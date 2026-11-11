@@ -44,26 +44,19 @@ def test_inflight_llm_does_not_hold_scheduler_or_image_resources(text_case, monk
         assert db.get(ClassicState, text_case[0]).translations == {}
 
 
-def test_parallel_groups_meter_every_call_without_cost_cap(text_case):
-    segments = [{'id': 'b001', 'source': 'Hello! ' * 100}]
-    def reserve(index):
-        try:
-            return classic.reserve_call(*text_case, index, segments, 'zh-Hans')[0]
-        except TextError as error:
-            return error.code
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(reserve, [0, 1]))
-    assert len(set(results)) == 2 and all(not result.startswith('TEXT_') for result in results)
+def test_whole_page_call_reserves_full_cost(text_case):
+    segments = [{'id': str(index), 'source': 'Hello! ' * 100} for index in range(10)]
+    classic.reserve_call(*text_case, segments, 'zh-Hans')
     with session_factory()() as db:
         calls = db.scalars(select(TextCall)).all()
-        assert len(calls) == 2 and sum(call.accounted_micros for call in calls) > 50_000
+        assert len(calls) == 1 and calls[0].accounted_micros > 50_000
         assert all(call.accounted_micros == call.reserved_micros > 0 for call in calls)
 
 
-def test_parallel_same_group_cannot_duplicate_calls(text_case):
+def test_parallel_same_page_cannot_duplicate_calls(text_case):
     def reserve(_):
         try:
-            return classic.reserve_call(*text_case, 0, SEGMENTS, 'zh-Hans')[0]
+            return classic.reserve_call(*text_case, SEGMENTS, 'zh-Hans')[0]
         except TextError as error:
             return error.code
     with ThreadPoolExecutor(max_workers=2) as pool:

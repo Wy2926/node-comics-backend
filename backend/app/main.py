@@ -63,6 +63,8 @@ async def lifespan(app):
         yield
     finally:
         app.state.comic_title_executor.close()
+        from .adapters.transport import close_pooled_connections
+        close_pooled_connections()
         close_hub()
 
 

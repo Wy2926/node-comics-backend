@@ -13,7 +13,6 @@ export const numericFields = [
   {key: 'timeout_seconds', title: '请求超时', unit: '秒', min: 1, max: 180, integer: true, group: 'requests', help: '每次文本请求的超时时间。'},
   {key: 'max_attempts', title: '最多尝试次数', unit: '次', min: 1, max: 3, integer: true, group: 'requests', help: '仅用于正文，包含首次请求；漫画名查询不自动重试。'},
   {key: 'max_output_tokens', title: '最大输出长度', unit: 'token', min: 128, max: 32768, integer: true, group: 'requests', help: '单次文本调用允许的最大输出长度，须在模型支持的范围内。'},
-  {key: 'group_bytes', title: '文本分组大小', unit: '字节', min: 128, max: 16000, integer: true, group: 'requests', help: '仅用于正文，控制每组待翻译文本的大小。'},
   {key: 'input_rate', title: '输入单价', unit: '元 / 百万 token', min: 0, max: 1000, integer: false, group: 'pricing', help: '用于记录输入成本，支持小数和 0。'},
   {key: 'output_rate', title: '输出单价', unit: '元 / 百万 token', min: 0, max: 5000, integer: false, group: 'pricing', help: '用于记录输出成本，支持小数和 0。'},
 ] as const;
@@ -23,7 +22,7 @@ export const textLimits = {name: 100, base_url: 1000, model: 120, user_agent: 20
 // These are the new provider API defaults, independent of legacy text settings.
 const defaults: TranslationProviderConfig = {
   base_url: 'https://api.openai.com/v1', model: '', protocol: 'chat_completions', reasoning_effort: 'none', user_agent: 'NodeComics/0.1',
-  timeout_seconds: 60, max_attempts: 3, max_output_tokens: 1024, group_bytes: 1800,
+  timeout_seconds: 60, max_attempts: 3, max_output_tokens: 1024,
   input_rate: 5, output_rate: 30, pricing_version: 'operator-estimate-v1',
   openrouter_providers: [],
 };

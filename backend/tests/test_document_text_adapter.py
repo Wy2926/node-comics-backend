@@ -56,7 +56,7 @@ def test_document_large_response_and_output_budget_are_independent(monkeypatch, 
             body = {'choices': [{'finish_reason': 'stop', 'message': {'content': content}}]}
         return httpx.Response(200, json=body)
 
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     reply = openai_text.call_messages([], profile, 'synthetic-key', json_schema=response_schema(),
         limits=RequestLimits(600, 65536, 4 * 1024 * 1024))
     assert reply.content == content and len(calls) == 1 and profile == original
@@ -77,7 +77,7 @@ def test_document_deadline_includes_header_wait_without_changing_legacy(monkeypa
         clock[0] = 25
         return httpx.Response(200, stream=Body())
 
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE'):
         openai_text.call_messages([], PROFILE, 'synthetic-key', limits=RequestLimits(30, 4096, 4096))
     clock[0] = 0

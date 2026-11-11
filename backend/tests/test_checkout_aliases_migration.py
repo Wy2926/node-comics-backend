@@ -55,7 +55,7 @@ def test_checkout_alias_upgrade_preserves_original_orders_and_keys(isolated_migr
 
     migrate(engine, 'head')
     with engine.connect() as db:
-        assert db.scalar(text('SELECT version_num FROM alembic_version')) == 'cleanup_indexes_0026'
+        assert db.scalar(text('SELECT version_num FROM alembic_version')) == 'whole_page_text_0027'
         assert db.scalar(text('SELECT count(*) FROM billing_checkout_aliases')) == 0
         for table in preserved:
             assert db.execute(metadata.tables[table].select().order_by(metadata.tables[table].c.id)).all() == before[table]
@@ -82,12 +82,12 @@ def test_checkout_alias_upgrade_preserves_original_orders_and_keys(isolated_migr
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / 'alembic.ini'))
     config.set_main_option('script_location', str(root / 'migrations'))
-    with pytest.raises(RuntimeError, match='Checkout aliases preserve accepted purchase retries'):
+    with pytest.raises(RuntimeError, match='Whole-page text requires restoring'):
         with engine.begin() as db:
             config.attributes['connection'] = db
             command.downgrade(config, 'prepaid_membership_0020')
     with engine.connect() as db:
-        assert db.scalar(text('SELECT version_num FROM alembic_version')) == 'cleanup_indexes_0026'
+        assert db.scalar(text('SELECT version_num FROM alembic_version')) == 'whole_page_text_0027'
         assert db.scalar(text('SELECT count(*) FROM billing_checkout_aliases')) == 2
         for table in preserved:
             assert db.execute(metadata.tables[table].select().order_by(metadata.tables[table].c.id)).all() == before[table]

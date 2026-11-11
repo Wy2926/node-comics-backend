@@ -10,7 +10,7 @@ import socket
 from threading import Event, Thread
 import time
 from sqlalchemy import select
-from .classic import run_text_stage
+from .classic import run_text_stage, unresolved_call
 from .config import settings
 from .db import session_factory
 from .runtime import check_runtime
@@ -88,7 +88,7 @@ def fail_stage(lease_id, error, *, token=None, node_id=None, recovering=False):
             return  # A heartbeat committed after maintenance's initial snapshot.
         if stage.generation != lease.generation:
             raise ProcessingError("LEASE_EXPIRED", "执行代次已更新")
-        if job.status not in {"running", "outcome_unknown"}:
+        if job.status != "running":
             stage.status = "cancelled"
             release_lease(db, lease, "cancelled")
             db.commit()
@@ -101,8 +101,13 @@ def fail_stage(lease_id, error, *, token=None, node_id=None, recovering=False):
         if job.cancel_requested or job.discard_output:
             finish_job(db, job, "cancelled")
             stage.status = "cancelled"
-        elif stage.name == 'text' and error.code in {'TEXT_PROVIDER_DISABLED', 'TEXT_RATE_LIMITED', 'ADMISSION_UNAVAILABLE'}:
-            # Pauses and rate waits release the shared execution slot without
+        elif stage.name == 'text' and (error.unknown or unresolved_call(db, job.id)):
+            stage.status = 'waiting'
+            job.status, job.phase, job.unknown_since = 'outcome_unknown', 'text', job.unknown_since or now()
+            job.error_code, job.error_message = 'TEXT_OUTCOME_UNKNOWN', '文本调用结果待核实，不会自动重复发送'
+        elif stage.name == 'text' and (getattr(error, 'retryable', False) or
+                error.code in {'TEXT_PROVIDER_DISABLED', 'TEXT_RATE_LIMITED', 'ADMISSION_UNAVAILABLE'}):
+            # Pauses and retries release the shared execution slot without
             # consuming a stage attempt. Per-call limits remain durable.
             delay = min(3600, max(0, getattr(error, 'retry_after', 0)))
             stage.status, stage.available_at = 'ready', now() + timedelta(seconds=delay)
@@ -294,6 +299,8 @@ def main():
                     stopping.wait(1)
             # The executor drains accepted stages before PID 1 exits.
     finally:
+        from .adapters.transport import close_pooled_connections
+        close_pooled_connections()
         close_hub()
 
 

@@ -139,7 +139,8 @@ def test_page_retry_and_checkpoint_replay_use_frozen_prompt_and_exact_cost(text_
                             None if len(calls) == 1 else {'input_tokens': 10, 'output_tokens': 2}, 'fixture')
 
     monkeypatch.setattr(classic, 'call_text', invoke)
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
+    with pytest.raises(page_text.TextError, match='TEXT_INVALID_RESPONSE'):
+        classic.run_text_stage(job_id, lease_id)
     assert classic.run_text_stage(job_id, lease_id) == {'translations': {'b001': '你好！'}}
     configure_system_limits(comic_translation_prompt='Changed again after completion.')
     assert classic.run_text_stage(job_id, lease_id) == {'translations': {'b001': '你好！'}}

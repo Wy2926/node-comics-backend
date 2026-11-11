@@ -102,7 +102,9 @@ def test_frozen_guidance_and_ocr_ids_survive_repair_and_paid_replay(text_case, m
 
     monkeypatch.setattr(page_text, 'call_messages', invoke)
     monkeypatch.setattr(classic, 'call_text', page_text.call_text)
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
+    if repair:
+        with pytest.raises(page_text.TextError, match='TEXT_INVALID_RESPONSE'):
+            classic.run_text_stage(job_id, lease_id)
     assert classic.run_text_stage(job_id, lease_id) == {'translations': translated}
     assert classic.run_text_stage(job_id, lease_id) == {'translations': translated}
     assert len(calls) == (2 if repair else 1)

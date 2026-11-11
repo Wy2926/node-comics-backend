@@ -8,6 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 @pytest.fixture(autouse=True)
+def isolated_provider_connections():
+    from app.adapters.transport import close_pooled_connections
+    close_pooled_connections()
+    yield
+    close_pooled_connections()
+
+
+@pytest.fixture(autouse=True)
 def isolated_identity_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("ADMIN_WEB_PATH", "/console-test/")

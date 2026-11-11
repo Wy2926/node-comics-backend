@@ -10,8 +10,8 @@ from test_classic import text_case, test_decimal_metering_keeps_integer_costs_an
 from translation_fixtures import configure_text_provider
 from test_classic_parallel import (
     test_inflight_llm_does_not_hold_scheduler_or_image_resources,
-    test_parallel_groups_meter_every_call_without_cost_cap,
-    test_parallel_same_group_cannot_duplicate_calls,
+    test_whole_page_call_reserves_full_cost,
+    test_parallel_same_page_cannot_duplicate_calls,
     test_new_node_reuses_paid_translation_after_image_cache_loss,
 )
 

@@ -3,7 +3,7 @@ import json
 
 import pytest
 from app.adapters.llm import TextError
-from app.adapters.text import groups, input_bound, messages, output_token_limit, parse_translations, response_schema
+from app.adapters.text import input_bound, messages, output_token_limit, parse_translations, response_schema
 
 
 @pytest.mark.parametrize('value', [
@@ -124,20 +124,16 @@ def test_schema_requires_exact_string_ids_and_excludes_source_and_geometry():
     assert 'private source' not in json.dumps(definition) and 'bbox' not in json.dumps(definition)
 
 
-def test_full_page_keeps_compact_ids_without_renumbering_groups():
+def test_full_page_keeps_all_ids_in_one_request():
     segments = [{'id': str(index), 'source': 'Wait! Where are you going?'} for index in range(200)]
-    batches = groups(segments, 1800)
-    assert len(batches) > 1
-    restored = {}
-    for batch in batches:
-        expected = {segment['id']: segment['source'] for segment in batch}
-        content = messages(batch, 'zh-Hans')[1]['content']
-        assert content == json.dumps(expected, ensure_ascii=False, separators=(',', ':'))
-        schema = response_schema(batch)['schema']
-        assert schema == {'type': 'object', 'properties': {key: {'type': 'string'} for key in expected},
-                          'required': list(expected), 'additionalProperties': False}
-        restored.update(parse_translations(content, batch))
-    assert restored == {segment['id']: segment['source'] for segment in segments}
+    expected = {segment['id']: segment['source'] for segment in segments}
+    content = messages(segments, 'zh-Hans')[1]['content']
+    assert len(content.encode()) > 1800
+    assert content == json.dumps(expected, ensure_ascii=False, separators=(',', ':'))
+    schema = response_schema(segments)['schema']
+    assert schema == {'type': 'object', 'properties': {key: {'type': 'string'} for key in expected},
+                      'required': list(expected), 'additionalProperties': False}
+    assert parse_translations(content, segments) == expected
 
 
 def test_output_budget_covers_utf8_and_escaped_ids_with_floor_and_provider_ceiling():

@@ -351,7 +351,7 @@ def test_postgres_initial_migrations_wait_on_advisory_lock_across_processes(pg_s
             assert "migration-complete" in stdout
         with engine().connect() as connection:
             revisions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
-            assert revisions == ['cleanup_indexes_0026']
+            assert revisions == ['whole_page_text_0027']
             assert connection.scalar(text("SELECT count(*) FROM translation_providers")) == 0
             assert connection.scalar(text("SELECT count(*) FROM translation_provider_revisions")) == 0
             assert connection.scalar(text("SELECT count(*) FROM users")) == 0
@@ -388,15 +388,15 @@ def test_postgres_classic_metering_has_no_cost_cap(pg):
     def reserve_concurrently(index):
         barrier.wait(timeout=10)
         try:
-            return reserve_call(job_id, lease_id, index, [{'id': 'b001', 'source': 'Hello'}], 'zh-Hans')[0]
+            return reserve_call(job_id, lease_id, [{'id': 'b001', 'source': 'Hello ' * 1000}], 'zh-Hans')[0]
         except TextError as error:
             return error.code
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(reserve_concurrently, range(6)))
-    assert len(set(results)) == 6 and all(not value.startswith('TEXT_') for value in results)
+    assert results.count('TEXT_CALL_IN_FLIGHT') == 5
     with session_factory()() as db:
         calls = db.scalars(select(TextCall).where(TextCall.job_id == job_id)).all()
-        assert len(calls) == 6
+        assert len(calls) == 1
         assert sum(call.accounted_micros for call in calls) > 50_000
 
 

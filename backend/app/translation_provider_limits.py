@@ -4,7 +4,7 @@ from .models import uid
 from .redis_state import AdmissionUnavailable, window, release_window, run, key
 
 UNSTARTED_ERRORS = frozenset({'TEXT_PROVIDER_DISABLED', 'TEXT_PROVIDER_UNAVAILABLE',
-    'TEXT_PROVIDER_REVISION_INVALID', 'TEXT_CHANNEL_UNSUPPORTED'})
+    'TEXT_PROVIDER_REVISION_INVALID', 'TEXT_CHANNEL_UNSUPPORTED', 'TEXT_CONNECT_FAILED'})
 
 
 def reserve_request(provider, request_id=None):

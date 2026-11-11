@@ -3,7 +3,9 @@ import ipaddress
 import socket
 import time
 import ssl
+import atexit
 from contextlib import contextmanager
+from threading import Lock
 import httpcore
 import httpx
 from ..errors import ProcessingError
@@ -61,9 +63,11 @@ class ResponseStream(httpx.SyncByteStream):
 
 
 class CheckedTransport(httpx.BaseTransport):
-    def __init__(self, allow_private=False):
-        self.pool = httpcore.ConnectionPool(ssl_context=ssl.create_default_context(), retries=0,
-                                           network_backend=CheckedBackend(allow_private), max_connections=1)
+    def __init__(self, allow_private=False, *, pool=None):
+        self.owns_pool = pool is None
+        self.pool = pool if pool is not None else httpcore.ConnectionPool(
+            ssl_context=ssl.create_default_context(), retries=0,
+            network_backend=CheckedBackend(allow_private), max_connections=1)
 
     def handle_request(self, request):
         core_request = httpcore.Request(method=request.method, url=httpcore.URL(scheme=request.url.raw_scheme, host=request.url.raw_host,
@@ -74,4 +78,30 @@ class CheckedTransport(httpx.BaseTransport):
         return httpx.Response(response.status, headers=response.headers, stream=ResponseStream(response.stream), extensions=response.extensions)
 
     def close(self):
-        self.pool.close()
+        if self.owns_pool:
+            self.pool.close()
+
+
+_pool = None
+_pool_lock = Lock()
+
+
+def connection_pool():
+    """One bounded process-local pool; request clients keep credentials/cookies isolated."""
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            _pool = httpcore.ConnectionPool(ssl_context=ssl.create_default_context(), retries=0,
+                network_backend=CheckedBackend(), max_connections=128,
+                max_keepalive_connections=32, keepalive_expiry=30)
+        return _pool
+
+
+@atexit.register
+def close_pooled_connections():
+    """Call after accepted requests have drained."""
+    global _pool
+    with _pool_lock:
+        pool, _pool = _pool, None
+    if pool is not None:
+        pool.close()

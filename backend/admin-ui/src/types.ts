@@ -10,7 +10,7 @@ export type TranslationProviderConfig = {
   reasoning_effort?: TranslationReasoningEffort;
   openrouter_providers?: string[];
   document?: DocumentModelLimits;
-  timeout_seconds: number; max_attempts: number; max_output_tokens: number; group_bytes: number;
+  timeout_seconds: number; max_attempts: number; max_output_tokens: number;
   input_rate: number; output_rate: number; pricing_version: string;
 };
 export type TranslationProvider = {

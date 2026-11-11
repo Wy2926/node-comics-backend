@@ -39,7 +39,7 @@ def test_body_and_title_share_upstream_budget(text_case, monkeypatch, first):
     owner_id, provider_id = setup_limit(text_case)
     monkeypatch.setattr(comic_titles, 'call_messages', null_title)
     if first == 'body':
-        call_id = classic.reserve_call(*text_case, 0, SEGMENTS, 'en')[0]
+        call_id = classic.reserve_call(*text_case, SEGMENTS, 'en')[0]
         with pytest.raises(HTTPException) as error:
             comic_titles.query_title(TITLE, owner_id)
         assert error.value.status_code == 503
@@ -48,7 +48,7 @@ def test_body_and_title_share_upstream_budget(text_case, monkeypatch, first):
     else:
         comic_titles.query_title(TITLE, owner_id)
         with pytest.raises(TextError, match='TEXT_RATE_LIMITED'):
-            classic.reserve_call(*text_case, 0, SEGMENTS, 'en')
+            classic.reserve_call(*text_case, SEGMENTS, 'en')
         # A cache hit works even while this supplier has no upstream capacity.
         assert comic_titles.query_title(TITLE, owner_id).name is None
     with session_factory()() as db:
@@ -67,7 +67,7 @@ def test_parallel_body_and_title_cannot_overbook_supplier(text_case, monkeypatch
         barrier.wait(timeout=5)
         try:
             if purpose == 'body':
-                classic.reserve_call(*text_case, 0, SEGMENTS, 'en')
+                classic.reserve_call(*text_case, SEGMENTS, 'en')
             else:
                 comic_titles.query_title(TITLE, owner_id)
             return 'admitted'
@@ -149,7 +149,7 @@ def test_redis_outage_pauses_text_without_spending_attempt_or_cost(text_case, mo
     from app.queue_models import ExecutionLease, JobStage
     break_redis(monkeypatch)
     with pytest.raises(TextError) as failure:
-        classic.reserve_call(*text_case, 0, SEGMENTS, 'en')
+        classic.reserve_call(*text_case, SEGMENTS, 'en')
     assert failure.value.code == 'ADMISSION_UNAVAILABLE'
     workers.fail_stage(text_case[1], failure.value)
     with session_factory()() as db:

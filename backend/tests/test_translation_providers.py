@@ -130,9 +130,10 @@ def test_connection_config_excludes_body_policy_and_preserves_existing_versions(
         openai_text.OpenAITextConfig(model='test', group_bytes=512)
     with pytest.raises(ValidationError):
         TextPolicy(model='test')
-    created = create(admin_case, body(group_bytes=512, input_rate=9, max_attempts=2))
-    assert created['config']['group_bytes'] == 512 and created['config']['input_rate'] == 9
+    created = create(admin_case, body(input_rate=9, max_attempts=2))
+    assert 'group_bytes' not in created['config'] and created['config']['input_rate'] == 9
     client, auth = admin_case
+    assert client.post(PATH, headers=auth, json=body(group_bytes=512)).status_code == 422
     response = client.put(PATH + '/' + created['id'], headers=auth, json={
         'name': 'Renamed', 'channel': 'openai', 'enabled': True, 'config': created['config']})
     assert response.status_code == 200
@@ -255,7 +256,7 @@ def test_revision_changes_pin_old_endpoint_key_and_cache_identity(admin_case, mo
     def handler(request):
         seen.append((str(request.url), request.headers['authorization'], json.loads(request.content)['model']))
         return httpx.Response(200, json={'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}]})
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     call_text([], 'en', before['text'])
     call_text([], 'en', after['text'])
     assert seen == [('https://text.example/v1/chat/completions', 'Bearer isolated-new-key', 'contract-text-model'),
@@ -283,7 +284,7 @@ def test_reasoning_update_creates_revision_without_changing_existing_profile(adm
     def handler(request):
         seen.append(json.loads(request.content).get('reasoning_effort'))
         return httpx.Response(200, json={'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}]})
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     for profile in [before, after, before]:
         call_text([], 'en', profile)
     assert seen == [None, 'none', None]
@@ -407,7 +408,7 @@ def test_output_limit_update_preserves_revision_ceiling_under_dynamic_budget(adm
         assert payload['response_format']['json_schema']['strict'] is True
         seen.append(payload['max_completion_tokens'])
         return httpx.Response(200, json={'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}]})
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     for profile in [before, after, before]:
         call_text([], 'en', profile['text'])
     assert seen == [128, 256, 128]
@@ -422,7 +423,7 @@ def test_disabled_supplier_pauses_before_request_without_metering(text_case):
         db.get(TranslationProvider, provider_id).enabled = False
         db.commit()
     with pytest.raises(TextError, match='TEXT_PROVIDER_DISABLED') as exc:
-        classic.reserve_call(job_id, lease_id, 0, SEGMENTS, 'zh-Hans')
+        classic.reserve_call(job_id, lease_id, SEGMENTS, 'zh-Hans')
     workers.fail_stage(lease_id, exc.value)
     with session_factory()() as db:
         lease = db.get(ExecutionLease, lease_id)
@@ -490,20 +491,25 @@ def test_first_provider_creation_is_atomic_across_replicas(text_database):
         assert all(row.text_weight == 1 for row in providers)
 
 
-def test_parallel_requests_obey_supplier_limit(text_case):
+def test_parallel_requests_obey_supplier_limit(scheduler_case):
+    for _ in range(2):
+        add_job(scheduler_case, stage='text')
     with session_factory()() as db:
-        provider = db.get(TranslationProvider, db.get(Job, text_case[0]).config['text']['provider_id'])
+        provider = db.get(TranslationProvider, scheduler_case['text']['provider_id'])
         provider.requests_per_minute = 1
+        node_id = control_node(db, 'text')
+        db.get(ComputeNode, node_id).capacity = 2
+        leases = [claim_stage(db, node_id) for _ in range(2)]
         db.commit()
     barrier = Barrier(2)
-    def reserve(group):
+    def reserve(lease):
         barrier.wait(timeout=5)
         try:
-            return classic.reserve_call(*text_case, group, SEGMENTS, 'en')[0]
+            return classic.reserve_call(lease.job_id, lease.id, SEGMENTS, 'en')[0]
         except TextError as error:
             return error.code
     with ThreadPoolExecutor(max_workers=2) as pool:
-        outcomes = list(pool.map(reserve, range(2)))
+        outcomes = list(pool.map(reserve, leases))
     assert outcomes.count('TEXT_RATE_LIMITED') == 1
     with session_factory()() as db:
         assert len(db.scalars(select(TextCall)).all()) == 1
@@ -564,19 +570,17 @@ def test_disable_after_reservation_does_not_spend_retry_or_rpm(text_case, monkey
         assert list(window_members('provider')) == [calls[1].id]
 
 
-def test_mid_page_rate_wait_releases_shared_slot(text_case, monkeypatch):
+def test_page_rate_wait_releases_shared_slot(text_case, monkeypatch):
     job_id, lease_id = text_case
-    first_group = [{'id': 'b001', 'source': 'a' * 200}]
     with session_factory()() as db:
         job = db.get(Job, job_id)
-        db.get(TranslationProvider, job.config['text']['provider_id']).requests_per_minute = 1
-        job.config = {**job.config, 'text': {**job.config['text'], 'group_bytes': 256}}
-        state = db.get(ClassicState, job_id)
-        state.analysis = {**state.analysis, 'segments': first_group + [{'id': 'b002', 'source': 'b' * 200}]}
+        provider = db.get(TranslationProvider, job.config['text']['provider_id'])
+        provider.requests_per_minute = 1
+        reserve_request(provider)
         db.get(ComputeNode, 'text-node').engine_version = 'control'
         db.get(ComputeNode, 'text-node').capacity = 1
         db.commit()
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: pytest.fail('Rate waits must release the execution slot'))
+    monkeypatch.setattr(classic, 'call_text', lambda *args: pytest.fail('Rate admission must precede the model'))
     with pytest.raises(TextError, match='TEXT_RATE_LIMITED') as exc:
         classic.run_text_stage(job_id, lease_id)
     workers.fail_stage(lease_id, exc.value)
@@ -585,8 +589,8 @@ def test_mid_page_rate_wait_releases_shared_slot(text_case, monkeypatch):
         assert lease.completed_at is not None
         stage = db.get(JobStage, lease.stage_id)
         assert stage.status == 'ready' and stage.available_at > now() + timedelta(seconds=50)
-        assert db.get(ClassicState, job_id).translations == {'b001': '你好！'}
-        assert len(db.scalars(select(TextCall)).all()) == 1
+        assert db.get(ClassicState, job_id).translations == {}
+        assert len(db.scalars(select(TextCall)).all()) == 0
 
 
 @pytest.mark.parametrize('attempts', [1, 3])
@@ -600,7 +604,6 @@ def test_upstream_429_yields_with_durable_attempt_budget(text_case, monkeypatch,
     def rate_limited(*args):
         raise TextError('TEXT_RATE_LIMITED', 'Upstream limit', retryable=True, retry_after=90)
     monkeypatch.setattr(classic, 'call_text', rate_limited)
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: pytest.fail('429 must release the execution slot'))
     code = 'TEXT_RETRY_EXHAUSTED' if attempts == 1 else 'TEXT_RATE_LIMITED'
     with pytest.raises(TextError, match=code) as exc:
         classic.run_text_stage(*text_case)

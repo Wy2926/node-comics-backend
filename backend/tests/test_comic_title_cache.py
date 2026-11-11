@@ -297,7 +297,7 @@ def test_live_slow_transport_renews_lease_and_cannot_be_claimed_twice(client, mo
         assert request.extensions['timeout']['read'] == 180
         clock[0] = 150  # Headers arrive within the per-read timeout.
         return httpx.Response(200, stream=SlowBody())
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(query, client, auth)
         try:

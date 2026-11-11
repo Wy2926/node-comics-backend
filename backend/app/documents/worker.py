@@ -1,6 +1,6 @@
 """Central whole-document text executor; image files remain on the assigned host."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 import logging
 import os
@@ -155,7 +155,10 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     executor_id = f'{socket.gethostname()}:{os.getpid()}'
     pending, next_maintenance, maintenance = set(), 0, MaintenanceState()
-    with ThreadPoolExecutor(max_workers=cfg.worker_slots, thread_name_prefix='document') as pool:
+    from ..adapters.transport import close_pooled_connections
+    with ExitStack() as cleanup:
+        cleanup.callback(close_pooled_connections)
+        pool = cleanup.enter_context(ThreadPoolExecutor(max_workers=cfg.worker_slots, thread_name_prefix='document'))
         while not stopping.is_set():
             try:
                 for future in list(pending):

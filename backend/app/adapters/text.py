@@ -1,4 +1,4 @@
-"""Body translation: grouping, JSON messages and strict translation parsing."""
+"""Whole-page translation, JSON messages and strict translation parsing."""
 import json
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .llm import RequestLimits, TextError, call_messages
@@ -39,10 +39,9 @@ class DocumentTextPolicy(BaseModel):
 
 
 class TextPolicy(BaseModel):
-    """Body translation grouping, retries and cost estimates."""
+    """Body translation retries and cost estimates."""
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True, hide_input_in_errors=True)
     max_attempts: int = Field(default=3, ge=1, le=3, strict=True)
-    group_bytes: int = Field(default=1800, ge=128, le=16000, strict=True)
     input_rate: float = Field(default=5, ge=0, le=1000, strict=True, allow_inf_nan=False)
     output_rate: float = Field(default=30, ge=0, le=5000, strict=True, allow_inf_nan=False)
     pricing_version: str = Field(default='operator-estimate-v1', min_length=1, max_length=100)
@@ -80,20 +79,6 @@ def output_token_limit(segments, maximum):
     framing = len(json.dumps({segment['id']: '' for segment in segments},
                              ensure_ascii=False, separators=(',', ':')).encode())
     return min(maximum, max(256, 2 * source_bytes + framing + 64))
-
-
-def groups(segments, limit):
-    result, current, size = [], [], 0
-    for segment in segments:
-        length = len(json.dumps(segment, ensure_ascii=False).encode())
-        if length > limit:
-            raise TextError("TEXT_INPUT_TOO_LARGE", "单个文本块超过配置上限，请调大分组限制后重新估算")
-        if current and size + length > limit:
-            result.append(current)
-            current, size = [], 0
-        current.append(segment)
-        size += length
-    return result + ([current] if current else [])
 
 
 def _unique_object(pairs):

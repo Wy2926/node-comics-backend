@@ -8,7 +8,7 @@ import httpx
 from pydantic import Field, field_validator, model_validator
 from ..errors import ProcessingError
 from .transport import read_bounded
-from .transport import CheckedTransport
+from .transport import CheckedTransport, connection_pool
 from .llm import LLMConfig, Message, RequestLimits, TextError, TextResponse
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -87,7 +87,7 @@ def call_messages(messages: list[Message], profile: dict, api_key: str, *,
     endpoint = profile["base_url"] + ("/chat/completions" if chat else "/responses")
     headers = {"Authorization": "Bearer " + api_key, "User-Agent": profile["user_agent"]}
     try:
-        with httpx.Client(transport=CheckedTransport(), trust_env=False, follow_redirects=False,
+        with httpx.Client(transport=CheckedTransport(pool=connection_pool()), trust_env=False, follow_redirects=False,
                           timeout=timeout) as client:
             with client.stream("POST", endpoint, json=payload, headers=headers) as response:
                 request_id = response.headers.get("x-request-id", "")[:200] or None
@@ -122,10 +122,13 @@ def call_messages(messages: list[Message], profile: dict, api_key: str, *,
         return TextResponse(content, usage, request_id)
     except TextError:
         raise
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+        raise TextError('TEXT_CONNECT_FAILED', '文本服务连接暂不可用', retryable=True,
+                        usage={'input_tokens': 0, 'output_tokens': 0}) from None
     except (httpx.HTTPError, OSError):
-        raise TextError("TEXT_TRANSPORT_FAILED", "文本请求超时或连接中断", retryable=True) from None
+        raise TextError("TEXT_TRANSPORT_FAILED", "文本请求超时或连接中断，结果待核实", unknown=True) from None
     except (ValueError, TypeError, AttributeError, ProcessingError):
-        raise TextError("TEXT_INVALID_RESPONSE", "文本服务响应无效", retryable=True) from None
+        raise TextError("TEXT_INVALID_RESPONSE", "文本服务响应无效，结果待核实", unknown=True) from None
 
 
 def safe_usage(data):

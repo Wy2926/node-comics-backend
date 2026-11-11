@@ -147,7 +147,7 @@ def test_real_adapter_payload_with_mock_transport(client, monkeypatch, protocol)
         response = {'choices': [{'message': {'content': content}, 'finish_reason': 'stop'}]} if protocol == 'chat_completions' else {
             'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': content}]}]}
         return httpx.Response(200, json=response)
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     result = client.post(URL, headers=login(client), json=BODY)
     assert result.status_code == 200, result.text
     assert result.json()['name'] == 'Attack on Titan'

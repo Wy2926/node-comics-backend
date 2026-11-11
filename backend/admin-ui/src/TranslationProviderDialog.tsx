@@ -156,7 +156,7 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
           </details>
           <details className="config-section provider-section">
             <summary id="provider-document-title">整本文档翻译</summary>
-            <p className="muted">仅在核实模型能力后启用。PDF / ZIP 汇总全部 OCR，一次请求；不套用单页分组、截断或自动重发。输入采用包含结构开销的保守 UTF-8 token 上界。</p>
+            <p className="muted">仅在核实模型能力后启用。PDF / ZIP 汇总全部 OCR，一次请求；不截断或自动重发。输入采用包含结构开销的保守 UTF-8 token 上界。</p>
             <label className="provider-enabled"><input type="checkbox" checked={draft.document.enabled}
               onChange={event => setDraft(current => ({...current, document: {...current.document, enabled: event.target.checked}}))}/>
               此模型支持整本文档</label>
@@ -179,7 +179,7 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
           </details>
 
           {(['requests', 'pricing'] as const).map(group => <details className="config-section provider-section" key={group}>
-            <summary id={`provider-${group}-title`}>{group === 'requests' ? '请求与分组' : '成本计量'}</summary>
+            <summary id={`provider-${group}-title`}>{group === 'requests' ? '请求设置' : '成本计量'}</summary>
             {group === 'pricing' && <p className="muted">单价仅用于正文翻译的成本计量，不作为调用预算上限；漫画名查询不计入此账本。</p>}
             <div className="settings-fields">{numericFields.filter(item => item.group === group).map(item => field(item.key, `${item.title}（${item.unit}）`,
               `${item.help} 范围 ${item.min}–${item.max}${item.integer ? '，整数' : ''}。`, {type: 'number', min: item.min, max: item.max, step: item.integer ? 1 : 'any'}))}

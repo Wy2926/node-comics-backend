@@ -302,6 +302,12 @@ def test_mixed_heartbeat_cancellation_and_stopped_ack(v3):
         {'lease_token': leases[0]['lease_token'], 'error': {'code': 'LEASE_STOPPED'}})
     assert response.status_code == 200, response.text
     assert response.json()['job_status'] == 'cancelled'
+    assert read_input(v3, leases[0]).status_code == 200
+    from app.dispatcher import cleanup
+    with session_factory()() as db:
+        db.get(Job, leases[0]['job_id']).completed_at = now() - timedelta(hours=25)
+        db.commit()
+        cleanup(db)
     assert read_input(v3, leases[0]).json()['error']['code'] == 'INPUT_UNAVAILABLE'
 
 
@@ -512,7 +518,8 @@ def test_result_written_before_lost_commit_is_recovered(v3, png, monkeypatch):
         from app.models import Asset, Ledger
         job = db.get(Job, lease['job_id'])
         source = db.get(Asset, job.input_asset_id)
-        assert not LocalStore().exists(source.storage_key)
+        assert LocalStore().exists(source.storage_key) and not source.purged_at
+        assert source.active_references == 0 and not job.input_pinned
         assert db.scalar(select(func.count()).select_from(Ledger).where(Ledger.job_id == job.id, Ledger.kind == 'settle')) <= 1
 
 

@@ -315,8 +315,7 @@ def main():
                 'api_key': private['TEXT_API_KEY'], 'config': {
                     'base_url': private['TEXT_BASE_URL'], 'model': private['TEXT_MODEL'],
                     'protocol': args.protocol, 'reasoning_effort': 'low',
-                    'max_output_tokens': 8192, 'timeout_seconds': 120, 'max_attempts': 1,
-                    'group_bytes': 1800}}), (201,))
+                    'max_output_tokens': 8192, 'timeout_seconds': 120, 'max_attempts': 1}}), (201,))
             private.clear()
             nodes = checked(client.get('/v1/admin/compute-nodes', headers=admin))['items']
             existing = next((node for node in nodes if node['resource_id'] == 'overlay-live:cuda:0'), None)

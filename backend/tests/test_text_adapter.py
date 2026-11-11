@@ -17,7 +17,7 @@ def profile(client, monkeypatch):
 
 
 def install(monkeypatch, handler):
-    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda: httpx.MockTransport(handler))
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
 
 
 @pytest.mark.parametrize('language', LANGUAGES)

@@ -116,7 +116,7 @@ def test_text_stage_checkpoint_replay_never_repeats_paid_call(text_case):
         assert (call.accounted_micros, call.cost_state) == (1100, 'estimated')
 
 
-def test_compact_prompt_resumes_old_checkpoint_with_original_page_ids(text_case, monkeypatch):
+def test_partial_checkpoint_retranslates_whole_page_with_original_ids(text_case, monkeypatch):
     import json
     from app.adapters.text import messages, response_schema
     job_id, lease_id = text_case
@@ -139,13 +139,13 @@ def test_compact_prompt_resumes_old_checkpoint_with_original_page_ids(text_case,
         return TextResponse(json.dumps({key: 'translated ' + key for key in ids}),
                             {'input_tokens': 10, 'output_tokens': 5}, 'compact')
     monkeypatch.setattr(classic, 'call_text', model)
-    expected = {'translations': {'0': '', '10': 'translated 10', '199': 'translated 199'}}
+    expected = {'translations': {'0': 'translated 0', '10': 'translated 10', '199': 'translated 199'}}
     assert classic.run_text_stage(job_id, lease_id) == expected
     assert classic.run_text_stage(job_id, lease_id) == expected
-    assert called == [['10'], ['199']]
+    assert called == [['0', '10', '199']]
     with session_factory()() as db:
         calls = db.scalars(select(TextCall).order_by(TextCall.group_index)).all()
-        assert [call.group_index for call in calls] == [1, 2]
+        assert [call.group_index for call in calls] == [classic.PAGE_CALL_INDEX]
         assert all(call.accounted_micros == 200 for call in calls)
 
 
@@ -195,13 +195,17 @@ def test_all_empty_group_retries_with_metering_without_saving_empty_checkpoint(t
         return TextResponse(json.dumps(values), {'input_tokens': 100, 'output_tokens': 5},
                             'empty-group-' + str(len(requests)))
     monkeypatch.setattr(classic, 'call_text', model)
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
     if repair:
+        with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE') as error:
+            classic.run_text_stage(job_id, lease_id)
+        assert error.value.retryable and error.value.retry_after == 1
         assert classic.run_text_stage(job_id, lease_id) == {'translations': valid}
         assert classic.run_text_stage(job_id, lease_id) == {'translations': valid}
     else:
-        with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE'):
-            classic.run_text_stage(job_id, lease_id)
+        for attempt in range(3):
+            with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE') as error:
+                classic.run_text_stage(job_id, lease_id)
+            assert error.value.retryable is (attempt < 2)
         with pytest.raises(TextError, match='TEXT_RETRY_EXHAUSTED'):
             classic.run_text_stage(job_id, lease_id)
     with session_factory()() as db:
@@ -239,7 +243,7 @@ def test_dynamic_output_reserves_schema_cost_then_accounts_actual_usage(text_cas
         provider = configure_text_provider(db, job.config['text']['provider_id'], max_output_tokens=32768)
         job.config = {**job.config, 'text': snapshot(db, provider.id)['text']}
         db.commit()
-    call_id, _, _, _, _ = classic.reserve_call(job_id, lease_id, 0, SEGMENTS, 'zh-Hans')
+    call_id, _, _, _, _ = classic.reserve_call(job_id, lease_id, SEGMENTS, 'zh-Hans')
     with session_factory()() as db:
         call = db.get(TextCall, call_id)
         sent_bytes = len(json.dumps({'messages': messages(SEGMENTS, 'zh-Hans'), 'response_format': {
@@ -270,7 +274,7 @@ def test_decimal_metering_keeps_integer_costs_and_frozen_prices(text_case, monke
         db.commit()
         configure_text_provider(db, provider.id, input_rate=1.125, output_rate=2.5)
     monkeypatch.setattr(classic, 'input_bound', lambda *args: 5)
-    call_id, frozen, _, _, _ = classic.reserve_call(job_id, lease_id, 0, SEGMENTS, 'zh-Hans')
+    call_id, frozen, _, _, _ = classic.reserve_call(job_id, lease_id, SEGMENTS, 'zh-Hans')
     assert frozen == profile
     with session_factory()() as db:
         call = db.get(TextCall, call_id)
@@ -304,7 +308,8 @@ def test_format_repair_records_cost_for_every_subcall(text_case, monkeypatch):
     original = classic.call_text
     replies = iter([TextResponse('invalid', {'input_tokens': 100, 'output_tokens': 5}, 'invalid'), original()])
     monkeypatch.setattr(classic, 'call_text', lambda *args: next(replies))
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
+    with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE'):
+        classic.run_text_stage(*text_case)
     classic.run_text_stage(*text_case)
     with session_factory()() as db:
         calls = db.scalars(select(TextCall).order_by(TextCall.sequence)).all()
@@ -318,9 +323,10 @@ def test_invalid_json_never_saves_partial_translations_and_stops_at_attempt_limi
     monkeypatch.setattr(classic, 'call_text', lambda *args: TextResponse(
         '{"b001":"first","b001":"second"}',
         {'input_tokens': 100, 'output_tokens': 5}, 'duplicate-json-id'))
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
-    with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE'):
-        classic.run_text_stage(*text_case)
+    for attempt in range(3):
+        with pytest.raises(TextError, match='TEXT_INVALID_RESPONSE') as error:
+            classic.run_text_stage(*text_case)
+        assert error.value.retryable is (attempt < 2)
     with session_factory()() as db:
         calls = db.scalars(select(TextCall)).all()
         assert len(calls) == 3
@@ -330,7 +336,7 @@ def test_invalid_json_never_saves_partial_translations_and_stops_at_attempt_limi
         classic.run_text_stage(*text_case)
 
 
-def test_unknown_call_keeps_metering_without_cost_cap_and_stops_at_attempt_limit(text_case, monkeypatch):
+def test_unknown_call_keeps_metering_and_never_resends(text_case, monkeypatch):
     with session_factory()() as db:
         db.get(ClassicState, text_case[0]).analysis = analysis([{'id': 'b001', 'source': 'Hello! ' * 100}])
         db.commit()
@@ -339,22 +345,23 @@ def test_unknown_call_keeps_metering_without_cost_cap_and_stops_at_attempt_limit
         calls.append(1)
         raise TextError('TEXT_TRANSPORT_FAILED', 'isolated timeout', retryable=True)
     monkeypatch.setattr(classic, 'call_text', timeout)
-    monkeypatch.setattr(classic, 'wait_for_retry', lambda *args: None)
-    with pytest.raises(TextError, match='TEXT_TRANSPORT_FAILED'):
+    with pytest.raises(TextError, match='TEXT_TRANSPORT_FAILED') as error:
         classic.run_text_stage(*text_case)
-    assert len(calls) == 3
+    assert error.value.unknown and not error.value.retryable
+    assert len(calls) == 1
     with session_factory()() as db:
         records = db.scalars(select(TextCall)).all()
-        assert len(records) == 3
-        assert sum(call.accounted_micros for call in records) > 50_000
+        assert len(records) == 1
+        assert sum(call.accounted_micros for call in records) > 0
         assert all(call.accounted_micros == call.reserved_micros > 0 and call.cost_state == 'unknown' for call in records)
-    with pytest.raises(TextError, match='TEXT_RETRY_EXHAUSTED'):
-        classic.reserve_call(*text_case, 0, SEGMENTS, 'zh-Hans')
+    with pytest.raises(TextError, match='TEXT_OUTCOME_UNKNOWN'):
+        classic.run_text_stage(*text_case)
+    assert len(calls) == 1
 
 
 def test_late_translation_accounts_usage_without_overwriting_new_generation(text_case):
     job, lease = text_case
-    call, _, _, _, _ = classic.reserve_call(job, lease, 0, SEGMENTS, 'zh-Hans')
+    call, _, _, _, _ = classic.reserve_call(job, lease, SEGMENTS, 'zh-Hans')
     with session_factory()() as db:
         db.get(JobStage, db.get(ExecutionLease, lease).stage_id).generation += 1
         db.commit()
@@ -391,17 +398,18 @@ def test_every_call_checks_shared_provider_rate_limit(text_case):
     with session_factory()() as db:
         provider_id = db.get(Job, text_case[0]).config['text']['provider_id']
         configure_text_provider(db, provider_id, requests_per_minute=1)
-    classic.reserve_call(*text_case, 0, SEGMENTS, 'zh-Hans')
+    call_id = classic.reserve_call(*text_case, SEGMENTS, 'zh-Hans')[0]
+    classic.complete_call(call_id, text_case[1], error=TextError('TEXT_PROVIDER_REJECTED', 'retryable failure'))
     with pytest.raises(TextError, match='TEXT_RATE_LIMITED'):
-        classic.reserve_call(*text_case, 1, SEGMENTS, 'zh-Hans')
+        classic.reserve_call(*text_case, SEGMENTS, 'zh-Hans')
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(TextCall)) == 1
 
 
-def test_duplicate_execution_cannot_call_same_group_twice_on_one_lease(text_case):
-    classic.reserve_call(*text_case, 0, SEGMENTS, 'zh-Hans')
+def test_duplicate_execution_cannot_call_same_page_twice_on_one_lease(text_case):
+    classic.reserve_call(*text_case, SEGMENTS, 'zh-Hans')
     with pytest.raises(TextError, match='TEXT_CALL_IN_FLIGHT'):
-        classic.reserve_call(*text_case, 0, SEGMENTS, 'zh-Hans')
+        classic.reserve_call(*text_case, SEGMENTS, 'zh-Hans')
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(TextCall)) == 1
 
