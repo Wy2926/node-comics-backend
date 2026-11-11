@@ -1,4 +1,4 @@
-"""Terminal input deletion, independent results and account-scoped references."""
+"""Configurable input retention, independent results and account-scoped references."""
 from io import BytesIO
 from uuid import uuid4
 import pytest
@@ -27,12 +27,13 @@ def finished(client, png, monkeypatch):
     return auth, source, job_id, request
 
 
-def test_terminal_input_deleted_and_result_still_downloadable(client, png, monkeypatch):
+def test_terminal_input_retained_and_result_still_downloadable(client, png, monkeypatch):
     auth, source, job_id, request = finished(client, png, monkeypatch)
     with session_factory()() as db:
         job = db.get(Job, job_id)
         original = db.get(Asset, job.input_asset_id)
-        assert original.purged_at and not object_path(original.storage_key).exists()
+        assert not original.purged_at and object_path(original.storage_key).exists()
+        assert original.expires_at is None and original.active_references == 0
         assert not original.deleted_at
     state = client.get('/v1/translations/' + request, headers=auth).json()
     assert state['state'] == 'succeeded'
@@ -48,7 +49,7 @@ def test_terminal_input_deleted_and_result_still_downloadable(client, png, monke
     assert client.get('/v1/images/' + source + '/content', headers=auth).status_code == 404
 
 
-def test_account_cache_survives_source_deletion_and_last_reference_gc(client, png, monkeypatch):
+def test_account_cache_survives_last_reference_gc(client, png, monkeypatch):
     auth, source, job_id, first = finished(client, png, monkeypatch)
     alias = submit_asset(client, auth, source, key=uuid4().hex).json()
     assert alias['state'] == 'succeeded'
@@ -56,14 +57,68 @@ def test_account_cache_survives_source_deletion_and_last_reference_gc(client, pn
         assert db.scalar(select(func.count()).select_from(Job)) == 1
         output = db.get(Asset, db.get(Job, job_id).output_asset_id)
         path = object_path(output.storage_key)
+        input_path = object_path(db.get(Asset, db.get(Job, job_id).input_asset_id).storage_key)
     assert client.delete('/v1/translations/' + first, headers=auth).status_code == 200
     assert path.exists()
+    assert input_path.exists()
     assert client.get(alias['result']['artifact']['path'], headers=auth).status_code == 200
     assert client.delete('/v1/translations/' + alias['id'], headers=auth).status_code == 200
     assert not path.exists()
+    assert not input_path.exists()
     assert client.get(alias['result']['artifact']['path'], headers=auth).status_code == 410
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(Ledger).where(Ledger.kind == 'settle')) == 1
+
+
+@pytest.mark.parametrize('quota_kind', ['classic_free', 'guest_trial'])
+@pytest.mark.parametrize('status', ['succeeded', 'no_text', 'failed', 'cancelled', 'unknown_released'])
+def test_input_retention_is_configurable_and_uniform(client, png, monkeypatch, quota_kind, status):
+    from app.dispatcher import cleanup
+    from app import result_retention
+    auth, source, job_id, request = finished(client, png, monkeypatch)
+    configure_system_limits(image_input_retention_hours=3)
+    with session_factory()() as db:
+        job = db.get(Job, job_id)
+        job.quota_kind, job.status = quota_kind, status
+        job.completed_at = now() - timedelta(hours=2)
+        source = db.get(Asset, job.input_asset_id)
+        source_id, path = source.id, object_path(source.storage_key)
+        output_path = object_path(db.get(Asset, job.output_asset_id).storage_key)
+        assert result_retention.input_expires_at(db, job) == job.completed_at + timedelta(hours=3)
+        db.commit()
+        cleanup(db)
+        assert path.exists()
+    configure_system_limits(image_input_retention_hours=1)
+    with session_factory()() as db:
+        cleanup(db)
+        assert db.get(Asset, source_id).purged_at
+        assert not db.get(Asset, source_id).deleted_at
+        assert not path.exists() and output_path.exists()
+    configure_system_limits(image_input_retention_hours=24)
+    with session_factory()() as db:
+        cleanup(db)
+        assert not path.exists()  # Extending retention cannot restore purged originals.
+
+
+def test_default_input_retention_and_active_task_protection(client, png, monkeypatch):
+    from app.dispatcher import cleanup
+    from app.result_retention import input_expires_at
+    auth, _, job_id, request = finished(client, png, monkeypatch)
+    with session_factory()() as db:
+        job = db.get(Job, job_id)
+        assert input_expires_at(db, job) == job.completed_at + timedelta(hours=24)
+        source = db.get(Asset, job.input_asset_id)
+        path = object_path(source.storage_key)
+        job.completed_at = now() - timedelta(hours=25)
+        job.status = 'outcome_unknown'
+        db.commit()
+        cleanup(db)
+        assert path.exists() and input_expires_at(db, job) is None
+        job.status = 'succeeded'
+        db.commit()
+        cleanup(db)
+        assert not path.exists()
+    assert client.get('/v1/translations/' + request + '/result', headers=auth).status_code == 200
 
 
 def test_another_account_cannot_claim_known_hash(client, png, monkeypatch):
@@ -133,15 +188,15 @@ def test_open_result_stream_survives_concurrent_unlink(client, png, monkeypatch)
     import os
     if os.name == 'nt':
         pytest.skip('Windows defers unlink until the open authorized response closes')
-    from app import translation_api
+    from app import image_results
     auth, _, job_id, request = finished(client, png, monkeypatch)
     with session_factory()() as db:
         path = object_path(db.get(Asset, db.get(Job, job_id).output_asset_id).storage_key)
-    original = translation_api.StreamingResponse
+    original = image_results.StreamingResponse
     def unlink_before_first_chunk(*args, **kwargs):
         path.unlink()
         return original(*args, **kwargs)
-    monkeypatch.setattr(translation_api, 'StreamingResponse', unlink_before_first_chunk)
+    monkeypatch.setattr(image_results, 'StreamingResponse', unlink_before_first_chunk)
     response = client.get('/v1/translations/' + request + '/result', headers=auth)
     assert response.status_code == 200 and response.content == png
     assert not path.exists()

@@ -4,6 +4,7 @@ import type {Mode, TaskDetail as TaskData, UserDetail as UserData} from './types
 import {Badge, duration, Empty, label, number, Stat, Table, time} from './ui';
 import {MembershipActions} from './MembershipActions';
 import {TaskAttempts} from './TaskAttempts';
+import {TaskImages} from './TaskImages';
 import {UserHistory} from './UserHistory';
 import {taskTimingRows} from './timings';
 import {AuthProfile} from './AuthProfile';
@@ -22,6 +23,7 @@ export function TaskDetail({job: j, onUnauthorized}: {job: TaskData; onUnauthori
       <dt>额度结算</dt><dd>{label(j.settlement)} · {j.quota_pages} 页</dd><dt>供应商</dt><dd>{j.provider?.name || '未记录'}</dd></dl>
     {j.error_code && <p className="error">{j.error_message && <>{j.error_message}<br/></>}错误代码：{j.error_code}</p>}
     {j.expired_leases > 0 && <p className="attention">{j.expired_leases} 个租约已过期，等待回收。</p>}
+    {j.workflow_kind === 'image' && <TaskImages key={j.id} jobId={j.id} onUnauthorized={onUnauthorized}/>}
     <h3 className="detail-heading">阶段进度</h3><div className="stage-flow">{j.stages.length ? j.stages.map(s =>
       <div key={`${s.name}:${s.page_index}`}><b>{label(s.name)}{s.page_index > 0 && ` · 第 ${s.page_index} 页`}</b><Badge value={s.status}/><small>已领取 {s.attempts} 次</small></div>) : <p className="muted">尚无执行阶段</p>}</div>
     <h3 className="detail-heading">执行履历 <span>{j.executions.length} 次</span></h3>

@@ -64,6 +64,27 @@ def test_database_settings_allow_future_fields_without_dropping_them(client):
         assert db.get(SystemSettings, 1).values['future_additive_setting'] == 42
 
 
+def test_existing_settings_gain_configurable_input_retention_without_overwriting_values(client):
+    auth = login(client, 'admin')
+    current = client.get(PATH, headers=auth).json()
+    with session_factory()() as db:
+        row = db.get(SystemSettings, 1)
+        old = {key: value for key, value in row.values.items() if key != 'image_input_retention_hours'}
+        row.values = old
+        db.commit()
+    restored = client.get(PATH, headers=auth).json()
+    assert restored['version'] == current['version']
+    assert restored['values']['image_input_retention_hours'] == 24
+    with session_factory()() as db:
+        assert db.get(SystemSettings, 1).values == old
+    response = client.put(PATH, headers=auth, json={'expected_version': restored['version'],
+        'values': {**restored['values'], 'image_input_retention_hours': 6}})
+    assert response.status_code == 200
+    with session_factory()() as db:
+        assert get_request_limits(db).image_input_retention_hours == 6
+        assert db.get(SystemSettings, 1).values['image_input_retention_hours'] == 6
+
+
 @pytest.fixture
 def system_case(text_database):
     for name, value in DEFAULTS.items():
@@ -107,6 +128,8 @@ def test_only_administrators_can_read_and_change_settings(system_case):
 
 
 @pytest.mark.parametrize("change", [
+    {"image_input_retention_hours": 0}, {"image_input_retention_hours": 8761},
+    {"image_input_retention_hours": True}, {"image_input_retention_hours": 1.5},
     {"image_result_retention_days": 0}, {"image_result_retention_days": 366},
     {"image_result_retention_days": True}, {"image_result_retention_days": 1.5},
     {"free_images_per_minute": 0}, {"plus_images_per_minute": 10001}, {"free_images_per_minute": True},
@@ -133,7 +156,7 @@ def test_invalid_values_do_not_change_settings(system_case, change):
 
 def test_complete_values_and_consistent_limits_are_required(system_case):
     case = system_case
-    for field in ("image_result_retention_days", "upload_user_concurrency", "guest_daily_limit", "guest_network_daily_limit", "guest_global_daily_limit",
+    for field in ("image_input_retention_hours", "image_result_retention_days", "upload_user_concurrency", "guest_daily_limit", "guest_network_daily_limit", "guest_global_daily_limit",
                   *PROMPT_DEFAULTS):
         missing = {name: value for name, value in DEFAULTS.items() if name != field}
         assert case.client.put(PATH, headers=case.auth,

@@ -130,6 +130,7 @@ def cleanup(db):
     orphan_cutoff = now() - timedelta(seconds=max(3600, settings().upload_body_timeout_seconds * 2))
     from .guests import expire_guests
     from .result_retention import expire_registered_results
+    from .system_settings import get_request_limits
     expire_guests(db)
     expire_registered_results(db)
     orphan_results = list(db.scalars(select(Asset).outerjoin(Job, Job.output_asset_id == Asset.id).where(
@@ -138,10 +139,11 @@ def cleanup(db):
     for asset in orphan_results:
         asset.deleted_at = now()
     db.flush()
+    input_cutoff = now() - timedelta(hours=get_request_limits(db).image_input_retention_hours)
     originals = list(db.scalars(select(Asset.id).outerjoin(Job, Job.input_asset_id == Asset.id).where(
         Asset.kind == 'original', Asset.purged_at.is_(None),
-        or_(Asset.deleted_at.is_not(None), Job.status.not_in(ACTIVE),
-            and_(Job.id.is_(None), Asset.created_at <= orphan_cutoff))).limit(200)))
+        or_(Asset.deleted_at.is_not(None), and_(Job.status.not_in(ACTIVE), Job.completed_at <= input_cutoff),
+            and_(Job.id.is_(None), Asset.created_at <= orphan_cutoff))).distinct().limit(200)))
     deleted = list(db.scalars(select(Asset).where(Asset.kind != 'original', Asset.deleted_at.is_not(None),
         Asset.purged_at.is_(None)).limit(200)))
     files = [(asset.id, asset.storage_key) for asset in deleted]

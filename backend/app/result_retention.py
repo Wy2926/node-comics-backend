@@ -1,4 +1,4 @@
-"""Image result expiry shared by reads, reuse and bounded maintenance."""
+"""Image retention shared by reads, reuse and bounded maintenance."""
 from datetime import timedelta
 from sqlalchemy import select, text, update
 from .models import Asset, Job, now, IMAGE_RESULT_EXPIRY_FILTER
@@ -15,6 +15,13 @@ def result_expires_at(db, job, *, days=None):
         return None
     days = days if days is not None else get_request_limits(db).image_result_retention_days
     return job.completed_at + timedelta(days=days)
+
+
+def input_expires_at(db, job):
+    from .scheduler import ACTIVE
+    if not job or job.workflow_kind != 'image' or not job.completed_at or job.status in ACTIVE:
+        return None
+    return job.completed_at + timedelta(hours=get_request_limits(db).image_input_retention_hours)
 
 
 def result_expired(db, job, *, days=None, at=None):

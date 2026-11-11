@@ -31,6 +31,13 @@ h2 {font-size: 17px; font-weight: 600;}
 h3, h4 {font-size: 14px; font-weight: 600;}
 small, .muted, .panel-note, .footnote {font-size: 12px; color: var(--muted);}
 .panel-note, .footnote {margin-top: 16px; line-height: 1.7;}
+.task-images-actions {display: flex; gap: 8px; margin-bottom: 12px;}
+.task-images-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px;}
+.task-images-grid figure {margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); min-width: 0;}
+.task-images-grid figcaption {font-weight: 600; margin-bottom: 10px;}
+.task-images-grid .ant-image {display: block;}
+.task-images-grid img {max-height: 560px; object-fit: contain;}
+.task-images-grid small {display: block; margin-top: 8px;}
 code, pre {font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere;}
 button, input, select, textarea {font: inherit; -webkit-tap-highlight-color: transparent;}
 button:disabled {cursor: not-allowed;}

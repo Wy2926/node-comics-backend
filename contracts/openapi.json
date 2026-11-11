@@ -6371,6 +6371,98 @@
         }
       }
     },
+    "/v1/admin/monitor/tasks/{job_id}/images": {
+      "get": {
+        "summary": "Images",
+        "operationId": "images_v1_admin_monitor_tasks__job_id__images_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/monitor/tasks/{job_id}/images/{kind}": {
+      "get": {
+        "summary": "Image",
+        "operationId": "image_v1_admin_monitor_tasks__job_id__images__kind__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "original",
+                "result"
+              ],
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/audit": {
       "get": {
         "summary": "Audit Events",
@@ -10565,6 +10657,12 @@
             "minimum": 0.0,
             "title": "Free Daily Pages"
           },
+          "image_input_retention_hours": {
+            "type": "integer",
+            "maximum": 8760.0,
+            "minimum": 1.0,
+            "title": "Image Input Retention Hours"
+          },
           "image_result_retention_days": {
             "type": "integer",
             "maximum": 365.0,
@@ -10684,6 +10782,7 @@
         "type": "object",
         "required": [
           "free_daily_pages",
+          "image_input_retention_hours",
           "image_result_retention_days",
           "empty_claim_retention_days",
           "completed_claim_retention_days",

@@ -32,6 +32,7 @@ from .middleware import BodyLimitMiddleware
 from .admin_api import router as admin_router
 from .node_admin import router as node_admin_router
 from .admin_monitor import router as admin_monitor_router
+from .admin_images import router as admin_images_router
 from .admin_audit import router as admin_audit_router
 from .admin_operations import router as admin_operations_router
 from .user_admin import router as user_admin_router
@@ -83,6 +84,7 @@ app.include_router(billing_router)
 app.include_router(billing_admin_router)
 app.include_router(billing_catalog_router)
 app.include_router(admin_monitor_router)
+app.include_router(admin_images_router)
 app.include_router(admin_audit_router)
 app.include_router(admin_operations_router)
 app.include_router(user_admin_router)

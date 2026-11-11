@@ -3,12 +3,13 @@ import asyncio
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import Field, model_validator
 from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
-from .assets import available, object_path
+from .assets import available
+from .image_results import asset_response, result_json
 from .auth import identity
 from .config import settings
 from .db import get_db, session_factory
@@ -157,23 +158,10 @@ def translation_json(db, row, *, context=None):
     if state == 'succeeded' and not withdrawn:
         output = asset_for(entry.output_asset_id) if entry.output_asset_id else None
         source = asset_for(entry.input_asset_id) if entry.input_asset_id else None
-        description = entry.result_description or {}
-        representation = output.representation if output else 'original'
-        result = {'kind': 'no_text' if entry.status == 'no_text' else 'partial' if 'unrecognized_regions' in (entry.quality_flags or []) else 'translated',
-            'representation': representation, 'input_sha256': entry.source_sha256,
-            'normalization_version': source.normalization_version if source else 1,
-            'width': output.width if representation == 'full-image-v1' else description.get('width') or (source.width if source else None),
-            'height': output.height if representation == 'full-image-v1' else description.get('height') or (source.height if source else None),
-            'artifact': None, 'quality_flags': entry.quality_flags or []}
-        if output:
-            result['artifact'] = {'sha256': output.sha256, 'byte_size': output.byte_size, 'mime': output.mime,
-                'path': f"/v1/{'guest/' if (entry.entitlement or {}).get('plan') == 'guest' else ''}translations/{row.id}/result"}
-            if representation == 'overlay-v1':
-                result.update(bbox=output.bbox, composite='source-atop')
-            elif representation == 'overlay-tiles-v1':
-                result['composite'] = 'source-atop'
-            if not available(output):
-                error = {'code': 'RESULT_UNAVAILABLE', 'message': '结果文件暂不可用，请稍后重试'}
+        result = result_json(entry, source, output,
+            f"/v1/{'guest/' if (entry.entitlement or {}).get('plan') == 'guest' else ''}translations/{row.id}/result")
+        if output and not available(output):
+            error = {'code': 'RESULT_UNAVAILABLE', 'message': '结果文件暂不可用，请稍后重试'}
     return {'id': row.id, 'state': state,
         'execution_resolved': bool(withdrawn and (entry and entry.id in context[3] or
             row.job_id is None and row.revoked_at and row.legacy_execution_resolved)),
@@ -462,32 +450,7 @@ def translation_result(translation_id: UUID, request: Request, user: User = Depe
     output = db.get(Asset, entry.output_asset_id)
     if not available(output) or output.owner_id != user.id:
         problem('RESULT_UNAVAILABLE', '结果文件暂不可用', 503)
-    try:
-        handle = object_path(output.storage_key).open('rb')
-        import os
-        if os.fstat(handle.fileno()).st_size != output.byte_size:
-            handle.close()
-            problem('RESULT_UNAVAILABLE', '结果文件完整性异常', 503)
-    except OSError:
-        problem('RESULT_UNAVAILABLE', '结果文件暂不可用', 503)
-    headers = {'ETag': '"' + output.sha256 + '"', 'Cache-Control': 'private, no-store',
-        'Content-Length': str(output.byte_size), 'X-Content-Type-Options': 'nosniff'}
-    try:
-        db.commit()
-    except BaseException:
-        handle.close()
-        raise
-    if request.headers.get('if-none-match') == headers['ETag']:
-        handle.close()
-        return Response(status_code=304, headers={key: value for key, value in headers.items() if key != 'Content-Length'})
-    def chunks():
-        try:
-            while chunk := handle.read(256 * 1024):
-                yield chunk
-        finally:
-            handle.close()
-    from starlette.background import BackgroundTask
-    return StreamingResponse(chunks(), media_type=output.mime, headers=headers, background=BackgroundTask(handle.close))
+    return asset_response(db, output, request)
 
 
 @router.delete('/v1/translations/{translation_id}')
@@ -501,6 +464,9 @@ def translation_delete(translation_id: UUID, user: User = Depends(identity), db:
     if not other and row.job_id:
         job = db.get(Job, row.job_id)
         cancel_job(db, job)
+        if job.input_asset_id:
+            source = db.get(Asset, job.input_asset_id)
+            source.deleted_at = source.deleted_at or now()
         if job.output_asset_id:
             output = db.get(Asset, job.output_asset_id)
             output.deleted_at = output.deleted_at or now()

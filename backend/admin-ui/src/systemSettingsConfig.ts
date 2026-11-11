@@ -1,4 +1,6 @@
 export const numericFields = [
+  {key: 'image_input_retention_hours', group: 'storage', title: '原图保留时间（所有用户）', unit: '小时', min: 1, max: 8760, integer: true,
+    help: '从任务结束起计算，注册用户与游客统一适用；在途任务继续保留。保存后适用于已有原图，延长不能恢复已清理文件。覆盖层译图的后台预览依赖原图。'},
   {key: 'image_result_retention_days', group: 'storage', title: '注册账户单图结果保留时间', unit: '天', min: 1, max: 365, integer: true,
     help: '从任务完成起计算，读取不续期；保存后同时适用于已有结果。缩短会回收过期文件，延长不能恢复已删除文件；任务与账单记录保留。'},
   {key: 'empty_claim_retention_days', group: 'storage', title: '空领取回执保留时间', unit: '天', min: 1, max: 365, integer: true,

@@ -1,6 +1,6 @@
 import hashlib
 from io import BytesIO
-from sqlalchemy import event, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .config import settings
 from .errors import problem, ProcessingError
@@ -109,19 +109,10 @@ async def upload_bytes(image):
     return data
 
 
-def schedule_input_cleanup(db, job):
-    """Revoke execution access in the terminal transaction; unlink only after commit."""
-    if not job.input_asset_id:
-        return
-    source = db.get(Asset, job.input_asset_id)
-    if source and source.kind == 'original':
-        source.expires_at = now()
-        db.info.setdefault('cleanup_inputs', set()).add(source.id)
-
-
 def cleanup_inputs(asset_ids):
     from .db import session_factory
     from .models import Job
+    from .result_retention import input_expires_at
     from .scheduler import ACTIVE
     for asset_id in asset_ids:
         with session_factory()() as db:
@@ -130,25 +121,14 @@ def cleanup_inputs(asset_ids):
                 continue
             if db.scalar(select(Job.id).where(Job.input_asset_id == asset_id, Job.status.in_(ACTIVE)).limit(1)):
                 continue
+            if not source.deleted_at and any(
+                (deadline := input_expires_at(db, job)) is None or deadline > now()
+                for job in db.scalars(select(Job).where(Job.input_asset_id == asset_id))
+            ):
+                continue
             try:
                 get_store().delete(source.storage_key)
             except OSError:
                 continue
             source.purged_at = now()
             db.commit()
-
-
-@event.listens_for(Session, 'after_commit')
-def _cleanup_after_commit(session):
-    ids = session.info.pop('cleanup_inputs', set())
-    if ids:
-        try:
-            cleanup_inputs(ids)
-        except Exception:
-            import logging
-            logging.getLogger(__name__).warning('Deferred input file cleanup')
-
-
-@event.listens_for(Session, 'after_rollback')
-def _discard_uncommitted_cleanup(session):
-    session.info.pop('cleanup_inputs', None)
