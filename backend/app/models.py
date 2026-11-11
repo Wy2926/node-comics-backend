@@ -61,7 +61,12 @@ class Asset(Base):
     purged_at: Mapped[datetime | None] = mapped_column(DateTime)
     __table_args__ = (Index("ix_assets_content_lookup", "kind", "sha256"),
                      Index("ix_assets_owner_content", "owner_id", "kind", "sha256"),
-                     Index("ix_assets_storage_key", "storage_key"))
+                     Index("ix_assets_storage_key", "storage_key"),
+                     Index('ix_assets_unpurged', 'kind', 'id',
+                         sqlite_where=text('purged_at IS NULL'), postgresql_where=text('purged_at IS NULL')),
+                     Index('ix_assets_live_created', 'created_at', 'id',
+                         sqlite_where=text("deleted_at IS NULL AND kind != 'original'"),
+                         postgresql_where=text("deleted_at IS NULL AND kind != 'original'")))
 
 
 class Job(Base):
@@ -73,7 +78,7 @@ class Job(Base):
     input_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
     source_sha256: Mapped[str] = mapped_column(String(64), default="", index=True)
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, index=True)
-    output_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id"))
+    output_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id"), index=True)
     mode: Mapped[str] = mapped_column(String(20))
     workflow_kind: Mapped[str] = mapped_column(String(16), server_default='image')
     target_language: Mapped[str] = mapped_column(String(20))

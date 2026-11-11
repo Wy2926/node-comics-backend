@@ -8,22 +8,18 @@ from datetime import timedelta
 import logging
 import os
 import re
-import socket
 import traceback
 from sqlalchemy import and_, delete, func, select, text
 from .config import settings
 from .db import session_factory
 from .health_models import ServiceHeartbeat
+from .healthcheck import instance_id
 from .models import Job, now
 from .queue_models import ComputeNode, ExecutionLease, JobStage
 
 ROLES = ("control-worker", "maintenance")
 REPORT_ROLES = (*ROLES, "oidc", "document-worker")
 log = logging.getLogger("node_comics.health")
-
-
-def instance_id(pid=None):
-    return f"{socket.gethostname()}:{os.getpid() if pid is None else pid}"[:200]
 
 
 def error_code(error):

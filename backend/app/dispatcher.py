@@ -133,9 +133,9 @@ def cleanup(db):
     from .system_settings import get_request_limits
     expire_guests(db)
     expire_registered_results(db)
-    orphan_results = list(db.scalars(select(Asset).outerjoin(Job, Job.output_asset_id == Asset.id).where(
+    orphan_results = list(db.scalars(select(Asset).where(
         Asset.kind != "original", Asset.deleted_at.is_(None), Asset.created_at <= orphan_cutoff,
-        Job.id.is_(None)).limit(100)))
+        ~select(Job.id).where(Job.output_asset_id == Asset.id).exists()).limit(100)))
     for asset in orphan_results:
         asset.deleted_at = now()
     db.flush()
@@ -210,11 +210,16 @@ def main():
     next_oidc_probe = 0
     next_campaign_scan = 0
     next_retention_scan = 0
+    next_cleanup = 0
     while not stopping.is_set():
         try:
             recover_once()
-            with session_factory()() as db:
-                cleanup(db)
+            # Physical retention is not lease recovery. Avoid scanning history
+            # under the scheduler lock on every two-second recovery tick.
+            if time.monotonic() >= next_cleanup:
+                with session_factory()() as db:
+                    cleanup(db)
+                next_cleanup = time.monotonic() + 60
             if time.monotonic() >= next_retention_scan:
                 from .execution_retention import cleanup_execution_data
                 with session_factory()() as db:

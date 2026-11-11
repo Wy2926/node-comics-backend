@@ -86,7 +86,7 @@ services:
     command: [python, -m, app.dispatcher]
     stop_grace_period: 31m
     healthcheck:
-      test: [CMD, python, -m, app.health, maintenance]
+      test: [CMD, python, -m, app.healthcheck, maintenance]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -96,7 +96,7 @@ services:
     command: [python, -m, app.workers]
     stop_grace_period: 31m
     healthcheck:
-      test: [CMD, python, -m, app.health, control-worker]
+      test: [CMD, python, -m, app.healthcheck, control-worker]
       interval: 15s
       timeout: 5s
       retries: 3

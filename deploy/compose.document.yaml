@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 31m
     healthcheck:
-      test: [CMD, python, -m, app.health, document-worker]
+      test: [CMD, python, -m, app.healthcheck, document-worker]
       interval: 15s
       timeout: 5s
       retries: 3
