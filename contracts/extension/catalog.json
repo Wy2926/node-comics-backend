@@ -1,0 +1,1634 @@
+[
+  {
+    "id": "readcomicsonline",
+    "name": "Read Comics Online",
+    "url": "https://readcomicsonline.ru/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%230f172a'/%3e%3cpath%20d='M9%2014h19l4%204%204-4h19v34H36l-4%204-4-4H9Z'%20fill='%23ef4444'/%3e%3cpath%20d='M32%2021v24M15%2023h10m-10%207h10m-10%207h10m14-14h10m-10%207h10m-10%207h10'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "primaryLanguages": [
+      "en"
+    ],
+    "adaptedOn": "2026-10-27",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "western"
+    ],
+    "search": true,
+    "searchPageSize": 60,
+    "adapterId": "readcomicsonline",
+    "key": "readcomicsonline:readcomicsonline"
+  },
+  {
+    "id": "comicogyaaa",
+    "name": "COMIC OGYAAA!!",
+    "url": "https://comic-ogyaaa.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23dd6e24'/%3e%3cpath%20d='M32%2012a20%2020%200%201%200%200%2040%2020%2020%200%200%200%200-40Zm0%209a11%2011%200%201%201%200%2022%2011%2011%200%200%201%200-22Z'%20fill='%23fff'%20fill-rule='evenodd'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-25",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicogyaaa",
+    "key": "comicogyaaa:comicogyaaa"
+  },
+  {
+    "id": "comicseasons",
+    "name": "Seasons",
+    "url": "https://comic-seasons.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23426b69'/%3e%3cpath%20d='M47%2015H28c-9%200-14%205-14%2012s5%2011%2013%2011h9c3%200%205%201%205%203s-2%203-5%203H16v8h21c10%200%2015-5%2015-12s-5-11-14-11H28c-3%200-5-1-5-3s2-3%205-3h19Z'%20fill='%23fff'%20fill-rule='evenodd'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-25",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicseasons",
+    "key": "comicseasons:comicseasons"
+  },
+  {
+    "id": "comictrail",
+    "name": "コミックトレイル",
+    "url": "https://comic-trail.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%231d7069'/%3e%3cpath%20d='M14%2017h36v8H37v24H27V25H14Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-25",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comictrail",
+    "key": "comictrail:comictrail"
+  },
+  {
+    "id": "feelweb",
+    "name": "FEEL web",
+    "url": "https://feelweb.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23af386d'/%3e%3cpath%20d='M18%2013h30v9H28v7h17v9H28v13H18Z'%20fill='%23fff'%20fill-rule='evenodd'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-25",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "feelweb",
+    "key": "feelweb:feelweb"
+  },
+  {
+    "id": "magcomi",
+    "name": "マグコミ",
+    "url": "https://magcomi.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23ca333d'/%3e%3cpath%20d='M12%2048V17h10l10%2015%2010-15h10v31H42V33L32%2046%2022%2033v15Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-25",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "magcomi",
+    "key": "magcomi:magcomi"
+  },
+  {
+    "id": "akazascans",
+    "name": "Akaza Scans",
+    "url": "https://akazascans.org/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23203F59'/%3e%3cpath%20d='M13%2047%2029%2015h6l16%2032H40l-3-7H27l-3%207zm17-16h4l-2-6z'%20fill='%2371DBD2'/%3e%3cpath%20d='m49%2010%202%205%205%202-5%202-2%205-2-5-5-2%205-2z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "contentTags": [
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "akazascans",
+    "key": "akazascans:akazascans"
+  },
+  {
+    "id": "anisascans",
+    "name": "Anisa Scans",
+    "url": "https://anisascans.in/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23287F92'/%3e%3cpath%20d='M13%2015h17l4%205%2017-5v34l-17%203-4-5H13z'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'/%3e%3cpath%20d='M33%2022v25M19%2025h7M19%2033h7M40%2027l5-1M40%2035l5-1'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "anisascans",
+    "key": "anisascans:anisascans"
+  },
+  {
+    "id": "asterscans",
+    "name": "Aster Scans",
+    "url": "https://asterscans.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23482F69'/%3e%3cpath%20d='M13%2047%2029%2015h6l16%2032H40l-3-7H27l-3%207zm17-16h4l-2-6z'%20fill='%23E0B5FF'/%3e%3cpath%20d='m49%2010%202%205%205%202-5%202-2%205-2-5-5-2%205-2z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manhwa",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "asterscans",
+    "key": "asterscans:asterscans"
+  },
+  {
+    "id": "comicaction",
+    "name": "webアクション",
+    "url": "https://comic-action.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23173e7b'/%3e%3cpath%20d='M15%2013h34v38H15z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='m23%2042%209-21%209%2021m-14-8h10'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicaction",
+    "key": "comicaction:comicaction"
+  },
+  {
+    "id": "comicgardo",
+    "name": "コミックガルド",
+    "url": "https://comic-gardo.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23276a42'/%3e%3cpath%20d='M15%2013h34v38H15z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M39%2025a11%2011%200%201%200%200%2015v-7h-8'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicgardo",
+    "key": "comicgardo:comicgardo"
+  },
+  {
+    "id": "gakamangas",
+    "name": "GakaMangas",
+    "url": "https://gakamangas.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%234755ab'/%3e%3cpath%20d='M44%2021a17%2017%200%201%200%205%2017H33v-8h24v8A25%2025%200%201%201%2049%2015Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "contentTags": [
+      "doujin"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "gakamangas",
+    "key": "gakamangas:gakamangas"
+  },
+  {
+    "id": "goodtoon",
+    "name": "GoodToon",
+    "url": "https://www.goodtoon008.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23bc72c1'/%3e%3cpath%20fill='%23fff'%20d='M16%2014h32v28H31l-11%209v-9h-4z'/%3e%3cpath%20fill='%23814787'%20d='M39%2024a11%2011%200%201%200%201%2013V29H29v5h6v1a6%206%200%201%201%200-8z'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manhwa",
+      "webtoon"
+    ],
+    "isRaw": true,
+    "primaryLanguages": [
+      "ko"
+    ],
+    "search": true,
+    "searchPageSize": 63,
+    "adapterId": "goodtoon",
+    "key": "goodtoon:goodtoon"
+  },
+  {
+    "id": "hunlightcomics",
+    "name": "Hunlight Comics",
+    "url": "https://hunlightcomics.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23bf6b24'/%3e%3ccircle%20cx='32'%20cy='32'%20r='12'%20fill='%23fff'/%3e%3cpath%20d='M32%208v7m0%2034v7M8%2032h7m34%200h7M15%2015l5%205m24%2024%205%205M15%2049l5-5m24-24%205-5'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manga"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "hunlightcomics",
+    "key": "hunlightcomics:hunlightcomics"
+  },
+  {
+    "id": "kingofshojo",
+    "name": "King of Shojo",
+    "url": "https://kingofshojo.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23b84778'/%3e%3cpath%20d='m12%2024%209%207%2011-15%2011%2015%209-7-6%2023H18Z'%20fill='%23fff'/%3e%3cpath%20d='M19%2052h26'%20stroke='%23fff'%20stroke-width='4'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "kingofshojo",
+    "key": "kingofshojo:kingofshojo"
+  },
+  {
+    "id": "kuragebunch",
+    "name": "くらげバンチ",
+    "url": "https://kuragebunch.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2316847b'/%3e%3cpath%20d='M12%2034a20%2020%200%200%201%2040%200z'%20fill='%23fff'/%3e%3cpath%20d='M20%2036v7q0%205-4%208m16-15v16m12-16v7q0%205%204%208'%20fill='none'%20stroke='%23fff'%20stroke-width='5'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "kuragebunch",
+    "key": "kuragebunch:kuragebunch"
+  },
+  {
+    "id": "nekoscans",
+    "name": "NekoScans / Neko Manga",
+    "url": "https://nekoproject.org/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23AB497F'/%3e%3cpath%20d='m15%2031%201-18%2014%2010h4l14-10%201%2018c6%2023-40%2023-34%200Z'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'/%3e%3cpath%20d='M23%2033v3m18-3v3m-11%205%202%202%202-2M9%2039l12%202m22%200%2012-2'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'%20fill='none'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "es"
+    ],
+    "search": true,
+    "adapterId": "nekoscans",
+    "key": "nekoscans:nekoscans"
+  },
+  {
+    "id": "s2manga",
+    "name": "S2Manga / S2READ",
+    "url": "https://s2read.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%236952B3'/%3e%3cpath%20d='M13%2015h17l4%205%2017-5v34l-17%203-4-5H13z'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'/%3e%3cpath%20d='M33%2022v25M19%2025h7M19%2033h7M40%2027l5-1M40%2035l5-1'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon",
+      "doujin"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "s2manga",
+    "key": "s2manga:s2manga"
+  },
+  {
+    "id": "shonenjumpplus",
+    "name": "少年ジャンプ＋",
+    "url": "https://shonenjumpplus.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23e32932'/%3e%3cpath%20d='M13%2016h22v23c0%209-5%2014-13%2014-6%200-10-3-12-8l7-4c1%203%202%204%205%204s5-2%205-6V24H13zM46%2019h6v9h9v6h-9v9h-6v-9h-9v-6h9z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "shonenjumpplus",
+    "key": "shonenjumpplus:shonenjumpplus"
+  },
+  {
+    "id": "tonarinoyj",
+    "name": "となりのヤングジャンプ",
+    "url": "https://tonarinoyj.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%231d74aa'/%3e%3cpath%20d='M9%2015h10l7%2013%207-13h10L30%2038v12h-8V38zM43%2027h13v15c0%207-4%2011-10%2011-5%200-8-2-10-6l6-4c1%202%202%203%204%203s3-1%203-4v-8h-6z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "tonarinoyj",
+    "key": "tonarinoyj:tonarinoyj"
+  },
+  {
+    "id": "zenon",
+    "name": "ゼノンプラス",
+    "url": "https://comic-zenon.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23c43439'/%3e%3cpath%20d='M15%2013h34v38H15z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M23%2022h18L23%2042h18'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "zenon",
+    "key": "zenon:zenon"
+  },
+  {
+    "id": "asurascans",
+    "name": "Asura Scans",
+    "url": "https://asurascans.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%237542bb'/%3e%3cpath%20d='m32%2010%2023%2044H44l-4-9H24l-4%209H9Zm0%2017-5%2011h10Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-19",
+    "pricing": "freemium",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "accessTags": [
+      "login-required"
+    ],
+    "search": true,
+    "adapterId": "asurascans",
+    "key": "asurascans:asurascans"
+  },
+  {
+    "id": "arenascans",
+    "name": "Arena Scans",
+    "url": "https://arenascan.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%239a3412'/%3e%3cpath%20d='m14%2049%2014-34h8l14%2034h-9l-3-8H26l-3%208zm15-16h6l-3-9z'%20fill='%23fff7ed'/%3e%3cpath%20d='M13%2053h38'%20stroke='%23fdba74'%20stroke-width='4'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manhwa",
+      "manhua"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "arenascans",
+    "key": "arenascans:arenascans"
+  },
+  {
+    "id": "asacomi",
+    "name": "アサコミ",
+    "url": "https://asacomi.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%23d7504d'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='m22%2038%2010-20%2010%2020m-16-7h12'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "asacomi",
+    "key": "asacomi:asacomi"
+  },
+  {
+    "id": "bunmanga",
+    "name": "Bun Manga",
+    "url": "https://bunmanga.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%237754a0'/%3e%3cpath%20d='M12%2015h17l3%204%203-4h17v35H35l-3%203-3-3H12z'%20fill='%23fff'/%3e%3cpath%20d='M23%2024v17h6a4%204%200%200%200%200-8h-6%205a4%204%200%200%200%200-9zm16%200v17m5-17v17'%20fill='none'%20stroke='%237754a0'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manhua",
+      "manhwa"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "bunmanga",
+    "key": "bunmanga:bunmanga"
+  },
+  {
+    "id": "championcross",
+    "name": "Champion Cross / チャンピオンクロス",
+    "url": "https://championcross.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23bd293f'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M28%2023h-6a6%206%200%200%200-6%206v2a6%206%200%200%200%206%206h6m7-14%2012%2014m0-14L35%2037'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "championcross",
+    "key": "championcross:championcross"
+  },
+  {
+    "id": "comicride",
+    "name": "Comic RIDE / ライコミ",
+    "url": "https://comicride.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23145da0'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M22%2038V20h11a6%206%200%200%201%200%2012H22m11%200%208%206'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicride",
+    "key": "comicride:comicride"
+  },
+  {
+    "id": "comicryu",
+    "name": "COMIC リュウ",
+    "url": "https://comic-ryu.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23c73132'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M16%2036V23h4a3%203%200%200%201%200%206h-4m4%200%204%207m3-13%204%206%204-6m-4%206v7m8-13v9a4%204%200%200%200%208%200v-9'%20fill='none'%20stroke='%23fff'%20stroke-width='2.5'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicryu",
+    "key": "comicryu:comicryu"
+  },
+  {
+    "id": "hanayume",
+    "name": "Hana To Yume+ / 花とゆめ＋",
+    "url": "https://hanayume.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%23db467d'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M23%2022v16m18-16v16M23%2030h18'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "hanayume",
+    "key": "hanayume:hanayume"
+  },
+  {
+    "id": "kimicomi",
+    "name": "KimiComi / キミコミ",
+    "url": "https://kimicomi.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%23df597c'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M23%2022v16m17-16L23%2031l17%207'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "kimicomi",
+    "key": "kimicomi:kimicomi"
+  },
+  {
+    "id": "lagoonscans",
+    "name": "Lagoon Scans",
+    "url": "https://lagoonscans.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23075985'/%3e%3cpath%20d='M15%2015h9v29h25v8H15z'%20fill='%23e0f2fe'/%3e%3cpath%20d='M31%2023c5-5%2010%205%2017%200v8c-7%205-12-5-17%200z'%20fill='%2338bdf8'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "lagoonscans",
+    "key": "lagoonscans:lagoonscans"
+  },
+  {
+    "id": "lhtranslation",
+    "name": "LHTranslation",
+    "url": "https://lhtranslation.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23176589'/%3e%3cpath%20d='M12%2014h17l3%204%203-4h17v36H35l-3%203-3-3H12z'%20fill='%23fff'/%3e%3cpath%20d='M21%2024v16h6m11-16v16m8-16v16m-8-8h8'%20fill='none'%20stroke='%23176589'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manga"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "lhtranslation",
+    "key": "lhtranslation:lhtranslation"
+  },
+  {
+    "id": "mangabang",
+    "name": "MangaBang Comics / マンガBANGコミックス",
+    "url": "https://comics.manga-bang.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%23ed6c19'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M17%2039V21l7%209%207-9v18m7%200V21h5a4%204%200%200%201%200%208h-5m5%200a5%205%200%200%201%200%2010h-5'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "mangabang",
+    "key": "mangabang:mangabang"
+  },
+  {
+    "id": "mangaeclipse",
+    "name": "Manga Eclipse",
+    "url": "https://mangaeclipse.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23242345'/%3e%3ccircle%20cx='30'%20cy='29'%20r='18'%20fill='%23f4d36c'/%3e%3ccircle%20cx='39'%20cy='23'%20r='17'%20fill='%23242345'/%3e%3cpath%20d='M14%2049h36M20%2055h24'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manhua"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "mangaeclipse",
+    "key": "mangaeclipse:mangaeclipse"
+  },
+  {
+    "id": "mangasushi",
+    "name": "Mangasushi",
+    "url": "https://mangasushi.org/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23197a6b'/%3e%3cpath%20d='M14%2019h14l4%204%204-4h14v31H36l-4%203-4-3H14z'%20fill='%23fff'/%3e%3cpath%20d='M23%2029c4-5%2014-5%2018%200v10c-4%205-14%205-18%200z'%20fill='%23197a6b'/%3e%3cellipse%20cx='32'%20cy='29'%20rx='9'%20ry='5'%20fill='%23f29955'/%3e%3cpath%20d='M29%2028h6'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manga"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "mangasushi",
+    "key": "mangasushi:mangasushi"
+  },
+  {
+    "id": "monopolyscan",
+    "name": "Monopoly Scan",
+    "url": "https://monopolymanhua.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23146b68'/%3e%3cpath%20d='M12%2013h17l3%204%203-4h17v37H35l-3%203-3-3H12z'%20fill='%23fff'/%3e%3cpath%20d='M20%2041V25l12%2011%2012-11v16'%20fill='none'%20stroke='%23146b68'%20stroke-width='5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manhua"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "es"
+    ],
+    "search": true,
+    "adapterId": "monopolyscan",
+    "key": "monopolyscan:monopolyscan"
+  },
+  {
+    "id": "takecomic",
+    "name": "TakeComic / 竹コミ！",
+    "url": "https://takecomic.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%233c9251'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M21%2022h22M32%2022v17'%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "takecomic",
+    "key": "takecomic:takecomic"
+  },
+  {
+    "id": "undertranslations",
+    "name": "UnderTranslations",
+    "url": "https://undertranslations.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%235b21b6'/%3e%3cpath%20d='M16%2015h8v24c0%2010%2016%2010%2016%200V15h8v24c0%2021-32%2021-32%200z'%20fill='%23f5f3ff'/%3e%3cpath%20d='M28%2018h8v21h-8z'%20fill='%23c4b5fd'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manga"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "es"
+    ],
+    "search": true,
+    "adapterId": "undertranslations",
+    "key": "undertranslations:undertranslations"
+  },
+  {
+    "id": "weloma",
+    "name": "WeLoMa",
+    "url": "https://weloma.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%233498db'/%3e%3cpath%20d='m10%2018%209%2029h8l5-17%205%2017h8l9-29H44l-4%2017-4-17h-8l-4%2017-4-17Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "free",
+    "contentTags": [
+      "manga"
+    ],
+    "isRaw": true,
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "weloma",
+    "key": "weloma:weloma"
+  },
+  {
+    "id": "younganimal",
+    "name": "Young Animal / ヤングアニマル",
+    "url": "https://younganimal.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23166c4a'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='m17%2022%206%208%206-8m-6%208v8m11%200%206-16%206%2016m-10-5h8'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "younganimal",
+    "key": "younganimal:younganimal"
+  },
+  {
+    "id": "youngchampion",
+    "name": "Young Champion / ヤンチャンWeb",
+    "url": "https://youngchampion.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3cpath%20d='M14%200h36a14%2014%200%200%201%2014%2014v36a14%2014%200%200%201-14%2014H14A14%2014%200%200%201%200%2050V14A14%2014%200%200%201%2014%200Z'%20fill='%23a72035'/%3e%3cpath%20d='M10%2012h44v34H37l-9%208v-8H10Z'%20fill='none'%20stroke='%23fff'%20stroke-width='3'/%3e%3cpath%20d='M18%2020l6%209%206-9m-6%209v10m23-17a9%209%200%201%200%200%2015'%20fill='none'%20stroke='%23fff'%20stroke-width='3'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-15",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "youngchampion",
+    "key": "youngchampion:youngchampion"
+  },
+  {
+    "id": "rawkuro",
+    "name": "RawKuro",
+    "url": "https://rawkuro.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2320252d'/%3e%3cpath%20d='M14%2015h20c11%200%2016%205%2016%2014%200%207-4%2011-10%2013l11%2010H37L25%2039v13H14zm11%2010v7h9c3%200%205-1%205-4s-2-3-5-3z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-14",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "rawkuro",
+    "key": "rawkuro:rawkuro"
+  },
+  {
+    "id": "raw1001",
+    "name": "Raw1001",
+    "url": "https://raw1001.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2320252d'/%3e%3cpath%20d='M14%2015h20c11%200%2016%205%2016%2014%200%207-4%2011-10%2013l11%2010H37L25%2039v13H14zm11%2010v7h9c3%200%205-1%205-4s-2-3-5-3z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-14",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "rawkuro",
+    "key": "rawkuro:raw1001"
+  },
+  {
+    "id": "comicfuz",
+    "name": "COMIC FUZ",
+    "url": "https://comic-fuz.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='12'%20fill='%23f39800'/%3e%3cpath%20d='M17%2014h33v9H28v8h18v9H28v13H17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "freemium",
+    "isRaw": true,
+    "primaryLanguages": [
+      "ja"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "accessTags": [
+      "login-required"
+    ],
+    "search": true,
+    "adapterId": "comicfuz",
+    "key": "comicfuz:comicfuz"
+  },
+  {
+    "id": "hachiraw",
+    "name": "Hachiraw",
+    "url": "https://hachiraw.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='12'%20fill='%232b2b2b'/%3e%3cpath%20d='M15%2014h9v14h16V14h9v36h-9V36H24v14h-9z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "hachiraw",
+    "key": "hachiraw:hachiraw"
+  },
+  {
+    "id": "mangataro",
+    "name": "MangaTaro",
+    "url": "https://mangataro.org/home",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23171717'/%3e%3cpath%20d='M12%2047V17h8l12%2017%2012-17h8v30H42V33L32%2046%2022%2033v14z'%20fill='%23f97316'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "free",
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "search": true,
+    "adapterId": "mangataro",
+    "key": "mangataro:mangataro"
+  },
+  {
+    "id": "webtoonscan",
+    "name": "WebtoonScan",
+    "url": "https://webtoonscan.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23e52f45'/%3e%3cpath%20d='M12%2016h40v28H34L22%2053v-9H12z'%20fill='%23fff'/%3e%3cpath%20d='m19%2024%204%2012%205-8%205%208%204-12m5%200v12'%20fill='none'%20stroke='%23e52f45'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "free",
+    "contentTags": [
+      "manhwa",
+      "webtoon"
+    ],
+    "isRaw": false,
+    "primaryLanguages": [
+      "en",
+      "ko"
+    ],
+    "search": true,
+    "adapterId": "webtoonscan",
+    "key": "webtoonscan:webtoonscan"
+  },
+  {
+    "id": "zaimanhua",
+    "name": "再漫画 · 原创",
+    "url": "https://www.zaimanhua.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%231994d0'/%3e%3cpath%20d='M15%2015h34v8L26%2042h23v8H15v-8l23-19H15z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "freemium",
+    "isRaw": false,
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "contentTags": [
+      "manhua"
+    ],
+    "search": true,
+    "adapterId": "zaimanhua",
+    "key": "zaimanhua:zaimanhua"
+  },
+  {
+    "id": "zaimanhua-manga",
+    "name": "再漫画 · 日漫",
+    "url": "https://manhua.zaimanhua.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%231994d0'/%3e%3cpath%20d='M15%2015h34v8L26%2042h23v8H15v-8l23-19H15z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "freemium",
+    "isRaw": false,
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "search": true,
+    "adapterId": "zaimanhua",
+    "key": "zaimanhua:zaimanhua-manga"
+  },
+  {
+    "id": "zebrack",
+    "name": "ゼブラック · Zebrack",
+    "url": "https://zebrack-comic.shueisha.co.jp/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='12'%20fill='%2325beb1'/%3e%3cpath%20d='M16%2015h33v8L28%2041h21v9H15v-8l22-18H16z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-12",
+    "pricing": "freemium",
+    "isRaw": true,
+    "primaryLanguages": [
+      "ja"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "search": true,
+    "adapterId": "zebrack",
+    "key": "zebrack:zebrack"
+  },
+  {
+    "id": "comickz",
+    "name": "ComicK (comickz)",
+    "url": "https://comickz.co.uk/home",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%232563eb'/%3e%3cpath%20d='M44%2019a19%2019%200%201%200%200%2026l-6-6a10%2010%200%201%201%200-14z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-09",
+    "pricing": "free",
+    "isRaw": false,
+    "primaryLanguages": [
+      "en"
+    ],
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "search": true,
+    "adapterId": "comickz",
+    "key": "comickz:comickz"
+  },
+  {
+    "id": "comicwalker",
+    "name": "カドコミ · ComicWalker",
+    "url": "https://comic-walker.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23f15b40'/%3e%3cpath%20d='M42%2018H27c-8%200-13%206-13%2014s5%2014%2013%2014h15M35%2018%2024%2032l11%2014'%20fill='none'%20stroke='%23fff'%20stroke-width='6'%20stroke-linejoin='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-09",
+    "pricing": "freemium",
+    "isRaw": true,
+    "primaryLanguages": [
+      "ja"
+    ],
+    "accessTags": [
+      "partial-web"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "search": true,
+    "adapterId": "comicwalker",
+    "key": "comicwalker:comicwalker"
+  },
+  {
+    "id": "heros",
+    "name": "HERO'S Web",
+    "url": "https://heros-web.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='12'%20fill='%23cf1826'/%3e%3cpath%20d='M17%2014h9v13h12V14h9v36h-9V36H26v14h-9z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-09",
+    "pricing": "freemium",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "heros",
+    "key": "heros:heros"
+  },
+  {
+    "id": "rawlazy",
+    "name": "RawLazy",
+    "url": "https://rawlazy.io/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2329415a'/%3e%3cpath%20d='M16%2014h18c12%200%2017%207%2017%2015%200%206-3%2011-9%2013l10%2010H38L25%2037v15H13V14zm9%2011v8h9c3%200%205-1%205-4s-2-4-5-4z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-04",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga",
+      "doujin"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "rawlazy",
+    "key": "rawlazy:rawlazy"
+  },
+  {
+    "id": "comicdays",
+    "name": "Comic DAYS",
+    "url": "https://comic-days.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23e9473f'/%3e%3cpath%20d='M20%2015h11c17%200%2022%209%2022%2017s-5%2017-22%2017H20V15zm9%208v18h3c8%200%2012-4%2012-9s-4-9-12-9h-3z'%20fill='%23fff'/%3e%3cpath%20d='M11%2024h5v16h-5z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-03",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicdays",
+    "key": "comicdays:comicdays"
+  },
+  {
+    "id": "klmanga",
+    "name": "KLManga",
+    "url": "https://klmanga.works/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23143d59'/%3e%3cpath%20d='M14%2016h8v14l10-14h10L29%2033l14%2015H32L22%2036v12h-8zm32%200h8v25h6v7H46z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-03",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "klmanga",
+    "key": "klmanga:klmanga"
+  },
+  {
+    "id": "mangadna",
+    "name": "MangaDNA",
+    "url": "https://mangadna.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23e74b3b'/%3e%3cpath%20d='M14%2047V17h8l10%2017%2010-17h8v30h-8V31L32%2047%2022%2031v16z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-03",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "mangadna",
+    "key": "mangadna:mangadna"
+  },
+  {
+    "id": "mangaone",
+    "name": "マンガワン · Manga One",
+    "url": "https://manga-one.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='12'%20fill='%23e62c6e'/%3e%3cpath%20d='M12%2046V18h8l8%2014%208-14h8v28h-8V32l-8%2013-8-13v14zm36-28h7v28h-7z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-03",
+    "pricing": "freemium",
+    "isRaw": true,
+    "primaryLanguages": [
+      "ja"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "search": true,
+    "adapterId": "mangaone",
+    "key": "mangaone:mangaone"
+  },
+  {
+    "id": "mangapill",
+    "name": "MangaPill",
+    "url": "https://mangapill.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%232563eb'/%3e%3cg%20transform='rotate(-35%2032%2032)'%3e%3crect%20x='13'%20y='23'%20width='38'%20height='18'%20rx='9'%20fill='%23fff'/%3e%3cpath%20d='M32%2023v18'%20stroke='%232563eb'%20stroke-width='3'/%3e%3c/g%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-03",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "mangapill",
+    "key": "mangapill:mangapill"
+  },
+  {
+    "id": "atsu",
+    "name": "Atsumaru",
+    "url": "https://atsu.moe/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%231d1e20'/%3e%3cpath%20d='M13%2047%2027%2016h10l14%2031H40l-2-6H26l-2%206zm16-14h6l-3-9z'%20fill='%23e8aebe'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-02",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "atsu",
+    "key": "atsu:atsu"
+  },
+  {
+    "id": "jf00",
+    "name": "漫画猫 (00jf)",
+    "url": "https://www.00jf.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='15'%20fill='%2375a4b4'/%3e%3cpath%20d='M15%2027%2012%2012l16%2011h8l16-11-3%2015v14c0%2011-34%2011-34%200Z'%20fill='%23fff'/%3e%3ccircle%20cx='25'%20cy='35'%20r='3'%20fill='%2344616b'/%3e%3ccircle%20cx='39'%20cy='35'%20r='3'%20fill='%2344616b'/%3e%3cpath%20d='m29%2042%203%203%203-3'%20fill='none'%20stroke='%2344616b'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-02",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manhua",
+      "manhwa",
+      "manga",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "jf00",
+    "key": "jf00:jf00"
+  },
+  {
+    "id": "mangaball",
+    "name": "MangaBall",
+    "url": "https://mangaball.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3e%3crect%20width='48'%20height='48'%20rx='12'%20fill='%23151a27'/%3e%3ccircle%20cx='24'%20cy='24'%20r='16'%20fill='%23e4b74b'/%3e%3cpath%20d='M13%2030V17h4l7%208%207-8h4v13h-5v-6l-6%207-6-7v6z'%20fill='%23151a27'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-02",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon",
+      "doujin"
+    ],
+    "primaryLanguages": [
+      "en",
+      "vi",
+      "es",
+      "id"
+    ],
+    "search": true,
+    "adapterId": "mangaball",
+    "key": "mangaball:mangaball"
+  },
+  {
+    "id": "rawotaku",
+    "name": "RawOtaku",
+    "url": "https://rawotaku.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20x='4'%20y='4'%20width='56'%20height='56'%20rx='12'%20fill='%235f25a6'/%3e%3cpath%20d='M12%2012h40v5H12zM12%2047h40v5H12z'%20fill='%23ffd702'/%3e%3cg%20fill='none'%20stroke='%23fff'%20stroke-width='4'%20stroke-linejoin='round'%3e%3cpath%20d='M17%2042V23h8a6%206%200%200%201%200%2012h-8m8%200%207%207'/%3e%3crect%20x='37'%20y='23'%20width='12'%20height='19'%20rx='6'/%3e%3c/g%3e%3c/svg%3e",
+    "adaptedOn": "2026-10-02",
+    "pricing": "free",
+    "isRaw": true,
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "rawotaku",
+    "key": "rawotaku:rawotaku"
+  },
+  {
+    "id": "pixiv",
+    "name": "pixiv",
+    "url": "https://www.pixiv.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3e%3crect%20width='32'%20height='32'%20rx='7'%20fill='%230096fa'/%3e%3cpath%20fill='%23fff'%20d='M10%208h7a7%207%200%200%201%200%2014h-3v5h-4V8zm4%204v6h3a3%203%200%200%200%200-6h-3z'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-29",
+    "pricing": "free",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga",
+      "doujin",
+      "illustration"
+    ],
+    "primaryLanguages": [
+      "ja",
+      "zh-Hans",
+      "en"
+    ],
+    "adapterId": "pixiv",
+    "key": "pixiv:pixiv"
+  },
+  {
+    "id": "baozimh",
+    "name": "包子漫画",
+    "url": "https://cn.baozimh.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23ffb84d'/%3e%3cpath%20d='M13%2037c0-9%208-15%2019-20%2011%205%2019%2011%2019%2020%200%209-8%2015-19%2015S13%2046%2013%2037Z'%20fill='%23fff8e8'/%3e%3cpath%20d='m25%2025%207-8%207%208M25%2035h14'%20fill='none'%20stroke='%23bb6425'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manhua",
+      "manga",
+      "manhwa",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "baozimh",
+    "key": "baozimh:baozimh"
+  },
+  {
+    "id": "sundaywebry",
+    "name": "サンデーうぇぶり",
+    "url": "https://www.sunday-webry.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23ef3438'/%3e%3cpath%20d='M17%2015h30v8H25v5h14a10%2010%200%200%201%200%2020H17v-8h22a2%202%200%200%200%200-4H25a8%208%200%200%201-8-8Z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "partial-web"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "sundaywebry",
+    "key": "sundaywebry:sundaywebry"
+  },
+  {
+    "id": "webtoons-en",
+    "name": "WEBTOON · English",
+    "url": "https://www.webtoons.com/en/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-en"
+  },
+  {
+    "id": "webtoons-zh-hant",
+    "name": "WEBTOON · 繁體中文",
+    "url": "https://www.webtoons.com/zh-hant/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "zh-Hant"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-zh-hant"
+  },
+  {
+    "id": "webtoons-th",
+    "name": "WEBTOON · ภาษาไทย",
+    "url": "https://www.webtoons.com/th/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "th"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-th"
+  },
+  {
+    "id": "webtoons-id",
+    "name": "WEBTOON · Indonesia",
+    "url": "https://www.webtoons.com/id/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "id"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-id"
+  },
+  {
+    "id": "webtoons-es",
+    "name": "WEBTOON · Español",
+    "url": "https://www.webtoons.com/es/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "es"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-es"
+  },
+  {
+    "id": "webtoons-fr",
+    "name": "WEBTOON · Français",
+    "url": "https://www.webtoons.com/fr/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "fr"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-fr"
+  },
+  {
+    "id": "webtoons-de",
+    "name": "WEBTOON · Deutsch",
+    "url": "https://www.webtoons.com/de/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%2300dc64'/%3e%3cpath%20d='m10%2018%208%2028h9l5-16%205%2016h9l8-28h-9l-4%2017-5-17h-8l-5%2017-4-17z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-27",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required",
+      "partial-web"
+    ],
+    "contentTags": [
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "de"
+    ],
+    "search": true,
+    "adapterId": "webtoons",
+    "key": "webtoons:webtoons-de"
+  },
+  {
+    "id": "mangadot",
+    "name": "MangaDot",
+    "url": "https://mangadot.net/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%237854db'/%3e%3cpath%20d='M12%2046V18h8l12%2014%2012-14h8v28h-8V30L32%2043%2020%2030v16z'%20fill='%23fff'/%3e%3ccircle%20cx='49'%20cy='50'%20r='5'%20fill='%23e2d6ff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-26",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en",
+      "fr",
+      "es"
+    ],
+    "search": true,
+    "adapterId": "mangadot",
+    "key": "mangadot:mangadot"
+  },
+  {
+    "id": "guazimanhua",
+    "name": "瓜子漫画",
+    "url": "https://www.guazimanhua.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3e%3crect%20width='48'%20height='48'%20rx='12'%20fill='%23247d52'/%3e%3cpath%20d='M24%207C12%2018%2011%2034%2024%2042%2037%2034%2036%2018%2024%207Z'%20fill='%23fff2c4'/%3e%3cpath%20d='M24%2014v23'%20stroke='%23247d52'%20stroke-width='3'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-25",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "guazimanhua",
+    "key": "guazimanhua:guazimanhua"
+  },
+  {
+    "id": "mangadex",
+    "name": "MangaDex",
+    "url": "https://mangadex.org/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%23ff6740'/%3e%3cpath%20d='M12%2017h15l5%206%205-6h15v31H37l-5%204-5-4H12zm6%206v19h11V27l-5-4zm28%200H40l-5%204v15h11z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-25",
+    "pricing": "free",
+    "isRaw": false,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon",
+      "doujin"
+    ],
+    "primaryLanguages": [
+      "en",
+      "es",
+      "pt-BR",
+      "fr"
+    ],
+    "search": true,
+    "adapterId": "mangadex",
+    "key": "mangadex:mangadex"
+  },
+  {
+    "id": "comix",
+    "name": "Comix",
+    "url": "https://comix.to/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='14'%20fill='%237549ea'/%3e%3cpath%20d='M44%2019a18%2018%200%201%200%200%2026'%20fill='none'%20stroke='white'%20stroke-width='8'%20stroke-linecap='round'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-23",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "manhua",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "en"
+    ],
+    "search": true,
+    "adapterId": "comix",
+    "key": "comix:comix"
+  },
+  {
+    "id": "dm5",
+    "name": "动漫屋 DM5",
+    "url": "https://www.dm5.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3e%3crect%20width='64'%20height='64'%20rx='16'%20fill='%23ff3f60'/%3e%3cpath%20d='M13%2018h16c7%200%2011%205%2011%2014S36%2046%2029%2046H13zm8%207v14h7c3%200%205-2%205-7s-2-7-5-7z'%20fill='%23fff'/%3e%3cpath%20d='M44%2018h10v7h-4v4c7%202%207%2015-2%2017h-6v-7h5c3-1%202-4-3-4z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-23",
+    "pricing": "freemium",
+    "isRaw": false,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga",
+      "manhua",
+      "manhwa",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "dm5",
+    "key": "dm5:dm5"
+  },
+  {
+    "id": "naver",
+    "name": "NAVER Webtoon",
+    "url": "https://comic.naver.com/",
+    "icon": "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3e%3crect%20width='48'%20height='48'%20rx='12'%20fill='%2300dc64'/%3e%3cpath%20d='M11%2012h8l10%2016V12h8v24h-8L19%2020v16h-8z'%20fill='%23fff'/%3e%3c/svg%3e",
+    "adaptedOn": "2026-09-23",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manhwa",
+      "webtoon"
+    ],
+    "primaryLanguages": [
+      "ko"
+    ],
+    "search": true,
+    "adapterId": "naver",
+    "key": "naver:naver"
+  },
+  {
+    "id": "comicpash",
+    "name": "Comic PASH!",
+    "url": "https://comicpash.jp/",
+    "icon": "/site-icons/comicpash.svg",
+    "adaptedOn": "2026-09-22",
+    "pricing": "freemium",
+    "isRaw": true,
+    "accessTags": [
+      "login-required"
+    ],
+    "contentTags": [
+      "manga"
+    ],
+    "primaryLanguages": [
+      "ja"
+    ],
+    "search": true,
+    "adapterId": "comicpash",
+    "key": "comicpash:comicpash"
+  },
+  {
+    "id": "copy4000",
+    "name": "拷贝漫画",
+    "url": "https://www.copy4000.com/",
+    "icon": "/site-icons/mangacopy.svg",
+    "adaptedOn": "2026-09-15",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "doujin"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "mangacopy",
+    "key": "mangacopy:copy4000"
+  },
+  {
+    "id": "mangacopy",
+    "name": "MangaCopy",
+    "url": "https://www.mangacopy.com/",
+    "icon": "/site-icons/mangacopy.svg",
+    "adaptedOn": "2026-09-14",
+    "pricing": "free",
+    "isRaw": false,
+    "contentTags": [
+      "manga",
+      "manhwa",
+      "doujin"
+    ],
+    "primaryLanguages": [
+      "zh-Hans"
+    ],
+    "search": true,
+    "adapterId": "mangacopy",
+    "key": "mangacopy:mangacopy"
+  }
+]

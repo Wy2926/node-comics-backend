@@ -1,0 +1,9 @@
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+# Preserve checksum-pinned assets and upstream notices verbatim.
+backend/website/src/assets/** -text
+backend/website/public/browsers/* -text
+backend/website/public/icons/* -text
+backend/website/public/licenses/* -text -whitespace
+contracts/extension/site-icons/* -text
