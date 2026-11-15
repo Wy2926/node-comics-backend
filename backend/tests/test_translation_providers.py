@@ -92,7 +92,9 @@ def test_admin_only_and_secret_validation(admin_case):
                     {**body(), 'api_key': ''}, {**body(), 'api_key': 'private\nsecret'},
                     body(protocol='openai_chat'), body(timeout_seconds=0), body(max_attempts=4),
                     body(base_url='https://user:private@text.example/v1'), body(user_agent='bad\r\nheader'),
-                    body(requests_per_minute=True), body(reasoning_effort='invalid'), body(text_weight=-1),
+                    body(requests_per_minute=True), body(reasoning_effort='invalid'),
+                    body(document={'reasoning_effort': 'invalid'}), body(document={'reasoning_effort': True}),
+                    body(document={'reasoning_effort': ''}), body(text_weight=-1),
                     body(text_weight=True), body(text_weight=10001), body(title_weight=-1),
                     body(title_weight=True), body(title_weight=10001), {k: v for k, v in body().items() if k != 'api_key'}]:
         response = client.post(PATH, headers=auth, json=payload)
@@ -269,25 +271,42 @@ def test_revision_changes_pin_old_endpoint_key_and_cache_identity(admin_case, mo
     assert len(seen) == 2
 
 
-def test_reasoning_update_creates_revision_without_changing_existing_profile(admin_case, monkeypatch):
+@pytest.mark.parametrize('document', [False, True])
+def test_reasoning_revisions_preserve_credentials_and_existing_profiles(admin_case, monkeypatch, document):
+    from app.adapters.llm import RequestLimits, call_messages
+    from app.documents.text import policy
     from app.translation_providers import provider_profile
-    first = create(admin_case, body(reasoning_effort='provider_default'))
+    config = ({'reasoning_effort': 'none', 'document': {'enabled': True, 'reasoning_effort': 'low'}}
+              if document else {'reasoning_effort': 'provider_default'})
+    first = create(admin_case, body(**config))
     with session_factory()() as db:
         before = provider_profile(db, first['id'])
     client, auth = admin_case
-    changed = client.put(PATH + '/' + first['id'], headers=auth, json=body(reasoning_effort='none'))
-    assert changed.status_code == 200
-    assert changed.json()['revision_id'] != before['revision_id']
+    payload = {key: first[key] for key in ('name', 'channel', 'enabled', 'config')}
+    changes = ({'document': {**first['config']['document'], 'reasoning_effort': 'high'}}
+               if document else {'reasoning_effort': 'none'})
+    payload['config'] = {**first['config'], **changes}
+    changed = client.put(PATH + '/' + first['id'], headers=auth, json=payload)
+    assert changed.status_code == 200 and changed.json()['revision_id'] != before['revision_id']
+    assert changed.json()['config']['reasoning_effort'] == 'none'
     with session_factory()() as db:
         after = provider_profile(db, first['id'])
+        assert db.get(TranslationProviderRevision, before['revision_id']).config == first['config']
     seen = []
     def handler(request):
+        assert request.headers['authorization'] == 'Bearer isolated-new-key'
         seen.append(json.loads(request.content).get('reasoning_effort'))
-        return httpx.Response(200, json={'choices': [{'message': {'content': '{}'}, 'finish_reason': 'stop'}]})
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': '{}'}}]})
     monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
     for profile in [before, after, before]:
-        call_text([], 'en', profile)
-    assert seen == [None, 'none', None]
+        if document:
+            limits = policy(profile)
+            call_messages([], profile, limits=RequestLimits(limits.timeout_seconds,
+                limits.max_output_tokens, limits.max_response_bytes, reasoning_effort=limits.reasoning_effort))
+        else:
+            call_text([], 'en', profile)
+    call_text([], 'en', before)
+    assert seen == (['low', 'high', 'low', 'none'] if document else [None, 'none', None, None])
 
 
 def test_weight_changes_preserve_existing_jobs_and_request_reuse(admin_case, png):

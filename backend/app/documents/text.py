@@ -277,7 +277,8 @@ def run_text_stage(job_id, lease_id, check=lambda: None):
         response = None
         try:
             response = call_messages(prompt, profile, json_schema=response_schema(), limits=RequestLimits(
-                limits.timeout_seconds, limits.max_output_tokens, limits.max_response_bytes))
+                limits.timeout_seconds, limits.max_output_tokens, limits.max_response_bytes,
+                reasoning_effort=limits.reasoning_effort))
             translations = parse_translations(response.content, expected)
         except TextError as error:
             _record_call(call_id, response=response, error=error)

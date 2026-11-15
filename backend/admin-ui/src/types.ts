@@ -3,6 +3,7 @@ export type TranslationProtocol = 'chat_completions' | 'responses';
 export type TranslationReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'provider_default';
 export type DocumentModelLimits = {
   enabled: boolean; context_tokens: number; max_input_tokens: number; max_output_tokens: number;
+  reasoning_effort?: TranslationReasoningEffort | null;
   timeout_seconds: number; max_response_bytes: number;
 };
 export type TranslationProviderConfig = {

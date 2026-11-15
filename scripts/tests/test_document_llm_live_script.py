@@ -72,6 +72,9 @@ def reply(request, *, mutate=lambda rows: rows, incomplete=False, translations=N
 def wire(monkeypatch):
     state = SimpleNamespace(handler=reply, calls=[])
     class OfflineTransport(httpx.BaseTransport):
+        def __init__(self, *, pool):
+            assert pool is not None
+
         def handle_request(self, request):
             state.calls.append(json.loads(request.content))
             assert request.headers['user-agent'] == PROFILE['user_agent']
@@ -105,6 +108,24 @@ def test_small_keeps_frozen_routing_and_uses_independent_document_budget(wire, p
     assert KEY not in serialized and 'Authorization' not in serialized and 'Mira' not in serialized and 'https://' not in serialized
     assert result['posts'][0]['input_unchanged'] and len(result['posts'][0]['sha256']) == 64
     assert capsys.readouterr().out == ''
+
+
+@pytest.mark.parametrize('protocol', ['chat_completions', 'responses'])
+@pytest.mark.parametrize('effort', [None, 'none', 'low', 'provider_default'])
+def test_document_reasoning_is_used_on_wire_and_in_report(wire, protocol, effort):
+    profile = {**PROFILE, 'protocol': protocol, 'document': {'reasoning_effort': effort}}
+    frozen = copy.deepcopy(profile)
+    result = smoke.run_smoke(profile, KEY)
+    expected = effort or PROFILE['reasoning_effort']
+    assert result['ok'] and result['requests'] == 1 and profile == frozen
+    assert result['reasoning_effort'] == expected
+    payload = wire.calls[0]
+    if expected == 'provider_default':
+        assert 'reasoning_effort' not in payload and 'reasoning' not in payload
+    elif protocol == 'chat_completions':
+        assert payload['reasoning_effort'] == expected
+    else:
+        assert payload['reasoning'] == {'effort': expected}
 
 
 def test_pages_200_has_all_ids_long_source_and_long_complete_output(wire):

@@ -1,7 +1,7 @@
 """Whole-page translation, JSON messages and strict translation parsing."""
 import json
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from .llm import RequestLimits, TextError, call_messages
+from .llm import ReasoningEffort, RequestLimits, TextError, call_messages
 from ..translation_prompts import COMIC_TRANSLATION_PROMPT, target_instructions
 
 PROMPT_VERSION = 'comic-json-v14'
@@ -25,6 +25,7 @@ class DocumentTextPolicy(BaseModel):
     """Operator-verified model limits, separate from interactive page limits."""
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
     enabled: bool = False
+    reasoning_effort: ReasoningEffort | None = None
     context_tokens: int = Field(default=128000, ge=1024, le=2000000, strict=True)
     max_input_tokens: int = Field(default=96000, ge=512, le=2000000, strict=True)
     max_output_tokens: int = Field(default=32000, ge=128, le=1000000, strict=True)

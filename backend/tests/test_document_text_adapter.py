@@ -1,5 +1,6 @@
 """Whole-document request budgets do not mutate a frozen single-image profile."""
 import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import httpx
@@ -7,7 +8,7 @@ import pytest
 
 from app.adapters import openai_text, transport
 from app.adapters.llm import RequestLimits, TextError
-from app.documents.text import PROMPT_VERSION, SYSTEM, input_bound, messages, response_schema
+from app.documents.text import PROMPT_VERSION, SYSTEM, input_bound, messages, policy, response_schema
 
 
 PROFILE = {'base_url': 'https://text.example/v1', 'model': 'fixture', 'protocol': 'responses',
@@ -82,3 +83,41 @@ def test_document_deadline_includes_header_wait_without_changing_legacy(monkeypa
         openai_text.call_messages([], PROFILE, 'synthetic-key', limits=RequestLimits(30, 4096, 4096))
     clock[0] = 0
     assert openai_text.call_messages([], PROFILE, 'synthetic-key').content == '{}'
+
+
+@pytest.mark.parametrize('protocol', ['responses', 'chat_completions'])
+@pytest.mark.parametrize('general,document,expected', [
+    ('none', {'reasoning_effort': 'low'}, 'low'),
+    ('low', {'reasoning_effort': 'none'}, 'none'),
+    ('low', {'reasoning_effort': 'provider_default'}, None),
+    ('high', {'reasoning_effort': None}, 'high'),
+    ('low', {}, 'low'),
+    (None, {}, None),
+])
+def test_document_reasoning_override_preserves_general_and_legacy_requests(monkeypatch, protocol, general, document, expected):
+    profile = {**PROFILE, 'protocol': protocol, 'reasoning_effort': general,
+               'document': {'enabled': True, **document}}
+    if general is None:
+        del profile['reasoning_effort']
+    original, seen = deepcopy(profile), []
+    def handler(request):
+        payload = json.loads(request.content)
+        if protocol == 'chat_completions':
+            assert 'reasoning' not in payload
+            seen.append(payload.get('reasoning_effort'))
+            body = {'choices': [{'finish_reason': 'stop', 'message': {'content': '{}'}}]}
+        else:
+            assert 'reasoning_effort' not in payload
+            seen.append(payload.get('reasoning', {}).get('effort'))
+            body = {'status': 'completed', 'output': [{'type': 'message',
+                'content': [{'type': 'output_text', 'text': '{}'}]}]}
+        return httpx.Response(200, json=body)
+    monkeypatch.setattr(openai_text, 'CheckedTransport', lambda **_: httpx.MockTransport(handler))
+    limits = policy(profile)
+    openai_text.call_messages([], profile, 'synthetic-key')
+    openai_text.call_messages([], profile, 'synthetic-key', limits=RequestLimits(
+        limits.timeout_seconds, limits.max_output_tokens, limits.max_response_bytes,
+        reasoning_effort=limits.reasoning_effort))
+    openai_text.call_messages([], profile, 'synthetic-key', limits=RequestLimits(30, 1024, 4096))
+    assert seen == [general, expected, general]
+    assert profile == original

@@ -65,6 +65,28 @@ test('independent routing weights accept zero and reject invalid or fractional v
   for (const value of ['', '0', '-1', '0.5', '10001']) assert.ok(validateProvider({...draft(), requests_per_minute: value}, channels, true).requests_per_minute);
 });
 
+test('document reasoning is independent, supports inheritance and round-trips all choices', () => {
+  const original = draft();
+  assert.equal(original.document.reasoning_effort, null);
+  for (const effort of [null, 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'provider_default']) {
+    const edited = {...original, document: {...original.document, enabled: true, reasoning_effort: effort}};
+    assert.deepEqual(validateProvider(edited, channels, true), {});
+    const saved = providerInput(edited);
+    assert.equal(saved.config.reasoning_effort, 'none');
+    assert.equal(saved.config.document.reasoning_effort, effort);
+    assert.equal(providerDraft(saved).document.reasoning_effort, effort);
+  }
+  const legacy = providerInput(original);
+  delete legacy.config.document.reasoning_effort;
+  legacy.config.reasoning_effort = 'high';
+  const edited = providerDraft(legacy);
+  assert.equal(edited.document.reasoning_effort, null);
+  assert.equal(providerInput(edited).config.reasoning_effort, 'high');
+  for (const effort of ['', 'invalid', false, 1]) {
+    assert.ok(validateProvider({...original, document: {...original.document, reasoning_effort: effort}}, channels, true).document);
+  }
+});
+
 test('output limit accepts larger model responses and preserves existing values', () => {
   for (const value of ['128', '8192', '32768']) {
     const input = {...draft(), max_output_tokens: value};

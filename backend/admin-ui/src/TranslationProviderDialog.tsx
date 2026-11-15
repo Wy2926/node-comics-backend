@@ -1,7 +1,7 @@
 import {Button} from './ui';
 import {useEffect, useRef, useState, type InputHTMLAttributes} from 'react';
 import {ApiError, authError, errorText, sendRequest} from './api';
-import type {TranslationChannel, TranslationPlan, TranslationProvider} from './types';
+import type {TranslationChannel, TranslationPlan, TranslationProvider, TranslationReasoningEffort} from './types';
 import {channelProtocols, documentFields, isOpenRouterUrl, numericFields, protocolLabels, reasoningLabels, routingFields, upstreamLimit, providerDraft, providerEndpoint, providerInput, textLimits, validateProvider, type ProviderField} from './translationProviderConfig';
 import {BillingDialog} from './BillingShared';
 
@@ -111,10 +111,10 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
                   placeholder={'例如：deepinfra\ntogether'}/>
                 {hint('openrouter_providers', '填写模型页面中的供应商 ID，每行一个或用英文逗号分隔。按顺序尝试，仅在指定列表内切换；留空由 OpenRouter 默认路由。支持带区域的完整 ID，最多 20 个。')}
               </div>}
-              <div className="settings-field"><label htmlFor="provider-reasoning_effort">思考程度</label>
+              <div className="settings-field"><label htmlFor="provider-reasoning_effort">通用思考程度</label>
                 <select required {...accessibility('reasoning_effort')} value={draft.reasoning_effort} onChange={event => update('reasoning_effort', event.target.value)}>
                   {Object.entries(reasoningLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-                </select>{hint('reasoning_effort', '默认关闭思考，优先速度；适用于正文与漫画名。请按模型支持的档位选择，不支持此参数时选“供应商默认”。')}
+                </select>{hint('reasoning_effort', '用于单图正文与漫画名；整本文档可单独设置。请按模型支持的档位选择，不支持此参数时选“供应商默认”。')}
                 {provider && provider.config.reasoning_effort === undefined && <p className="muted">当前配置尚未指定思考程度，本次保存会应用所选档位并生成模型新版本。</p>}</div>
               <div className="settings-field"><label htmlFor="provider-protocol">接口协议</label>
                 <select required {...accessibility('protocol')} value={draft.protocol} onChange={event => update('protocol', event.target.value)}>
@@ -160,6 +160,17 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
             <label className="provider-enabled"><input type="checkbox" checked={draft.document.enabled}
               onChange={event => setDraft(current => ({...current, document: {...current.document, enabled: event.target.checked}}))}/>
               此模型支持整本文档</label>
+            <div className="settings-field">
+              <label htmlFor="provider-document-reasoning_effort">整本思考程度</label>
+              <select id="provider-document-reasoning_effort" value={draft.document.reasoning_effort ?? ''}
+                aria-invalid={!!errors.document} aria-describedby="provider-document-reasoning-help provider-document-help"
+                onChange={event => setDraft(current => ({...current, document: {...current.document,
+                  reasoning_effort: event.target.value ? event.target.value as TranslationReasoningEffort : null}}))}>
+                <option value="">跟随通用设置</option>
+                {Object.entries(reasoningLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+              </select>
+              <p id="provider-document-reasoning-help" className="muted">仅用于整本 OCR 汇总后的翻译请求，随模型版本冻结。例如通用关闭、整本选择低（low）。</p>
+            </div>
             <div className="settings-fields">{documentFields.map(({key, title, min, max}) => <div className="settings-field" key={key}>
               <label htmlFor={'provider-document-' + key}>{title}</label>
               <input id={'provider-document-' + key} type="number" min={min} max={max} step={1}

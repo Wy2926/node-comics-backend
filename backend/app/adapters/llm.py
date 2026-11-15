@@ -5,6 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..errors import ProcessingError
 
 
+ReasoningEffort = Literal['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'provider_default']
+
+
 class Message(TypedDict):
     role: Literal['system', 'user', 'assistant']
     content: str
@@ -33,10 +36,11 @@ class TextResponse:
 
 @dataclass(frozen=True)
 class RequestLimits:
-    """Trusted workflow override; never taken from a public translation request."""
+    """Trusted workflow limits and reasoning; never taken from a public translation request."""
     timeout_seconds: int
     max_output_tokens: int
     max_response_bytes: int
+    reasoning_effort: ReasoningEffort | None = None
 
 
 def call_messages(messages: list[Message], profile: dict, *, json_schema: dict | None = None,

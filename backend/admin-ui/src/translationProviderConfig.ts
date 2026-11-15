@@ -26,7 +26,7 @@ const defaults: TranslationProviderConfig = {
   input_rate: 5, output_rate: 30, pricing_version: 'operator-estimate-v1',
   openrouter_providers: [],
 };
-export const documentDefaults: DocumentModelLimits = {enabled: false, context_tokens: 128000,
+export const documentDefaults: DocumentModelLimits = {enabled: false, reasoning_effort: null, context_tokens: 128000,
   max_input_tokens: 96000, max_output_tokens: 32000, timeout_seconds: 600, max_response_bytes: 8388608};
 export const documentFields = [
   {key: 'context_tokens', title: '模型上下文容量（token）', min: 1024, max: 2000000},
@@ -100,7 +100,9 @@ export function validateProvider(draft: ProviderDraft, channels: TranslationChan
       errors[field.key] = `请输入 ${field.min}–${field.max} 范围内的${field.integer ? '整数' : '数值'}。`;
     }
   }
-  if (documentFields.some(field => !Number.isInteger(draft.document[field.key]) ||
+  if (draft.document.reasoning_effort != null && !Object.hasOwn(reasoningLabels, draft.document.reasoning_effort)) {
+    errors.document = '请选择有效的整本思考程度。';
+  } else if (documentFields.some(field => !Number.isInteger(draft.document[field.key]) ||
       draft.document[field.key] < field.min || draft.document[field.key] > field.max)) {
     errors.document = '请在各整本参数的范围内填写整数。';
   } else if (draft.document.max_input_tokens + draft.document.max_output_tokens > draft.document.context_tokens) {

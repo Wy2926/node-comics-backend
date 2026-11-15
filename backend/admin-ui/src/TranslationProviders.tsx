@@ -108,7 +108,9 @@ export function TranslationProvidersPage({onUnauthorized}: {onUnauthorized: (mes
                   <small>{data.channels.find(channel => channel.id === provider.channel)?.label ?? provider.channel}</small>
                   </td>
                 <td><b>{provider.config.model}</b><small>{protocolLabels[provider.config.protocol] ?? provider.config.protocol}</small>
-                  <small>思考：{reasoningLabels[provider.config.reasoning_effort ?? 'provider_default']}</small>
+                  <small>通用思考：{reasoningLabels[provider.config.reasoning_effort ?? 'provider_default']}</small>
+                  {provider.config.document?.enabled && <small>整本思考：{provider.config.document.reasoning_effort == null ?
+                    '跟随通用设置' : reasoningLabels[provider.config.document.reasoning_effort]}</small>}
                   {!!provider.config.openrouter_providers?.length && <small>上游顺序：{provider.config.openrouter_providers.join(' → ')}</small>}
                   <small>{provider.config.base_url}</small></td>
                 <td><span className={`badge ${provider.enabled ? 'good' : 'warn'}`}>{provider.enabled ? '已启用' : '已停用'}</span>

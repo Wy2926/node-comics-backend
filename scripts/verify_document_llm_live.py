@@ -185,7 +185,8 @@ def run_smoke(profile, key, *, case='small', limit_overrides=None, diagnose_reje
     bound, requests, started = input_bound(prompt), [], time.monotonic()
     report = {'ok': False, 'case': case, 'prompt_version': document_text.PROMPT_VERSION,
         'model': connection['model'], 'protocol': connection['protocol'],
-        'reasoning_effort': connection['reasoning_effort'], 'openrouter_providers': connection['openrouter_providers'],
+        'reasoning_effort': limits.reasoning_effort or connection['reasoning_effort'],
+        'openrouter_providers': connection['openrouter_providers'],
         'pages': len(source), 'expected_segments': len(expected), 'target_language': language,
         'input_token_bound': bound, 'configured_output_tokens': limits.max_output_tokens,
         'timeout_seconds': limits.timeout_seconds, 'max_response_bytes': limits.max_response_bytes,
@@ -198,7 +199,8 @@ def run_smoke(profile, key, *, case='small', limit_overrides=None, diagnose_reje
             raise TextError('DOCUMENT_CONTEXT_EXCEEDED', 'Whole-document input exceeds the configured budget')
         with observe_posts(prompt, requests, key, diagnose_rejection=diagnose_rejection):
             response = openai_text.call_messages(prompt, connection, key, json_schema=response_schema(),
-                limits=RequestLimits(limits.timeout_seconds, limits.max_output_tokens, limits.max_response_bytes))
+                limits=RequestLimits(limits.timeout_seconds, limits.max_output_tokens, limits.max_response_bytes,
+                                     reasoning_effort=limits.reasoning_effort))
         translated = parse_translations(response.content, expected)
         sentinels_ok = all(all(marker in translated[key] for marker in markers) for key, markers in sentinels.items())
         long_chars = len(translated[long_id]) if long_id else None

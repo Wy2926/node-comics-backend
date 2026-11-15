@@ -9,7 +9,7 @@ from pydantic import Field, field_validator, model_validator
 from ..errors import ProcessingError
 from .transport import read_bounded
 from .transport import CheckedTransport, connection_pool
-from .llm import LLMConfig, Message, RequestLimits, TextError, TextResponse
+from .llm import LLMConfig, Message, ReasoningEffort, RequestLimits, TextError, TextResponse
 
 MAX_RESPONSE_BYTES = 1024 * 1024
 OPENROUTER_HOSTS = {'openrouter.ai', 'eu.openrouter.ai', 'us.openrouter.ai'}
@@ -18,7 +18,7 @@ OPENROUTER_HOSTS = {'openrouter.ai', 'eu.openrouter.ai', 'us.openrouter.ai'}
 class OpenAITextConfig(LLMConfig):
     base_url: str = Field(default='https://api.openai.com/v1', max_length=1000)
     protocol: Literal['chat_completions', 'responses'] = 'chat_completions'
-    reasoning_effort: Literal['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'provider_default'] = 'none'
+    reasoning_effort: ReasoningEffort = 'none'
     user_agent: str = Field(default='NodeComics/0.1', min_length=1, max_length=200)
     openrouter_providers: list[Annotated[str, Field(
         min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9][a-zA-Z0-9._/-]*$', strict=True
@@ -79,6 +79,8 @@ def call_messages(messages: list[Message], profile: dict, api_key: str, *,
     # Previously saved revisions omit this setting; keep their original request
     # behavior until the administrator saves a new immutable revision.
     effort = profile.get('reasoning_effort', 'provider_default')
+    if limits and limits.reasoning_effort is not None:
+        effort = limits.reasoning_effort
     if effort != 'provider_default':
         if chat:
             payload['reasoning_effort'] = effort

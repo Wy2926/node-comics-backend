@@ -168,13 +168,19 @@ def test_unknown_call_is_not_retried_and_keeps_page_reservation(flow, monkeypatc
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize('generation', ['current', 'stored-v6', 'stored', 'legacy'])
+@pytest.mark.parametrize('generation', ['current', 'document-low', 'stored-v6', 'stored', 'legacy'])
 @pytest.mark.parametrize('prompt_change', [None, 'SYSTEM', 'PROMPT_VERSION', 'settings'])
 def test_saved_text_recovery_never_calls_model_twice(flow, monkeypatch, prompt_change, generation):
     from app.errors import ProcessingError
+    from app.translation_providers import provider_profile
+    from translation_fixtures import configure_text_provider
     with session_factory()() as db:
         job = db.get(Job, flow.job_id)
-        if generation == 'legacy':
+        if generation == 'document-low':
+            provider = configure_text_provider(db, flow.case.provider,
+                reasoning_effort='none', document={'enabled': True, 'reasoning_effort': 'low'})
+            job.config = {**job.config, 'text': provider_profile(db, provider.id)}
+        elif generation == 'legacy':
             # Pre-settings document jobs used the single-page version in config;
             # the actual paid request identity was always comic-document-v2.
             job.config = {key: value for key, value in job.config.items() if key != 'text_prompt'}
@@ -195,9 +201,10 @@ def test_saved_text_recovery_never_calls_model_twice(flow, monkeypatch, prompt_c
     def invoke(*args, **kwargs):
         expected_prompt = ('Translate every input text into 简体中文 (Simplified Chinese).\n'
                            'Write all translation values in the target language.\n\n' + expected_system
-                           if generation == 'current' else expected_system + '\nTarget: "zh-Hans"')
+                           if generation in {'current', 'document-low'} else expected_system + '\nTarget: "zh-Hans"')
         assert args[0][0]['content'] == expected_prompt
         assert len(args[0]) == 2
+        assert kwargs['limits'].reasoning_effort == ('low' if generation == 'document-low' else None)
         with session_factory()() as db:
             document = db.get(Document, flow.job_id)
             assert document.text_input_payload['version'] == expected_version
@@ -217,6 +224,8 @@ def test_saved_text_recovery_never_calls_model_twice(flow, monkeypatch, prompt_c
         text.run_text_stage(flow.job_id, lease.id, lost_after_response)
     workflow.fail_lease(lease.id, exc.value)
     with session_factory()() as db:
+        if generation == 'document-low':
+            configure_text_provider(db, flow.case.provider, document={'enabled': True, 'reasoning_effort': 'high'})
         workflow.stage_for(db, flow.job_id, 'doc_text').available_at = now() - timedelta(seconds=1)
         db.commit()
     lease = claim()
