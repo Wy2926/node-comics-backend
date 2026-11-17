@@ -10,7 +10,7 @@ from test_translation_providers import (
     test_first_provider_creation_is_atomic_across_replicas,
     test_parallel_requests_obey_supplier_limit,
     test_disable_after_reservation_does_not_spend_retry_or_rpm,
-    test_mid_page_rate_wait_releases_shared_slot,
+    test_page_rate_wait_releases_shared_slot,
     test_upstream_429_yields_with_durable_attempt_budget,
 )
 from test_provider_limits import (
