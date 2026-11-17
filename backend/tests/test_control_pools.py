@@ -68,4 +68,5 @@ def test_node_schema_has_server_defaults_without_language_whitelist(client):
     result = client.get('/v1/admin/compute-nodes/config-schema',headers=login(client,'admin')).json()
     assert 'languages' not in result
     assert 'allowed_languages' not in result['defaults']
-    assert result['pool_limits'] == {'text':100,'validate_upload':32}
+    assert result['defaults']['performance_weight'] == 1
+    assert result['pool_limits'] == {'text':100,'validate_upload':32,'doc_text':4}

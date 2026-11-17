@@ -323,6 +323,7 @@ def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monk
 
 def test_postgres_initial_migrations_wait_on_advisory_lock_across_processes(pg_scope):
     from app.db import engine
+    from test_request_limits_migration import HEAD
     script = "from app.db import initialize; initialize(); print('migration-complete')"
     processes = []
     # A lock in this isolated database proves both initializers wait before DDL.
@@ -351,7 +352,7 @@ def test_postgres_initial_migrations_wait_on_advisory_lock_across_processes(pg_s
             assert "migration-complete" in stdout
         with engine().connect() as connection:
             revisions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
-            assert revisions == ['whole_page_text_0027']
+            assert revisions == [HEAD]
             assert connection.scalar(text("SELECT count(*) FROM translation_providers")) == 0
             assert connection.scalar(text("SELECT count(*) FROM translation_provider_revisions")) == 0
             assert connection.scalar(text("SELECT count(*) FROM users")) == 0
