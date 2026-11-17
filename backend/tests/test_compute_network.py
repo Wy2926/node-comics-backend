@@ -36,7 +36,7 @@ from app import classic
 from app.adapters.llm import TextResponse
 from app.db import session_factory
 from app.models import Job, Ledger, TextCall
-from app.queue_models import ExecutionLease
+from app.queue_models import ComputeNode, ExecutionLease
 from app.scheduler import claim_stage
 from app.workers import run_control_stage
 
@@ -116,6 +116,7 @@ class NetworkRun:
         self.unavailable = False
         self.supplier_calls = 0
         self.jobs = []
+        self.peers = []
         self.worker = ThreadPoolExecutor(4)
         self.futures = []
         def supplier(*_):
@@ -131,13 +132,15 @@ class NetworkRun:
                     await send({'type': 'http.response.body', 'body': b''})
                 return
             async def observed(message):
-                assignment = message['type'] == 'websocket.send' and '"type":"assignment"' in message.get('text', '')
+                frame = json.loads(message['text']) if self.target == 'assignment' and message['type'] == 'websocket.send' else {}
+                assignment = (frame.get('type') == 'assignment' and frame['leases']
+                              and scope['path'].endswith(f"/{fixture['node']['node_id']}/channel"))
                 response = message['type'] == 'http.response.start' and message['status'] == 200
                 if scope['path'].endswith('/input') and message['type'] == 'http.response.body':
                     self.input_chunks += 1
                 partial_input = (self.target == 'input' and scope['path'].endswith('/input')
                     and message['type'] == 'http.response.body' and self.input_chunks >= 3)
-                if self.target and (self.target == 'offer' and assignment or
+                if self.target and (assignment or
                         partial_input or response and self.target != 'input' and scope['path'].endswith('/' + self.target)):
                     self.target = None
                     wire.set('loss', '100%')
@@ -147,7 +150,7 @@ class NetworkRun:
             await app(scope, receive, observed)
         # Abandoned blackholed HTTP streams may outlive the node's successful reconnect.
         self.server = uvicorn.Server(uvicorn.Config(network_app, host='0.0.0.0', port=18088,
-            log_level='critical', lifespan='off', ws='websockets', timeout_graceful_shutdown=5))
+            log_level='critical', lifespan='off', timeout_graceful_shutdown=5))
         self.server_thread = Thread(target=self.server.run, daemon=True)
         self.server_thread.start()
         config = {'node_id': fixture['node']['node_id'], 'node_token': fixture['node']['token'],
@@ -170,9 +173,10 @@ class NetworkRun:
         self.until(lambda: bool(self.transport.connections), 5)
 
     def tick(self):
-        self.agent.poll_control()
-        self.agent.documents.poll_control()
-        self.agent.reap()
+        for agent in (self.agent, *self.peers):
+            agent.poll_control()
+            agent.documents.poll_control()
+            agent.reap()
         for future in self.futures:
             if future.done():
                 future.result()
@@ -237,7 +241,7 @@ class NetworkRun:
         return len(states) == len(ids) and all(state == 'succeeded' for state in states)
 
     def finish(self, ids, timeout=120):
-        return self.until(lambda: self.completed(ids) and not self.agent.active_pages(), timeout)
+        return self.until(lambda: self.completed(ids) and not any(a.active_pages() for a in (self.agent, *self.peers)), timeout)
 
     def verify(self, *, recovered=False, pages=None):
         assert self.supplier_calls == len(self.jobs)
@@ -245,7 +249,6 @@ class NetworkRun:
         if not recovered:
             assert self.runtime.analyzed == (pages or len(self.jobs))
         assert not self.journal.leases() and not self.journal.leases('document-lease:')
-        assert not any(path == 'claim' for _, _, path in self.transport.http)
         with session_factory()() as db:
             assert db.scalar(select(func.count()).select_from(TextCall).where(TextCall.job_id.in_(self.jobs))) == len(self.jobs)
             for job_id in self.jobs:
@@ -264,6 +267,10 @@ class NetworkRun:
 
     def close(self):
         self.wire.set()
+        for agent in self.peers:
+            agent.close()
+            agent.transport.close()
+            agent.journal.close()
         self.agent.close()
         self.worker.shutdown(wait=True)
         self.transport.close()
@@ -310,14 +317,77 @@ def test_loss_jitter_bandwidth_and_recovered_throughput(network):
     network.verify()
 
 
-@pytest.mark.parametrize('phase', ['offer', 'input', 'analysis', 'result'])
+@pytest.mark.parametrize('fault', ['blackhole', 'delay', 'lost-grant'])
+def test_unresponsive_high_weight_node_does_not_strand_work(network, tmp_path, fault):
+    from app.dispatcher import recover_once
+    from test_compute_multinode import peer
+    from test_node_scheduling import configure
+    strong = network.fixture
+    configure(strong, 100)
+    if fault == 'lost-grant':
+        # Exercise a short handoff policy against the normal 90s execution lease.
+        with session_factory()() as db:
+            node = db.get(ComputeNode, strong['node']['node_id'])
+            node.desired_config = {**node.desired_config, 'request_seconds': 2, 'heartbeat_seconds': 1}
+            node.config_version += 1
+            node.applied_config_version = node.config_version
+            db.commit()
+    weak = peer(strong)
+    config = {**network.agent.local, 'node_id': weak['node']['node_id'], 'node_token': weak['node']['token'],
+              'resource_id': weak['registration']['resource_id'], 'control_url': 'https://healthy:8443'}
+    healthy = Agent(config, FixtureRuntime(), ObservedTransport(config), Journal(tmp_path / 'healthy'))
+    network.peers.append(healthy)
+    healthy.register()
+    def both_waiting():
+        with session_factory()() as db:
+            return all(db.get(ComputeNode, n['node']['node_id']).runtime_report.get('dispatch_slots', 0) > 0
+                       for n in (strong, weak))
+    network.until(both_waiting)
+    if fault == 'lost-grant':
+        network.until(lambda: network.agent.config['request_seconds'] == 2)
+        network.target = 'assignment'
+    else:
+        impairment = ('loss', '100%') if fault == 'blackhole' else ('delay', '1500ms')
+        network.wire.set(*impairment)
+    started = time.monotonic()
+    jobs = network.create(1)
+    if fault == 'lost-grant':
+        network.until(network.interrupted.is_set, 5)
+        with session_factory()() as db:
+            lease = db.scalars(select(ExecutionLease).where(ExecutionLease.job_id == jobs[0])).one()
+            assert lease.node_id == strong['node']['node_id']
+            assert 0 < (lease.expires_at - lease.started_at).total_seconds() < 13
+        from app.models import now
+        network.until(lambda: now() > lease.expires_at, 15)
+        recover_once()
+    network.finish(jobs, timeout=10)
+    elapsed = time.monotonic() - started
+    with session_factory()() as db:
+        owners = list(db.scalars(select(ExecutionLease.node_id).where(ExecutionLease.job_id == jobs[0],
+            ExecutionLease.resource_pool == 'image').order_by(ExecutionLease.generation)))
+        expected = [strong['node']['node_id']] if fault == 'lost-grant' else []
+        assert owners == expected + [config['node_id']]
+        assert list(db.scalars(select(Ledger.kind).where(Ledger.job_id == jobs[0]).order_by(Ledger.kind))) == ['reserve', 'settle']
+    assert network.supplier_calls == healthy.runtime.analyzed == healthy.runtime.rendered == 1
+    assert network.runtime.analyzed == 0
+    if fault != 'delay':
+        assert network.wire.stats()['drops'] > 0
+    if fault != 'lost-grant':
+        assert elapsed < 8 and not network.transport.disconnections
+    else:
+        assert elapsed < 24, 'Handoff recovery must not wait for the normal execution lease'
+    network.report('preferred-peer-' + fault, healthy_completion_seconds=elapsed, assigned_nodes=owners,
+                   healthy_analyzed=healthy.runtime.analyzed, healthy_rendered=healthy.runtime.rendered)
+
+
+@pytest.mark.parametrize('phase', ['assignment', 'input', 'analysis', 'result'])
 def test_blackhole_replays_and_resumes_without_duplicate_work(network, phase):
     network.target = phase
     jobs = network.create(8)
     network.until(network.interrupted.is_set)
     network.until(lambda: bool(network.transport.disconnections), 25)
     detected = network.transport.disconnections[0] - network.cut_at
-    assert detected < 23, detected
+    assert detected < 15, detected
     network.hold(max(0, 30 - (time.monotonic() - network.cut_at)))
     dropped = network.wire.stats()
     assert dropped['drops'] > 0
@@ -327,7 +397,7 @@ def test_blackhole_replays_and_resumes_without_duplicate_work(network, phase):
     reconnected = network.transport.connections[-1] - restored
     finished = network.finish(jobs, 30)
     network.verify()
-    if phase == 'offer':
+    if phase == 'assignment':
         requests = [body for _, body in network.transport.requests]
         assert Counter(body['request_id'] for body in requests).most_common(1)[0][1] >= 2
     if phase == 'input':

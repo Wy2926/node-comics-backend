@@ -1,19 +1,15 @@
 """Whole-page compute leases. Image work stays on the node; text stays here."""
 import asyncio
 from datetime import datetime, timedelta
+import hashlib
 import hmac
-import random
 import re
 from typing import Annotated, Literal
-import time
 
 from fastapi import APIRouter, Depends, Header, Response, Request, HTTPException
 from starlette.responses import StreamingResponse
 from starlette.datastructures import UploadFile
-from pydantic import ValidationError, model_validator
-import hashlib
-from starlette.concurrency import run_in_threadpool
-from pydantic import Field
+from pydantic import Field, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,13 +21,12 @@ from .db import get_db, session_factory
 from .errors import ProcessingError, node_error, problem
 from .languages import Language, LANGUAGES
 from .translation_fonts import FontId, FONT_LANGUAGES, resolve_font, supports_font
-from .models import Asset, Attempt, ClassicState, Job, now
+from .models import Asset, ClassicState, Job, now
 from .node_config import NodeConfig
 from .providers import digest
-from .queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
+from .queue_models import ComputeNode, ExecutionLease, JobStage
 from .request_models import RequestBody
-from .scheduler import (claim_batch, current_lease, has_claimable_work, heartbeat_lease, lock_scheduler,
-                        prepare_claim_candidates, release_lease, remaining_capacity, touch_job)
+from .scheduler import current_lease, heartbeat_lease, lock_scheduler, release_lease, touch_job
 from .storage import get_store
 from .workers import fail_stage, finish_job
 
@@ -76,7 +71,12 @@ def scoped_lease(db, lease_id, token, identity):
 
 def live_lease(db, lease_id, token, identity):
     scoped_lease(db, lease_id, token, identity)
-    lease, stage, job = current_lease(db, lease_id, token)
+    return live_page(db, lease_id)
+
+
+def live_page(db, lease_id):
+    """Caller already scoped the page by node/token (HTTP) or node/stage (channel)."""
+    lease, stage, job = current_lease(db, lease_id)
     if not available(db.get(Asset, job.input_asset_id)):
         raise ProcessingError('ASSET_EXPIRED', '原图访问已失效')
     deadline = lease_deadline(db, lease)
@@ -126,7 +126,7 @@ def lease_payload(db, lease):
     if lease.completed_at:
         return receipt(lease)
     try:
-        _, _, job = live_lease(db, lease.id, lease.token, lease.node_id)
+        _, _, job = live_page(db, lease.id)
     except ProcessingError as error:
         return {'lease_id': lease.id, 'lease_token': lease.token, 'status': 'stop', 'code': error.code}
     source = db.get(Asset, job.input_asset_id)
@@ -144,13 +144,12 @@ def lease_payload(db, lease):
 
 class Registration(RequestBody):
     protocol_version: Literal[3]
-    control_channel: Literal['websocket'] | None = None
     engine_version: str = Field(min_length=1, max_length=120)
     resource_id: str = Field(min_length=1, max_length=120)
     device: str = Field(min_length=1, max_length=80)
     supported_languages: list[Language] = Field(min_length=1, max_length=len(LANGUAGES))
     ready: bool
-    document_protocol: Literal[1, 2] | None = None
+    document_protocol: Literal[2] | None = None
     result_formats: list[Literal['overlay-v1', 'overlay-tiles-v1']] = Field(default_factory=lambda: ['overlay-v1'], max_length=2)
     supported_font_ids: list[FontId] = Field(default_factory=list, max_length=len(FONT_LANGUAGES))
 
@@ -183,9 +182,6 @@ def register(body: Registration, identity=Depends(node_auth), db: Session = Depe
         'supported_font_ids': list(dict.fromkeys(body.supported_font_ids)) if body.ready else [],
         'overlay_tiles': body.ready and 'overlay-tiles-v1' in body.result_formats,
         'document_protocol': body.document_protocol if body.ready else None}
-    if body.control_channel == 'websocket':
-        # A registered GPU may still be unable to open its channel through the proxy.
-        node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0, 'dispatch_documents': 0}
     node.applied_config_version, node.config_error, node.heartbeat_at = node.config_version, None, now()
     result = {'protocol_version': 3, 'config': config_payload(node), 'server_time': stamp(now()),
               'leases': [lease_payload(db, lease) for lease in leases]}
@@ -193,93 +189,24 @@ def register(body: Registration, identity=Depends(node_auth), db: Session = Depe
     return result
 
 
-class ClaimRequest(RequestBody):
-    request_id: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
-    config_version: int = Field(ge=1, strict=True)
-    count: int = Field(ge=1, le=32, strict=True)
-
-
-@router.post('/nodes/{node_id}/claim')
-def claim(node_id: str, body: ClaimRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
-    node = scoped_node(db, identity, node_id)
-    request_hash = digest(body.model_dump())
-    candidate_needed = True
-    for attempt in range(2):
-        # Receipt replay and known configuration conflicts need no queue election.
-        saved = db.get(ComputeClaim, (identity, body.request_id))
-        prepared = (prepare_claim_candidates(db, identity, ['page'], limit=body.count)
-            if candidate_needed and not saved and node.config_version == body.config_version else None)
-        lock_scheduler(db)
-        node = scoped_node(db, identity, node_id)
-        if node.runtime_report.get('protocol_version') != 3:
-            problem('PROTOCOL_MISMATCH', '请先注册整页协议', 409)
-        saved = db.get(ComputeClaim, (identity, body.request_id), populate_existing=True)
-        if saved:
-            if saved.request_hash != request_hash:
-                problem('CLAIM_CONFLICT', '同一领取编号不能修改内容', 409)
-            leases = [db.get(ExecutionLease, key) for key in saved.lease_ids]
-            break
-        if body.config_version != node.config_version:
-            problem('NODE_CONFIG_CONFLICT', '领取前需要同步配置', 409)
-        leases = (claim_batch(db, identity, ['page'], limit=body.count,
-                             config_version=body.config_version, prepared=prepared) if prepared else [])
-        if not leases and prepared and prepared.signatures and attempt == 0 and remaining_capacity(db, node):
-            # Other nodes may have taken the entire bounded snapshot. Release
-            # the mutex before one fresh election, preserving any invalid-source
-            # cleanup. No lease or receipt exists for this request yet. Recheck
-            # its receipt/version next time: a concurrent replay may win meanwhile.
-            db.commit()
-            candidate_needed = has_claimable_work(db, identity, ['page'], config_version=body.config_version)
-            continue
-        db.add(ComputeClaim(node_id=identity, request_id=body.request_id,
-                            request_hash=request_hash, lease_ids=[lease.id for lease in leases]))
-        break
-    result = {'request_id': body.request_id, 'server_time': stamp(now()),
-              'config': config_payload(node), 'leases': [lease_payload(db, lease) for lease in leases]}
-    db.commit()
-    if not leases:
-        # A competing claimant may have consumed this bounded snapshot while
-        # other pages remain ready. Recheck after releasing the receipt lock;
-        # the hint authorizes no work and never changes the durable receipt.
-        with session_factory()() as ready_db:
-            if has_claimable_work(ready_db, identity, ['page'], config_version=body.config_version):
-                result['retry_after_seconds'] = round(random.uniform(.1, .3), 3)
-    return result
-
-
 class LeaseRequest(RequestBody):
     lease_token: str = Field(min_length=1, max_length=64)
 
 
-class UpdateLease(LeaseRequest):
+def page_update(db, lease):
+    if lease.completed_at:
+        return receipt(lease)
+    try:
+        _, _, job = live_page(db, lease.id)
+    except ProcessingError as error:
+        return {'lease_id': lease.id, 'status': 'stop', 'code': error.code}
+    if translated := translations_payload(db, job.id):
+        return {'lease_id': lease.id, 'status': 'active', 'translations': translated}
+
+
+class HeartbeatItem(LeaseRequest):
     lease_id: str = Field(min_length=1, max_length=36)
     translations_revision: str | None = Field(default=None, max_length=64)
-
-
-def lease_updates(db, identity, items):
-    """Read fenced text/terminal changes without renewing or authorizing input."""
-    replies = []
-    for item in items:
-        lease = db.get(ExecutionLease, item.lease_id)
-        stage = db.get(JobStage, lease.stage_id) if lease and lease.node_id == identity else None
-        if (not stage or stage.name != 'page' or not hmac.compare_digest(lease.token, item.lease_token)):
-            replies.append({'lease_id': item.lease_id, 'status': 'stop', 'code': 'NODE_SCOPE_MISMATCH'})
-            continue
-        if lease.completed_at:
-            replies.append(receipt(lease))
-            continue
-        try:
-            _, _, job = live_lease(db, lease.id, item.lease_token, identity)
-        except ProcessingError as error:
-            replies.append({'lease_id': lease.id, 'status': 'stop', 'code': error.code})
-            continue
-        translated = translations_payload(db, job.id)
-        if translated and translated['revision'] != item.translations_revision:
-            replies.append({'lease_id': lease.id, 'status': 'active', 'translations': translated})
-    return replies
-
-
-class HeartbeatItem(UpdateLease):
     phase: Literal['queued', 'download', 'analyze', 'inpaint', 'text', 'render', 'deliver', 'stopped'] = 'queued'
 
 

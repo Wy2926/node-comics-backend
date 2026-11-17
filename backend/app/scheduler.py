@@ -156,19 +156,20 @@ def compute_loads(db, node, at):
                 ComputeNode.applied_config_version == ComputeNode.config_version,
                 ComputeNode.runtime_report['protocol_version'].as_integer() == 3,
                 ComputeNode.runtime_report['ready'].as_boolean().is_(True),
-                or_(ComputeNode.runtime_report['channel_id'].as_string().is_(None),
-                    ComputeNode.runtime_report['dispatch_until'].as_string() > at.isoformat() + 'Z'))))
+                 ComputeNode.runtime_report['channel_id'].as_string().is_not(None),
+                 ComputeNode.runtime_report['dispatch_until'].as_string() > at.isoformat() + 'Z')))
         .group_by(ComputeNode.id).execution_options(populate_existing=True)).all()
     return {peer.id: (peer, busy, documents) for peer, busy, documents in peers if busy < peer.capacity}
 
 
-def assigned_candidates(node, candidates, loads, *, document=False):
+def assigned_candidates(node, candidates, loads, *, document=False, steal_before=None):
     """Simulate bounded weighted least-load placement; only the claimant gets leases."""
     from .node_config import NodeConfig
     configs = {key: NodeConfig.model_validate(peer.desired_config) for key, (peer, _, _) in loads.items()}
     planned = {key: 0 for key in loads}
     assigned = set()
-    for key, job in candidates:
+    fallback = None
+    for stage, job in candidates:
         eligible = []
         font = job.config.get('font_id') or DEFAULT_FONTS.get(job.target_language)
         for peer_id, (peer, busy, documents) in loads.items():
@@ -176,7 +177,7 @@ def assigned_candidates(node, candidates, loads, *, document=False):
             runtime = peer.runtime_report or {}
             if (busy + extra >= peer.capacity
                     or (peer_id != node.id and extra >= runtime.get(
-                        'dispatch_documents' if document else 'dispatch_slots', peer.capacity))
+                         'dispatch_documents' if document else 'dispatch_slots', 0))
                     or ('doc_prepare' if document else 'page') not in peer.capabilities
                     or job.target_language not in peer.supported_languages
                     or font not in runtime.get('supported_font_ids', [])
@@ -186,13 +187,16 @@ def assigned_candidates(node, candidates, loads, *, document=False):
             eligible.append(peer_id)
         if not eligible:
             continue
+        if fallback is None and steal_before is not None and node.id in eligible and stage.available_at <= steal_before:
+            fallback = stage.id
         chosen = min(eligible, key=lambda peer_id: (
             (loads[peer_id][1] + planned[peer_id] + 1) / configs[peer_id].performance_weight,
             loads[peer_id][1] + planned[peer_id], peer_id != node.id, peer_id))
         planned[chosen] += 1
         if chosen == node.id:
-            assigned.add(key)
-    return assigned
+            assigned.add(stage.id)
+    # A slow preferred peer gets a head start, not ownership of queued work.
+    return assigned or ({fallback} if fallback is not None else set())
 
 
 def has_eligible_work(db, node, stages):
@@ -205,32 +209,11 @@ def has_eligible_work(db, node, stages):
     return bool(db.scalar(select(eligible.exists())))
 
 
-def has_claimable_work(db, node_id, allowed_stages=None, *, config_version=None):
-    """An advisory readiness read; claim_batch remains authoritative."""
+def has_claimable_work(db, node_id, allowed_stages=None):
+    """Check capacity and queue eligibility; only a pull performs placement."""
     with db.no_autoflush:
         node = db.get(ComputeNode, node_id)
-        if not node or not node.enabled or (config_version is not None and config_version != node.config_version):
-            return False
-        stages = set(node.capabilities) & set(allowed_stages or node.capabilities)
-        if not stages or not remaining_capacity(db, node):
-            return False
-        if not has_eligible_work(db, node, stages):
-            return False
-        if stages != IMAGE_STAGES:
-            return True
-        at = now()
-        loads = compute_loads(db, node, at)
-        if not loads:
-            return False
-        if set(loads) == {node.id}:
-            return True
-        # Read only routing fields from the same bounded window as claim, never
-        # materialize jobs or touch local input files during readiness checks.
-        candidates = db.execute(_eligible_stages(node, stages, at).with_only_columns(
-            JobStage.id, Job.target_language, Job.config, Job.entitlement)
-            .order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
-        candidates.sort(key=lambda row: -job_priority(row))
-        return bool(assigned_candidates(node, [(row.id, row) for row in candidates], loads))
+        return remaining_capacity(db, node) > 0 and has_eligible_work(db, node, allowed_stages or node.capabilities)
 
 
 def next_control_delay(db, maximum=5):
@@ -260,8 +243,8 @@ def next_control_delay(db, maximum=5):
     return max(0, delay)
 
 
-def claim_stage(db, node_id, allowed_stages=None, *, executor_id=None, config_version=None):
-    leases = claim_batch(db, node_id, allowed_stages, limit=1, executor_id=executor_id, config_version=config_version)
+def claim_stage(db, node_id, allowed_stages=None, *, executor_id=None):
+    leases = claim_batch(db, node_id, allowed_stages, limit=1, executor_id=executor_id)
     return leases[0] if leases else None
 
 
@@ -291,7 +274,7 @@ def prepare_claim_candidates(db, node_id, allowed_stages=None, *, limit=CLAIM_BA
 
 
 def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, executor_id=None,
-                config_version=None, prepared=None):
+                prepared=None, steal_before=None):
     """Select once outside the mutex, then dispatch a bounded batch.
 
     The caller owns commit/rollback. Recheck the bounded snapshot under the
@@ -313,16 +296,14 @@ def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, ex
     at = now()
     if not node or not node.enabled:
         return []
-    if config_version is not None and config_version != node.config_version:
-        raise ProcessingError('NODE_CONFIG_CONFLICT', '领取前需要同步配置')
     node.heartbeat_at = at
     limit = min(limit, remaining_capacity(db, node))
     if not limit or not candidates_before_lock:
         return []
     leases = []
     candidates = _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked)
-    pages = [(stage.id, job) for stage, job in candidates if stage.name == 'page']
-    assigned = assigned_candidates(node, pages, compute_loads(db, node, at)) if pages else set()
+    pages = [(stage, job) for stage, job in candidates if stage.name == 'page']
+    assigned = assigned_candidates(node, pages, compute_loads(db, node, at), steal_before=steal_before) if pages else set()
     for stage, job in candidates:
         if len(leases) == limit:
             break

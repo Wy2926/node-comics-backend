@@ -109,7 +109,6 @@ def test_claimability_check_does_not_mutate_state(scheduler_case):
     with session_factory()() as db:
         heartbeat = db.get(ComputeNode, 'node-0').heartbeat_at
         assert scheduler.has_claimable_work(db, 'node-0', ['page'])
-        assert not scheduler.has_claimable_work(db, 'node-0', ['page'], config_version=99)
         assert not scheduler.has_claimable_work(db, 'node-0', ['text'])
         assert not db.new and not db.dirty
         assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 0

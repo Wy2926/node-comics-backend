@@ -65,14 +65,14 @@ def test_document_claim_and_resume_require_the_effective_language_font(documents
             entry = db.get(Job, job_id)
             entry.config = {key: value for key, value in entry.config.items() if key != 'font_id'}
             db.commit()
-    assert claim(case).json()['leases'] == []
+    assert claim(case) == []
     alternative = next(font for font, languages in FONT_LANGUAGES.items() if 'zh-Hans' in languages and font != default)
     wrong = {**unsupported, 'supported_font_ids': [alternative]}
     assert client.post(IMAGE_PREFIX + '/nodes/register', headers=node['auth'], json=wrong).status_code == 200
-    assert claim(case).json()['leases'] == []
+    assert claim(case) == []
     supported = {**unsupported, 'supported_font_ids': [default]}
     assert client.post(IMAGE_PREFIX + '/nodes/register', headers=node['auth'], json=supported).status_code == 200
-    lease = claim(case).json()['leases'][0]
+    lease = claim(case)[0]
     assert lease['job_id'] == job_id and lease['config']['font_id'] == default
     from test_document_compute import request
     resumed = request(case, f'/nodes/{node["node"]["node_id"]}/sync', {'workspace_ids': [job_id]})

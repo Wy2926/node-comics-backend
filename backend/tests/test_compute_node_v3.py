@@ -1,4 +1,3 @@
-from conftest import create
 """Run the actual node client against the controller, with isolated image/text fixtures."""
 import hashlib
 from io import BytesIO
@@ -13,6 +12,7 @@ import httpx
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
+from conftest import create
 
 if not os.environ.get('COMICS_COMPUTE_ROOT'):
     pytest.skip('Set COMICS_COMPUTE_ROOT for cross-repository node integration', allow_module_level=True)
@@ -102,20 +102,17 @@ def node_for(v3, tmp_path, pages, runtime, lose_replies=False, lose_upload=False
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
     listener.listen()
-    server = uvicorn.Server(uvicorn.Config(app, log_level='critical', lifespan='off', ws='websockets'))
+    server = uvicorn.Server(uvicorn.Config(app, log_level='critical', lifespan='off'))
     server_thread = Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
     server_thread.start()
     config = {'node_id': v3['node']['node_id'], 'node_token': v3['node']['token'],
         'resource_id': 'test:cuda:0', 'control_url': f'http://127.0.0.1:{listener.getsockname()[1]}',
         'engine': {'gpu': 0}, 'local_pages': pages, 'max_leases': max_leases}
     lost = set()
-    network = httpx.HTTPTransport()
     def control(request):
-        if request.url.path.endswith('/channel'):
-            return network.handle_request(request)
         response = v3['client'].request(request.method, request.url.path, headers=dict(request.headers), content=request.content)
         endpoint = request.url.path.rsplit('/', 1)[-1]
-        if ((lose_replies and endpoint in {'claim', 'analysis', 'result'}) or (lose_upload and endpoint == 'result')) and endpoint not in lost:
+        if ((lose_replies and endpoint in {'analysis', 'result'}) or (lose_upload and endpoint == 'result')) and endpoint not in lost:
             lost.add(endpoint)
             raise httpx.ReadError('lost after server committed')
         return httpx.Response(response.status_code, content=response.content, headers=dict(response.headers))
@@ -137,7 +134,6 @@ def node_for(v3, tmp_path, pages, runtime, lose_replies=False, lose_upload=False
         return reply
     def closed():
         close()
-        network.close()
         server.should_exit = True
         server_thread.join(5)
         listener.close()
@@ -359,7 +355,7 @@ def test_four_page_leases_work_with_serial_or_parallel_local_execution_and_lost_
 
 
 @pytest.mark.parametrize('disconnect', ['client', 'lifetime'])
-def test_pending_offer_survives_real_channel_disconnect_and_reconnect(v3, tmp_path, monkeypatch, disconnect):
+def test_idle_node_pulls_again_after_real_channel_reconnect(v3, tmp_path, monkeypatch, disconnect):
     if disconnect == 'lifetime':
         from app import compute_channel
         monkeypatch.setattr(compute_channel, 'CHANNEL_SECONDS', 2)
@@ -376,15 +372,14 @@ def test_pending_offer_survives_real_channel_disconnect_and_reconnect(v3, tmp_pa
             if predicate():
                 return
             time.sleep(.01)
-        pytest.fail('channel did not reconnect and replay its pending offer')
+        pytest.fail('channel did not resume pulling')
     try:
         agent.register()
-        until(lambda: transport.assignment_id is not None)
-        pending, old = journal.get('claim'), transport.channel
+        until(lambda: requests and journal.get('claim') is None)
+        old = transport.channel
         if disconnect == 'client':
             transport.close_channel()
         until(lambda: transport.channel is not None and transport.channel is not old and len(requests) >= 2)
-        assert all(body == pending for body in requests)
         jobs = v3['create']()
         drive(agent, jobs, schedule=True)
         assert agent.runtime.analyzed == agent.runtime.rendered == 1
@@ -398,7 +393,7 @@ def test_restart_resubmits_frozen_result_without_recomputing(v3, tmp_path):
     from test_compute_v3 import analyze, claim, result_for, text
     from conftest import png_variant
     jobs = v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     with session_factory()() as db:
@@ -430,7 +425,7 @@ def test_different_build_resumes_paid_checkpoint_on_another_node(v3, tmp_path):
     from test_node_management import provision
 
     jobs = v3['create']()
-    first = claim(v3).json()['leases'][0]
+    first = claim(v3)[0]
     analyze(v3, first)
     text(first)
     with session_factory()() as db:
@@ -631,7 +626,7 @@ def test_restart_acknowledges_stopped_lease_without_input_or_config(v3, tmp_path
     from test_compute_v3 import claim
     from conftest import login, request_for_job
     jobs = v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     auth = login(v3['client'], 'reader0')
     v3['client'].post('/v1/translations/' + request_for_job(v3['client'],auth,jobs[0]) + '/cancel', headers=auth).raise_for_status()
     runtime = FixtureRuntime()

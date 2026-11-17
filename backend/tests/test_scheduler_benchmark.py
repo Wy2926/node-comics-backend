@@ -1,4 +1,4 @@
-"""Opt-in FIFO/legacy comparison using the same isolated PostgreSQL workload."""
+"""Opt-in bounded scheduler throughput on an isolated PostgreSQL workload."""
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -64,10 +64,6 @@ def test_claim_throughput(scheduler_case, pages, nodes):
         with session_factory()() as db:
             leases = scheduler.claim_batch(db, f'node-{i}', ['page'], limit=4)
             db.commit()
-            # Match the public claim path's one bounded contention retry.
-            if not leases and scheduler.has_claimable_work(db, f'node-{i}', ['page']):
-                leases = scheduler.claim_batch(db, f'node-{i}', ['page'], limit=4)
-                db.commit()
             return perf_counter() - started, [lease.id for lease in leases]
 
     times, empty, total, elapsed = [], 0, 0, 0

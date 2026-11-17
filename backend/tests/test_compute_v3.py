@@ -1,7 +1,7 @@
-from conftest import create as create_translation_job
 """Whole-page control lifecycle against an isolated database/object-store adapter."""
 import base64
 import hashlib
+import itertools
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from PIL import Image
 from sqlalchemy import func, select
-from conftest import login, png_variant, upload
+from conftest import create as create_translation_job, login, png_variant, upload
 from app import classic
 from app.adapters.llm import TextResponse
 from app.config import settings
@@ -24,6 +24,7 @@ from app.storage import LocalStore
 from app.translation_fonts import FONT_LANGUAGES
 from app.workers import run_control_stage
 from test_node_management import provision
+from compute_pull import bound_pull, claim
 
 PREFIX = '/internal/compute/v3'
 
@@ -60,9 +61,11 @@ def v3(client, monkeypatch, png):
     assert 'no-store' in response.headers['cache-control']
     state = {'client': client, 'node': node, 'auth': auth, 'admin': admin, 'registration': registration}
 
+    indexes = itertools.count()
     def create(count=1):
         jobs = []
-        for index in range(count):
+        for _ in range(count):
+            index = next(indexes)
             user = login(client, 'reader' + str(index // 3))
             asset = upload(client, user, png_variant(png, index))
             response = create_translation_job(client, user, asset, key=uuid4().hex, language='en', mode='classic')
@@ -75,11 +78,6 @@ def v3(client, monkeypatch, png):
 
 def request(v3, path, body):
     return v3['client'].post(PREFIX + path, headers=v3['auth'], json=body)
-
-
-def claim(v3, count=1, request_id=None):
-    return request(v3, f'/nodes/{v3["node"]["node_id"]}/claim',
-                   {'request_id': request_id or uuid4().hex, 'config_version': 1, 'count': count})
 
 
 def encoded(image):
@@ -152,13 +150,10 @@ def read_input(v3, lease, *, token=None):
 
 def test_claim_receipt_capacity_shrink_and_restart(v3):
     v3['create'](5)
-    response = claim(v3, 4, 'lost-response')
-    assert response.status_code == 200, response.text
-    leases = response.json()['leases']
+    leases = claim(v3, 4, 'lost-response')
     assert len(leases) == 4
-    assert claim(v3, 4, 'lost-response').json()['leases'][0]['lease_id'] == leases[0]['lease_id']
-    assert claim(v3, 3, 'lost-response').status_code == 409
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3, 4, 'lost-response')[0]['lease_id'] == leases[0]['lease_id']
+    assert claim(v3) == []
     with session_factory()() as db:
         owners = [db.get(ExecutionLease, lease['lease_id']).owner_id for lease in leases]
         assert owners[0] == owners[1]  # FIFO has no per-account election.
@@ -170,21 +165,21 @@ def test_claim_receipt_capacity_shrink_and_restart(v3):
     assert all(item['status'] == 'active' for item in heartbeat(v3, leases).json()['leases'])
     resumed = request(v3, '/nodes/register', v3['registration']).json()
     assert len(resumed['leases']) == 4 and not resumed['config']['enabled']
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
 
 
 def test_concurrent_claims_never_exceed_capacity(v3):
     v3['create'](6)
+    pull = bound_pull(v3)
     with ThreadPoolExecutor(4) as pool:
-        replies = list(pool.map(lambda _: claim(v3, 4), range(4)))
-    assert all(reply.status_code == 200 for reply in replies)
-    ids = [lease['lease_id'] for reply in replies for lease in reply.json()['leases']]
+        replies = list(pool.map(lambda _: pull(4), range(4)))
+    ids = [lease['lease_id'] for batch in replies for lease in batch]
     assert len(ids) == len(set(ids)) == 4
 
 
 def test_no_text_checkpoint_is_terminal_idempotent_and_never_calls_llm(v3):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     body, reply = analyze(v3, lease, empty=True)
     assert reply['receipt']['job_status'] == 'no_text'
     from app.execution_retention import cleanup_execution_data
@@ -208,7 +203,7 @@ def test_no_text_checkpoint_is_terminal_idempotent_and_never_calls_llm(v3):
 
 def test_analysis_text_revision_and_delivery_settle_once(v3, png):
     jobs = v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     body, accepted = analyze(v3, lease)
     assert accepted['receipt'] is None
     assert request(v3, f'/leases/{lease["lease_id"]}/analysis', body).status_code == 200
@@ -242,7 +237,7 @@ def test_analysis_text_revision_and_delivery_settle_once(v3, png):
 def test_all_empty_translations_deliver_and_settle_once(v3, png, monkeypatch, representation):
     from app.models import Ledger
     jobs = v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     monkeypatch.setattr(classic, 'call_text', lambda *args: TextResponse(
         '{"0":""}', {'input_tokens': 10, 'output_tokens': 2}, 'empty-translation'))
@@ -272,7 +267,7 @@ def test_admitted_long_strip_and_tall_overlay_deliver_without_a_second_8192_ceil
     asset = upload(v3['client'], user, source.getvalue())
     created = create_translation_job(v3['client'], user, asset, key=uuid4().hex, language='en', mode='classic')
     assert created.status_code == 202
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, _ = result_for(v3, lease, source.getvalue())
@@ -291,7 +286,7 @@ def test_admitted_long_strip_and_tall_overlay_deliver_without_a_second_8192_ceil
 
 def test_mixed_heartbeat_cancellation_and_stopped_ack(v3):
     jobs = v3['create'](2)
-    leases = claim(v3, 2).json()['leases']
+    leases = claim(v3, 2)
     with session_factory()() as db:
         db.get(Job, leases[0]['job_id']).cancel_requested = True
         db.commit()
@@ -314,7 +309,7 @@ def test_mixed_heartbeat_cancellation_and_stopped_ack(v3):
 def test_recovery_reuses_analysis_and_running_text_without_duplicate_call(v3):
     from app.dispatcher import recover_lease
     v3['create']()
-    lease = claim(v3, request_id='old-claim').json()['leases'][0]
+    lease = claim(v3, request_id='old-claim')[0]
     analyze(v3, lease)
     with session_factory()() as db:
         text_lease = claim_stage(db, 'control-text', ['text'])
@@ -324,8 +319,8 @@ def test_recovery_reuses_analysis_and_running_text_without_duplicate_call(v3):
     with session_factory()() as db:
         db.get(JobStage, db.get(ExecutionLease, lease['lease_id']).stage_id).available_at = now()
         db.commit()
-    assert claim(v3, request_id='old-claim').json()['leases'][0]['status'] == 'terminal'
-    replacement = claim(v3).json()['leases'][0]
+    assert claim(v3, request_id='old-claim')[0]['status'] == 'terminal'
+    replacement = claim(v3)[0]
     assert replacement['generation'] == lease['generation'] + 1
     assert replacement['analysis'] and replacement['translations'] is None
     run_control_stage(text_lease.id)
@@ -338,7 +333,7 @@ def test_recovery_reuses_analysis_and_running_text_without_duplicate_call(v3):
 def test_deadline_cannot_be_extended_by_heartbeats(v3):
     from app.dispatcher import recover_lease
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     with session_factory()() as db:
         row = db.get(ExecutionLease, lease['lease_id'])
         row.limits = {**row.limits, 'deadline_at': (now() - timedelta(seconds=1)).isoformat() + 'Z'}
@@ -353,7 +348,7 @@ def test_deadline_cannot_be_extended_by_heartbeats(v3):
 def test_node_diagnostic_codes_fail_once_and_remain_visible(v3, code):
     from app.models import Ledger
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     body = {'lease_token': lease['lease_token'], 'error': {'code': code}}
     url = f'/leases/{lease["lease_id"]}/complete'
     response = request(v3, url, body)
@@ -372,7 +367,7 @@ def test_node_diagnostic_codes_fail_once_and_remain_visible(v3, code):
 
 def test_known_transient_node_error_still_retries(v3):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     response = request(v3, f'/leases/{lease["lease_id"]}/complete',
                        {'lease_token': lease['lease_token'], 'error': {'code': 'STORAGE_UNAVAILABLE'}})
     assert response.status_code == 200, response.text
@@ -397,12 +392,12 @@ def test_version_languages_and_direct_input_access(v3):
         node = db.get(ComputeNode, v3['node']['node_id'])
         node.supported_languages = ['ko']
         db.commit()
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
     with session_factory()() as db:
         node = db.get(ComputeNode, v3['node']['node_id'])
         node.supported_languages = ['en']
         db.commit()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     response = read_input(v3, lease)
     assert response.status_code == 200
     assert hashlib.sha256(response.content).hexdigest() == lease['input']['sha256']
@@ -420,7 +415,7 @@ def test_version_languages_and_direct_input_access(v3):
 def test_input_missing_metadata_or_file_is_unavailable(v3, missing):
     from app.models import Asset
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     with session_factory()() as db:
         job = db.get(Job, lease['job_id'])
         if missing == 'lease':
@@ -446,7 +441,7 @@ def test_input_streams_bounded_chunks_and_ranges_without_a_database_transaction(
     asset = upload(v3['client'], user, data)
     created = create_translation_job(v3['client'], user, asset, key=uuid4().hex, language='en', mode='classic')
     assert created.status_code == 202
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
 
     async def drain(response):
         return [chunk async for chunk in response.body_iterator]
@@ -467,7 +462,7 @@ def test_input_streams_bounded_chunks_and_ranges_without_a_database_transaction(
 
 def test_input_byte_ranges_and_validators_preserve_the_exact_source(v3):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     full = read_input(v3, lease)
     data, size = full.content, len(full.content)
     etag = f'"{lease["input"]["sha256"]}"'
@@ -496,7 +491,7 @@ def test_result_written_before_lost_commit_is_recovered(v3, png, monkeypatch):
     from app import compute_v3
     from app.assets import asset_storage_key
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -525,7 +520,7 @@ def test_result_written_before_lost_commit_is_recovered(v3, png, monkeypatch):
 
 def test_upload_is_scoped_frozen_and_validates_container_metadata(v3, png):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -541,7 +536,7 @@ def test_upload_is_scoped_frozen_and_validates_container_metadata(v3, png):
 
 def test_identity_result_has_no_file_and_retains_success(v3, png):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, _ = result_for(v3, lease, png)
@@ -557,7 +552,7 @@ def test_identity_result_has_no_file_and_retains_success(v3, png):
 def test_late_direct_upload_cannot_publish_after_cancel_or_new_generation(v3, png):
     from app.dispatcher import recover_lease
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -568,7 +563,7 @@ def test_late_direct_upload_cannot_publish_after_cancel_or_new_generation(v3, pn
     with session_factory()() as db:
         db.get(JobStage, db.get(ExecutionLease, lease['lease_id']).stage_id).available_at = now()
         db.commit()
-    replacement = claim(v3).json()['leases'][0]
+    replacement = claim(v3)[0]
     assert replacement['generation'] == lease['generation'] + 1
     assert replacement['translations']
     assert deliver(v3, lease, result, data).status_code == 409
@@ -582,7 +577,7 @@ def test_late_direct_upload_cannot_publish_after_cancel_or_new_generation(v3, pn
 
 def test_cancellation_during_file_publish_never_settles(v3, png, monkeypatch):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -604,7 +599,7 @@ def test_verification_finishing_after_deadline_is_never_recovered(v3, png, monke
     from app import compute_v3
     from app.assets import asset_storage_key
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -641,7 +636,7 @@ def test_verification_finishing_after_deadline_is_never_recovered(v3, png, monke
 def test_timely_received_result_can_publish_or_recover_after_deadline(v3, png, monkeypatch, crash):
     from app import compute_v3
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -682,7 +677,7 @@ def test_timely_received_result_can_publish_or_recover_after_deadline(v3, png, m
 def test_invalid_identity_file_has_no_accepted_receipt_to_recover(v3, png):
     from app import compute_v3
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -701,7 +696,7 @@ def test_invalid_identity_file_has_no_accepted_receipt_to_recover(v3, png):
 def test_identity_receipt_survives_crash_before_final_commit(v3, png, monkeypatch):
     from app import compute_v3
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, _ = result_for(v3, lease, png)
@@ -724,7 +719,7 @@ def test_accepted_publish_grace_is_fixed_and_stop_cannot_revoke_it(v3, png, monk
     from app import compute_v3
     from app.dispatcher import recover_lease
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -834,7 +829,7 @@ def test_result_ingress_full_rejects_before_reading_multipart(v3, monkeypatch):
 
 def test_overlay_limit_is_independent_of_original_upload_limit(v3, png, monkeypatch):
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, data = result_for(v3, lease, png)
@@ -848,7 +843,7 @@ def test_overlay_limit_is_independent_of_original_upload_limit(v3, png, monkeypa
 def test_overlay_larger_than_cluster_result_limit_is_rejected(v3, png, monkeypatch):
     import random
     v3['create']()
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     analyze(v3, lease)
     text(lease)
     result, _ = result_for(v3, lease, png)

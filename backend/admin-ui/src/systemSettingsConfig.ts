@@ -3,8 +3,6 @@ export const numericFields = [
     help: '从任务结束起计算，注册用户与游客统一适用；在途任务继续保留。保存后适用于已有原图，延长不能恢复已清理文件。覆盖层译图的后台预览依赖原图。'},
   {key: 'image_result_retention_days', group: 'storage', title: '注册账户单图结果保留时间', unit: '天', min: 1, max: 365, integer: true,
     help: '从任务完成起计算，读取不续期；保存后同时适用于已有结果。缩短会回收过期文件，延长不能恢复已删除文件；任务与账单记录保留。'},
-  {key: 'empty_claim_retention_days', group: 'storage', title: '空领取回执保留时间', unit: '天', min: 1, max: 365, integer: true,
-    help: 'HTTP 领取未分配任务时保存的回执，到期自动删除；WebSocket 空位等待不生成空回执。'},
   {key: 'completed_claim_retention_days', group: 'storage', title: '已结束领取回执保留时间', unit: '天', min: 1, max: 365, integer: true,
     help: '任务与租约全部结束后计算；在途和待核实任务不清理。'},
   {key: 'execution_detail_retention_days', group: 'storage', title: '执行明细保留时间', unit: '天', min: 1, max: 365, integer: true,

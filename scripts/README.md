@@ -15,6 +15,6 @@
 
 计算通道网络验收：在后端测试依赖环境运行 `python scripts/tests/rehearse_compute_network.py --compute-root ../node-comics-compute`。使用独立 Docker 网络、临时 PostgreSQL/Redis、OpenResty TLS 和 `tc netem`；需要 Docker 的 `NET_ADMIN` 能力。报告写入 `artifacts/compute-network/`，容器和网络自动清理。
 
-覆盖延迟 / 抖动 / 丢包 / 限速、下载中断续传、分配 / 分析 / 交付提交后的黑洞断网、服务不可用退避、租约过期和文件控制回执恢复；核对重连时间、恢复吞吐、原回执、工作目录、模型调用与结算次数。图像算法、文本供应商和文件 R2 传输为本地合成夹具，ZIP 解包 / 检查点 / 打包使用真实节点代码。
+覆盖延迟 / 抖动 / 丢包 / 限速、下载中断续传、分配 / 分析 / 交付提交后的黑洞断网、服务不可用退避、租约过期和文件控制回执恢复。双节点通过两条 TLS 路径验收：只切断或延迟高权重节点，核对健康节点接单耗时、租约归属、模型调用和结算次数。图像算法、文本供应商和文件 R2 传输为本地合成夹具，ZIP 解包 / 检查点 / 打包使用真实节点代码。
 
-浏览器工具使用 `PLAYWRIGHT_MODULE` 和脚本中的浏览器路径变量。真实 GPU 联调显式设置 `COMICS_COMPUTE_ROOT`；真实 LLM、R2 和支付另行配置，可能产生费用。
+浏览器工具使用 `PLAYWRIGHT_MODULE` 和脚本中的浏览器路径变量。真实 LLM、R2 和支付另行配置，可能产生费用。

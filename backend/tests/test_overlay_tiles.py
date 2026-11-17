@@ -60,14 +60,14 @@ def test_old_nodes_keep_ordinary_work_and_new_nodes_deliver_tiles_idempotently(v
         row = db.query(TranslationRequest).filter_by(job_id=job.id).first()
         row.descriptor = {**row.descriptor, 'result_format': 'overlay-tiles-v1'}
         db.commit()
-    ordinary = claim(v3).json()['leases']
+    ordinary = claim(v3)
     assert [lease['job_id'] for lease in ordinary] == [keys[1]]
     assert 'result_format' not in ordinary[0]['config']
     assert 'overlay-tiles-v1' not in v3['client'].get('/v1/capabilities').json()['representations']
     response = request(v3, '/nodes/register', {**v3['registration'], 'result_formats': ['overlay-v1', 'overlay-tiles-v1']})
     assert response.status_code == 200, response.text
     assert 'overlay-tiles-v1' in v3['client'].get('/v1/capabilities').json()['representations']
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     assert lease['job_id'] == keys[0] and lease['config']['result_format'] == 'overlay-tiles-v1'
     analyze(v3, lease)
     text(lease)

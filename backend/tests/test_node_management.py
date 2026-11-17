@@ -5,6 +5,7 @@ from app.db import session_factory
 from app.node_config import NodeConfig
 from app.queue_models import ComputeNode
 from app.translation_fonts import FONT_LANGUAGES
+from compute_pull import claim
 
 
 def provision(client, resource='machine:cuda:0'):
@@ -56,14 +57,7 @@ def test_server_owns_capacity_enablement_and_versions(client):
     assert current['config']['execution_slots'] == 3 and current['applied_version'] == 2
     assert current['config']['performance_weight'] == 8
     assert register(client, auth, performance_weight=1000).status_code == 422
-    response = client.post(f"/internal/compute/v3/nodes/{node['node_id']}/claim", headers=auth,
-                           json={'request_id': 'disabled', 'count': 1, 'config_version': 2})
-    assert response.status_code == 200 and response.json()['leases'] == []
-    # The former registration contract is explicitly rejected, never interpreted.
-    assert client.post('/internal/compute/v3/nodes/register', headers=auth, json={
-        'id': node['node_id'], 'name': 'rogue', 'capacity': 32,
-        'capabilities': ['analyze'], 'engine_version': 'test-v1', 'device': 'cuda:0',
-        'resource_id': 'machine:cuda:0'}).status_code == 422
+    assert claim({'client': client, 'node': node, 'auth': auth}, config_version=2) == []
 
 
 def test_unready_node_and_key_rotation_fence_new_admission(client):

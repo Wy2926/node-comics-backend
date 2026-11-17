@@ -240,6 +240,11 @@ def fail_lease(lease_id, error, *, token=None, node_id=None, recovering=False, w
                         .where(Document.job_id == job.id)) == document.text_call_id))
                 and stage.attempts < settings().cluster_stage_attempts):
             stage.status, stage.available_at = 'ready', now() + timedelta(seconds=min(30, stage.attempts * 2))
+            if (recovering and stage.name == 'doc_prepare' and document.manifest_sha256 is None
+                    and document.reserved_at is None):
+                # No durable manifest or quota yet. Fence any late parser before another host retries.
+                document.owner_node_id = None
+                document.workspace_generation += 1
         else:
             stage.status = 'failed'
             finish_failed(db, job, error)

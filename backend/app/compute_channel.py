@@ -1,17 +1,15 @@
-"""Duplex capacity offers, durable assignments and scoped execution updates."""
+"""Pull dispatch: notifications advertise work; only a received request can lease it."""
 import asyncio
 from datetime import timedelta
-import hmac
-from typing import Annotated, Literal
 
 import anyio
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import Field, TypeAdapter, ValidationError, model_validator
-from sqlalchemy import select
+from pydantic import Field, ValidationError, model_validator
+from sqlalchemy import or_, select
 from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketState
 
-from .compute_v3 import UpdateLease, config_payload, lease_payload, lease_updates, stamp
+from .compute_v3 import config_payload, lease_payload, page_update, receipt, stamp
 from .db import session_factory
 from .errors import ProcessingError, problem
 from .models import now, uid
@@ -20,16 +18,17 @@ from .notifications import hub
 from .providers import digest
 from .queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
 from .request_models import RequestBody
-from .scheduler import claim_batch, lock_scheduler, prepare_claim_candidates
+from .scheduler import claim_batch, has_eligible_work, lock_scheduler, prepare_claim_candidates
 
 router = APIRouter(prefix='/internal/compute/v3')
 RECONCILE_SECONDS = 5
+PREFERENCE_SECONDS = 1
+SUBPROTOCOL = 'compute.pull.v1'
 SEND_SECONDS = 10
 CHANNEL_SECONDS = 300  # Let reloaded proxies drain through normal node reconnection.
 
 
-class Ready(RequestBody):
-    type: Literal['ready']
+class Pull(RequestBody):
     request_id: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
     config_version: int = Field(ge=1, strict=True)
     count: int = Field(ge=0, le=4, strict=True)
@@ -38,23 +37,14 @@ class Ready(RequestBody):
     @model_validator(mode='after')
     def capacity(self):
         if not self.count and not self.document_count:
-            raise ValueError('Offer at least one execution slot')
+            raise ValueError('At least one execution slot is required')
         return self
 
 
-class Ack(RequestBody):
-    type: Literal['ack']
-    request_id: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
-
-
-MESSAGE = TypeAdapter(Annotated[Ready | Ack, Field(discriminator='type')])
-
-
-def authenticated(node_id, authorization, identity):
+def authenticated(node_id, authorization):
     with session_factory()() as db:
         lock_scheduler(db)
-        if node_auth(authorization, identity, db) != node_id:
-            problem('NODE_SCOPE_MISMATCH', '节点身份不匹配', 403)
+        node_auth(authorization, node_id, db)
         node = db.get(ComputeNode, node_id)
         if node.runtime_report.get('protocol_version') != 3:
             problem('PROTOCOL_MISMATCH', '请先注册整页协议', 409)
@@ -62,80 +52,81 @@ def authenticated(node_id, authorization, identity):
         node.runtime_report = {**node.runtime_report, 'channel_id': connection,
             'dispatch_slots': 0, 'dispatch_documents': 0}
         db.commit()
-        return node.credential_hash, connection
+        return connection
 
 
-def current_node(db, identity, credential, connection):
+def current_node(db, identity, connection):
     node = db.get(ComputeNode, identity, populate_existing=True)
-    if not node or not hmac.compare_digest(node.credential_hash or '', credential):
-        problem('NODE_AUTH_REQUIRED', '计算节点认证已失效', 401)
-    if node.runtime_report.get('channel_id') != connection:
-        problem('NODE_AUTH_REQUIRED', '计算节点连接已替换', 401)
+    if not node or node.runtime_report.get('channel_id') != connection:
+        problem('NODE_AUTH_REQUIRED', '计算节点连接已失效', 401)
     return node
 
 
-def offer(identity, credential, connection, body=None):
+def withdraw(identity, connection):
     with session_factory()() as db:
         lock_scheduler(db)
-        node = current_node(db, identity, credential, connection)
-        node.runtime_report = {**node.runtime_report, 'dispatch_slots': body.count if body else 0,
-            'dispatch_documents': body.document_count if body else 0,
-            'dispatch_until': stamp(now() + timedelta(seconds=15))}
+        node = current_node(db, identity, connection)
+        node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0, 'dispatch_documents': 0}
         db.commit()
 
 
-def assign(identity, credential, connection, body):
-    """An empty offer remains open; only actual grants create replay receipts."""
-    from .documents.compute import claimable_rows, payload, start_document_lease
+def assign(identity, connection, body):
+    """Only a received pull can allocate. Nonempty grants and their receipts commit together."""
+    from .documents.compute import claim_document, payload
     with session_factory()() as db:
-        saved = db.get(ComputeClaim, (identity, body.request_id))
-        prepared = prepare_claim_candidates(db, identity, ['page'], limit=body.count) if body.count and not saved else None
+        key = (identity, body.request_id)
+        prepared = (prepare_claim_candidates(db, identity, ['page'], limit=body.count)
+                    if body.count and not db.get(ComputeClaim, key) else None)
         lock_scheduler(db)
-        node = current_node(db, identity, credential, connection)
-        saved = db.get(ComputeClaim, (identity, body.request_id), populate_existing=True)
-        request_hash = digest({'channel_version': 1, **body.model_dump()})
+        node = current_node(db, identity, connection)
+        config = config_payload(node)
+        saved = db.get(ComputeClaim, key, populate_existing=True)
+        request_hash = digest(body.model_dump())
         if saved:
             if saved.request_hash != request_hash:
-                problem('CLAIM_CONFLICT', '同一容量编号不能修改内容', 409)
-            leases = [db.get(ExecutionLease, key) for key in saved.lease_ids]
+                problem('CLAIM_CONFLICT', '同一领取编号不能修改内容', 409)
+            leases = [db.get(ExecutionLease, lease_id) for lease_id in saved.lease_ids]
         else:
             if body.config_version != node.config_version:
                 problem('NODE_CONFIG_CONFLICT', '领取前需要同步配置', 409)
-            node.runtime_report = {**node.runtime_report,
-                'dispatch_until': stamp(now() + timedelta(seconds=15))}
-            leases = claim_batch(db, identity, ['page'], limit=body.count,
-                config_version=body.config_version, prepared=prepared) if prepared else []
-            if not leases and body.document_count and node.runtime_report.get('document_protocol') == 2:
-                rows = claimable_rows(db, node)
-                if rows:
-                    leases = [start_document_lease(db, node, rows[0])]
+            cutoff = now() - timedelta(seconds=PREFERENCE_SECONDS)
+            leases = (claim_batch(db, identity, ['page'], limit=body.count, prepared=prepared, steal_before=cutoff)
+                      if prepared else [])
+            if not leases and body.document_count and (document := claim_document(db, node, steal_before=cutoff)):
+                leases = [document]
             if leases:
+                # Allow a request round trip and two heartbeats. Only actual renewal gets the full execution lease.
+                handoff = now() + timedelta(seconds=max(config['request_seconds'] + SEND_SECONDS,
+                    2 * config['heartbeat_seconds'] + 2))
+                for lease in leases:
+                    lease.expires_at = min(lease.expires_at, handoff)
                 db.add(ComputeClaim(node_id=identity, request_id=body.request_id,
                     request_hash=request_hash, lease_ids=[lease.id for lease in leases]))
-        if leases:
-            node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0, 'dispatch_documents': 0}
-        # Commit before network I/O: replay recovers a lost response or ACK.
+        # Only client traffic refreshes advertised capacity, never the notification loop.
+        node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0 if leases else body.count,
+            'dispatch_documents': 0 if leases else body.document_count,
+            'dispatch_until': stamp(now() + timedelta(seconds=config['poll_seconds'] + RECONCILE_SECONDS))}
         db.commit()
-        if not leases:
-            return None
         return {'type': 'assignment', 'request_id': body.request_id, 'server_time': stamp(now()),
-            'config': config_payload(node),
-            'leases': [{**(payload if lease.limits.get('document_protocol') == 2 else lease_payload)(db, lease),
-                        'workflow_kind': 'document' if lease.limits.get('document_protocol') == 2 else 'image'}
+            'leases': [dict(workflow_kind='image', **lease_payload(db, lease)) if lease.resource_pool == 'image'
+                       else dict(workflow_kind='document', **payload(db, lease))
                        for lease in leases]}
 
 
-def snapshot(identity, credential, connection, tracked):
-    from .documents.compute import NODE_STAGES, live, receipt
+def snapshot(identity, connection, tracked, interest):
+    from .documents.compute import NODE_STAGES, has_document_work, live
     with session_factory()() as db:
-        node = current_node(db, identity, credential, connection)
-        active = set(db.scalars(select(ExecutionLease.id).where(
-            ExecutionLease.node_id == identity, ExecutionLease.completed_at.is_(None))))
+        node = current_node(db, identity, connection)
         rows = db.execute(select(ExecutionLease, JobStage.name).join(JobStage).where(
-            ExecutionLease.node_id == identity, ExecutionLease.id.in_(active | tracked))).all()
-        replies = lease_updates(db, identity, [UpdateLease(lease_id=lease.id, lease_token=lease.token)
-            for lease, stage in rows if stage == 'page'])
+            ExecutionLease.node_id == identity,
+            or_(ExecutionLease.completed_at.is_(None), ExecutionLease.id.in_(tracked)))).all()
+        active = {lease.id for lease, _ in rows if not lease.completed_at}
+        replies = []
         for lease, stage in rows:
+            if stage == 'page':
+                if reply := page_update(db, lease):
+                    replies.append(reply)
+                continue
             if stage not in NODE_STAGES:
                 continue
             if lease.completed_at:
@@ -145,32 +136,41 @@ def snapshot(identity, credential, connection, tracked):
                     live(db, lease)
                 except ProcessingError:
                     replies.append({'lease_id': lease.id, 'status': 'stop', 'code': 'LEASE_STOPPED'})
-        return config_payload(node), replies, active
+        # A hint doesn't reserve a stage or bind a document workspace.
+        available = (interest and node.enabled and interest.config_version == node.config_version
+            and len(active) < node.capacity and (
+                interest.count and has_eligible_work(db, node, ['page'])
+                or interest.document_count and has_document_work(db, node)))
+        return config_payload(node), replies, active, bool(available)
 
 
 @router.websocket('/nodes/{node_id}/channel')
 async def channel(socket: WebSocket, node_id: str):
+    if SUBPROTOCOL not in socket.scope.get('subprotocols', []):
+        await socket.close(code=1002)
+        return
     try:
-        credential, connection = await run_in_threadpool(authenticated, node_id,
-            socket.headers.get('authorization'), socket.headers.get('x-node-id'))
+        connection = await run_in_threadpool(authenticated, node_id, socket.headers.get('authorization'))
     except HTTPException:
         await socket.close(code=1008)
         return
-    await socket.accept(subprotocol='compute.v3' if 'compute.v3' in socket.scope.get('subprotocols', []) else None)
     notices = hub()
-    receive = asyncio.create_task(socket.receive())
-    wake_task = None
-    pending, awaiting_ack, previous, sent, tracked = None, None, None, {}, set()
+    receive = None
+    interest, previous, sent, tracked = None, None, {}, set()
+    clock = asyncio.get_running_loop().time
+    hint_after = 0
 
     async def send(value):
         await asyncio.wait_for(socket.send_json(value), SEND_SECONDS)
 
     try:
+        await socket.accept(subprotocol=SUBPROTOCOL)
         with notices.subscribe('compute') as wake, anyio.move_on_after(CHANNEL_SECONDS):
             while not notices.stop.is_set():
                 wake.clear()
-                if receive.done():
+                if receive is not None and receive.done():
                     frame = receive.result()
+                    receive = None
                     if frame['type'] == 'websocket.disconnect':
                         break
                     raw = frame.get('text')
@@ -181,52 +181,43 @@ async def channel(socket: WebSocket, node_id: str):
                         await socket.close(code=1009)
                         return
                     try:
-                        message = MESSAGE.validate_json(raw)
+                        message = Pull.model_validate_json(raw)
                     except ValidationError:
                         await socket.close(code=1008)
                         return
-                    if isinstance(message, Ack):
-                        if message.request_id != awaiting_ack:
-                            await socket.close(code=1008)
-                            return
-                        awaiting_ack = None
-                    elif (awaiting_ack and message.request_id != awaiting_ack) or (pending and pending != message):
-                        await socket.close(code=1008)
-                        return
-                    else:
-                        awaiting_ack = None
-                        pending = message
-                        await run_in_threadpool(offer, node_id, credential, connection, message)
+                    try:
+                        reply = await run_in_threadpool(assign, node_id, connection, message)
+                    except (HTTPException, ProcessingError) as error:
+                        code = error.detail['code'] if isinstance(error, HTTPException) else error.code
+                        if code == 'NODE_AUTH_REQUIRED':
+                            raise
+                        reply = {'type': 'error', 'request_id': message.request_id, 'code': code}
+                        await run_in_threadpool(withdraw, node_id, connection)
+                    await send(reply)
+                    interest = message if reply.get('leases') == [] else None
+                if receive is None:
                     receive = asyncio.create_task(socket.receive())
-                config, replies, active = await run_in_threadpool(snapshot, node_id, credential, connection, tracked)
+                    receive.add_done_callback(lambda _: wake.set())
+                config, replies, active, available = await run_in_threadpool(snapshot, node_id,
+                    connection, tracked, interest if clock() >= hint_after else None)
+                update = {}
                 if config != previous:
-                    await send({'type': 'updates', 'config': config})
+                    update['config'] = config
                     previous = config
+                if available:
+                    update['available'] = True
+                    interest = None
+                    hint_after = clock() + PREFERENCE_SECONDS
+                if update:
+                    await send({'type': 'updates', **update})
                 for reply in replies:
                     if sent.get(reply['lease_id']) != reply:
                         await send({'type': 'updates', 'leases': [reply]})
                 sent = {reply['lease_id']: reply for reply in replies if reply['lease_id'] in active}
                 tracked = active
-                if pending and not awaiting_ack:
-                    try:
-                        assignment = await run_in_threadpool(assign, node_id, credential, connection, pending)
-                    except (HTTPException, ProcessingError) as error:
-                        code = error.detail['code'] if isinstance(error, HTTPException) else error.code
-                        if code == 'NODE_AUTH_REQUIRED':
-                            raise
-                        await send({'type': 'error', 'request_id': pending.request_id, 'code': code})
-                        await run_in_threadpool(offer, node_id, credential, connection)
-                        pending = None
-                    else:
-                        if assignment:
-                            awaiting_ack, pending = pending.request_id, None
-                            await send(assignment)
-                wake_task = asyncio.create_task(wake.wait())
-                await asyncio.wait((receive, wake_task), timeout=RECONCILE_SECONDS, return_when=asyncio.FIRST_COMPLETED)
-                wake_task.cancel()
-                # A second cancellation during join can lose the enclosing scope's identity.
-                with anyio.CancelScope(shield=True):
-                    await asyncio.gather(wake_task, return_exceptions=True)
+                delay = hint_after - clock()
+                with anyio.move_on_after(min(RECONCILE_SECONDS, delay) if interest and delay > 0 else RECONCILE_SECONDS):
+                    await wake.wait()
     except HTTPException:
         await socket.close(code=1008)
     except (WebSocketDisconnect, TimeoutError):
@@ -234,12 +225,11 @@ async def channel(socket: WebSocket, node_id: str):
     finally:
         # ASGI cancellation must still withdraw capacity and release pending receives.
         with anyio.CancelScope(shield=True):
-            receive.cancel()
-            if wake_task:
-                wake_task.cancel()
-            await asyncio.gather(receive, *([wake_task] if wake_task else []), return_exceptions=True)
+            if receive is not None:
+                receive.cancel()
+                await asyncio.gather(receive, return_exceptions=True)
             try:
-                await run_in_threadpool(offer, node_id, credential, connection)
+                await run_in_threadpool(withdraw, node_id, connection)
             except HTTPException:
                 pass  # A newer connection or rotated credential owns the node now.
             if socket.application_state == WebSocketState.CONNECTED:

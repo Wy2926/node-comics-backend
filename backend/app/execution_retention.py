@@ -55,7 +55,6 @@ def compact_checkpoints(db, at, limits, batch):
 
 
 def delete_claims(db, at, limits, batch):
-    empty_cutoff = at - timedelta(days=limits.empty_claim_retention_days)
     done_cutoff = at - timedelta(days=limits.completed_claim_retention_days)
     elements = (func.json_array_elements_text(ComputeClaim.lease_ids) if db.get_bind().dialect.name == 'postgresql'
         else func.json_each(ComputeClaim.lease_ids)).table_valued('value')
@@ -67,10 +66,7 @@ def delete_claims(db, at, limits, batch):
             Job.completed_at.is_(None), Job.completed_at > done_cutoff, unresolved_text()))
         .correlate(ComputeClaim).exists())
     candidates = (select(ComputeClaim.node_id, ComputeClaim.request_id).where(
-        ComputeClaim.created_at <= max(empty_cutoff, done_cutoff),
-        or_(and_(func.json_array_length(ComputeClaim.lease_ids) == 0, ComputeClaim.created_at <= empty_cutoff),
-            and_(func.json_array_length(ComputeClaim.lease_ids) > 0,
-                ComputeClaim.created_at <= done_cutoff, ~unfinished)))
+        ComputeClaim.created_at <= done_cutoff, ~unfinished)
         .order_by(ComputeClaim.created_at, ComputeClaim.node_id, ComputeClaim.request_id).limit(batch))
     return db.execute(delete(ComputeClaim).where(tuple_(ComputeClaim.node_id, ComputeClaim.request_id)
         .in_(candidates)).execution_options(synchronize_session=False)).rowcount

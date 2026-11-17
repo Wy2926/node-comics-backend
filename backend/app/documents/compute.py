@@ -11,7 +11,7 @@ from pydantic import Field, model_validator
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from ..compute_v3 import config_payload, no_store, stamp
+from ..compute_v3 import config_payload, no_store, receipt, stamp
 from ..config import settings
 from ..db import get_db
 from ..errors import ProcessingError, node_error, problem
@@ -19,7 +19,7 @@ from ..models import Job, now
 from ..node_auth import node_auth
 from ..node_config import NodeConfig
 from ..providers import digest
-from ..queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
+from ..queue_models import ComputeNode, ExecutionLease, JobStage
 from ..request_models import RequestBody
 from ..scheduler import (CANDIDATE_LIMIT, assigned_candidates, compute_loads, current_lease,
                          has_eligible_work, lock_scheduler, release_lease, start_lease, touch_job)
@@ -75,12 +75,6 @@ class OCRText(RequestBody):
         if len({row.id for row in self.segments}) != len(self.segments) or any(not row.source.strip() for row in self.segments):
             raise ValueError('OCR identities must be unique and source text nonempty')
         return self
-
-
-class ClaimRequest(RequestBody):
-    request_id: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
-    config_version: int = Field(ge=1, strict=True)
-    count: Literal[1] = 1
 
 
 class LeaseRequest(RequestBody):
@@ -142,11 +136,6 @@ def scoped(db, lease_id, token, identity, workspace_generation=None):
     return lease, stage
 
 
-def receipt(lease):
-    return {'lease_id': lease.id, 'status': 'terminal', 'outcome': lease.outcome,
-            'result_hash': lease.result_hash, 'completed_at': stamp(lease.completed_at)}
-
-
 def live(db, lease):
     lease, stage, job = current_lease(db, lease.id, lease.token)
     deadline = datetime.fromisoformat(lease.limits['deadline_at'].removesuffix('Z'))
@@ -206,11 +195,10 @@ def sync(node_id: str, body: SyncRequest, identity=Depends(node_auth), db: Sessi
             'workspaces': workspaces}
 
 
-def claimable_rows(db, node):
-    """Shared admission for channel assignments and historical HTTP claims."""
+def document_queue(db, node):
     cfg = NodeConfig.model_validate(node.desired_config)
-    if not node.enabled or not cfg.document_slots:
-        return []
+    if not node.enabled or not cfg.document_slots or node.runtime_report.get('document_protocol') != 2:
+        return None
     # Unreconciled expired leases still occupy slots. Only ordinary pages on
     # this GPU prohibit borrowing; the control-text pool occupies no GPU slot.
     busy = db.execute(select(func.count().label('total'),
@@ -220,10 +208,10 @@ def claimable_rows(db, node):
             ExecutionLease.node_id == node.id, ExecutionLease.completed_at.is_(None))).one()
     limit = cfg.document_slots if busy.ordinary else node.capacity
     if busy.total >= node.capacity or busy.documents >= limit or has_eligible_work(db, node, ['page']):
-        return []
+        return None
     # Parsing/packing retain the conservative budget; only OCR/render borrow.
     stages = NODE_STAGES if busy.documents < cfg.document_slots else ('doc_ocr', 'doc_render')
-    rows = db.execute(select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
+    return (select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
         .join(Document, Document.job_id == Job.id).where(
             Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
             or_(Document.owner_node_id == node.id,
@@ -233,20 +221,31 @@ def claimable_rows(db, node):
             JobStage.name.in_(stages), JobStage.name.in_(node.capabilities), JobStage.status == 'ready',
             JobStage.available_at <= now(), Job.target_language.in_(node.supported_languages),
             supports_font(Job.config['font_id'].as_string(), Job.target_language,
-                          node.runtime_report.get('supported_font_ids', [])))
-        .order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
-    unowned = [(stage.id, job) for stage, job, document in rows if document.owner_node_id is None]
+                          node.runtime_report.get('supported_font_ids', []))))
+
+
+def has_document_work(db, node):
+    queue = document_queue(db, node)
+    return queue is not None and db.scalar(select(queue.exists()))
+
+
+def claim_document(db, node, *, steal_before):
+    queue = document_queue(db, node)
+    if queue is None:
+        return None
+    rows = db.execute(queue.order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
+    unowned = [(stage, job) for stage, job, document in rows if document.owner_node_id is None]
     assigned = set()
     if unowned:
         loads = compute_loads(db, node, now())
         loads = {key: load for key, load in loads.items()
-            if not has_eligible_work(db, load[0], ['page'])}
-        assigned = assigned_candidates(node, unowned, loads, document=True)
-    return [row for row in rows if row[2].owner_node_id == node.id or row[0].id in assigned]
-
-
-def start_document_lease(db, node, row):
-    stage, job, document = row
+            if key == node.id or not has_eligible_work(db, load[0], ['page'])}
+        assigned = assigned_candidates(node, unowned, loads, document=True, steal_before=steal_before)
+    for stage, job, document in rows:
+        if document.owner_node_id == node.id or stage.id in assigned:
+            break
+    else:
+        return None
     document.owner_node_id = node.id
     at, limits = now(), get_document_settings()
     cfg = NodeConfig.model_validate(node.desired_config)
@@ -261,31 +260,6 @@ def start_document_lease(db, node, row):
         lease.limits = {**lease.limits, 'output_key': get_document_store().key('output', job.id, lease.id, 'translated.zip')}
     lease.expires_at = min(lease.expires_at, at + timedelta(seconds=seconds))
     return lease
-
-
-@router.post('/nodes/{node_id}/claim')
-def claim(node_id: str, body: ClaimRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
-    lock_scheduler(db)
-    node = node_for(db, identity, node_id)
-    key = (node_id, body.request_id)
-    request_hash = digest({'document_protocol': 2, **body.model_dump()})
-    saved = db.get(ComputeClaim, key)
-    if saved:
-        if saved.request_hash != request_hash:
-            problem('CLAIM_CONFLICT', '领取编号已用于其他内容', 409)
-        leases = [db.get(ExecutionLease, value) for value in saved.lease_ids]
-    else:
-        if node.config_version != body.config_version:
-            problem('NODE_CONFIG_CONFLICT', '节点配置已更新', 409)
-        leases = []
-        rows = claimable_rows(db, node)
-        if rows:
-            leases.append(start_document_lease(db, node, rows[0]))
-        db.add(ComputeClaim(node_id=node_id, request_id=body.request_id, request_hash=request_hash,
-                            lease_ids=[lease.id for lease in leases]))
-    db.commit()
-    return {'request_id': body.request_id, 'server_time': stamp(now()), 'config': config_payload(node),
-            'leases': [payload(db, lease) for lease in leases]}
 
 
 @router.post('/nodes/{node_id}/heartbeat')

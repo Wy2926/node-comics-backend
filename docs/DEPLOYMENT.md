@@ -29,7 +29,7 @@ API 镜像不含页面。官网和后台由 Nginx 提供，参考 [代理模板]
 
 1. 配置候选槽位并启动，核对 `/health/ready` 和 release。
 2. `scripts/switch_release.py api` 原子更新代理 include，校验并 reload。
-3. 旧代理连接退出后，用 `scripts/retire_release.py api` 排空旧实例。节点通道每 300 秒主动结束并自动重连到新槽位，重放未决容量请求；保留节点状态目录。
+3. 旧代理连接退出后，用 `scripts/retire_release.py api` 排空旧实例。节点通道每 300 秒重连到新槽位；保留节点状态目录以重放未决领取请求。
 4. 静态产物用 `scripts/prepare_static_release.py` 准备，再用 `switch_release.py static` 激活。
 
 各命令参数见 `--help`。切换后探测失败不自动回退；确认实际代理状态再处理。保留仍被页面引用的哈希资源。

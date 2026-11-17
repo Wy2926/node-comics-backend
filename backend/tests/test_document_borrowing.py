@@ -7,6 +7,7 @@ from threading import Barrier, Event
 import pytest
 from sqlalchemy import event, func, select
 
+from app import compute_channel
 from app.db import engine, session_factory
 from app.documents import workflow
 from app.documents.models import DocumentPage
@@ -14,9 +15,10 @@ from app.entitlement_models import QuotaPeriod
 from app.models import Job, now
 from app.queue_models import ComputeNode, ExecutionLease, JobStage
 from app.scheduler import lock_scheduler, release_lease
+from compute_pull import bound_pull
 from conftest import configure_system_limits
 from test_compute_v3 import v3, analyze, claim as image_claim
-from test_document_compute import documents, create, claim, complete, other_node
+from test_document_compute import documents, create, claim as leases, complete, other_node
 from test_document_quota_api import document_case
 
 
@@ -44,12 +46,6 @@ def ready_render(case, count):
         workflow.on_stage_completed(db, db.get(Job, job_id), stage)
         db.commit()
     return job_id
-
-
-def leases(case, request_id=None):
-    response = claim(case, request_id)
-    assert response.status_code == 200, response.text
-    return response.json()['leases']
 
 
 @contextmanager
@@ -81,18 +77,17 @@ def test_idle_pages_borrow_total_capacity_with_fifo_and_one_lease_receipts(docum
     assert not documents.store.puts and not documents.store.verified
 
 
-def test_disabled_document_slots_preserve_active_and_empty_receipts(documents):
+def test_disabled_document_slots_preserve_grants_without_allocating(documents):
     create(documents, 5)
-    active = leases(documents, 'active-before-disable')
+    pull = bound_pull(documents.v3)
+    active = pull(0, 'active-before-disable', document_count=1)
     configure(documents, baseline=0)
     with statements() as disabled_sql:
-        assert leases(documents, 'disabled-empty') == []
+        assert pull(0, 'disabled-empty', document_count=1) == []
     assert not any('from execution_leases' in sql and 'count(' in sql for sql in disabled_sql)
-    assert leases(documents, 'active-before-disable') == active
+    assert pull(0, 'active-before-disable', document_count=1) == active
     configure(documents, baseline=1)
-    assert leases(documents, 'disabled-empty') == []
-    assert leases(documents)
-    assert claim(documents, 'disabled-empty', count=2).status_code == 422
+    assert pull(0, 'disabled-empty', document_count=1)
 
 
 @pytest.mark.parametrize('stage_name', ['doc_prepare', 'doc_zip'])
@@ -130,7 +125,7 @@ def test_ordinary_arrival_stops_new_document_claims_without_preemption(documents
     documents.v3['create']()
     assert complete(documents, first).status_code == 200
     assert leases(documents, 'ordinary-ready-empty') == []
-    ordinary = image_claim(documents.v3).json()['leases'][0]
+    ordinary = image_claim(documents.v3)[0]
     assert complete(documents, second).status_code == 200
     conservative = leases(documents)[0]
     assert leases(documents) == []
@@ -139,9 +134,7 @@ def test_ordinary_arrival_stops_new_document_claims_without_preemption(documents
         assert db.get(ExecutionLease, conservative['lease_id']).completed_at is None
         assert db.get(QuotaPeriod, documents.period_id).reserved == 5
     analyze(documents.v3, ordinary, empty=True)
-    # A recorded empty reply never allocates after the queue changes.
-    assert leases(documents, 'ordinary-ready-empty') == []
-    assert leases(documents)[0]['action'] == 'doc_ocr'
+    assert leases(documents, 'ordinary-ready-empty')[0]['action'] == 'doc_ocr'
 
 
 @pytest.mark.parametrize('expired', [False, True])
@@ -151,7 +144,7 @@ def test_active_ordinary_keeps_baseline_even_with_spare_capacity(documents, expi
     create(documents, 8)
     configure_system_limits(free_daily_pages=20)
     documents.v3['create']()
-    ordinary = image_claim(documents.v3).json()['leases'][0]
+    ordinary = image_claim(documents.v3)[0]
     if expired:
         with session_factory()() as db:
             db.get(ExecutionLease, ordinary['lease_id']).expires_at = now() - timedelta(seconds=1)
@@ -224,7 +217,7 @@ def test_ordinary_active_on_another_resource_does_not_block_borrowing(documents)
     configure_system_limits(free_daily_pages=20)
     documents.v3['create']()
     peer = other_node(documents)
-    assert len(image_claim(peer.v3).json()['leases']) == 1
+    assert len(image_claim(peer.v3)) == 1
     assert len(leases(documents)) == len(leases(documents)) == 1
 
 
@@ -232,9 +225,10 @@ def test_parallel_document_claims_share_total_capacity(documents):
     configure(documents, capacity=2)
     create(documents, 20)
     barrier = Barrier(6)
+    pull = bound_pull(documents.v3)
     def attempt(_):
         barrier.wait(timeout=10)
-        return leases(documents)
+        return pull(0, document_count=1)
     with ThreadPoolExecutor(6) as pool:
         replies = list(pool.map(attempt, range(6)))
     ids = [lease['lease_id'] for reply in replies for lease in reply]
@@ -246,11 +240,10 @@ def test_parallel_mixed_claims_prioritize_ordinary_and_keep_baseline(documents):
     configure_system_limits(free_daily_pages=20)
     documents.v3['create'](2)
     barrier = Barrier(6)
+    pull = bound_pull(documents.v3)
     def attempt(index):
         barrier.wait(timeout=10)
-        response = image_claim(documents.v3) if index < 3 else claim(documents)
-        assert response.status_code == 200, response.text
-        return response.json()['leases']
+        return pull() if index < 3 else pull(0, document_count=1)
     with ThreadPoolExecutor(6) as pool:
         replies = list(pool.map(attempt, range(6)))
     assert sum(map(len, replies[:3])) == 2
@@ -262,7 +255,6 @@ def test_parallel_mixed_claims_prioritize_ordinary_and_keep_baseline(documents):
 
 
 def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, monkeypatch):
-    from app.documents import compute
     create(documents, 3)
     configure_system_limits(free_daily_pages=20)
     job_id = documents.v3['create']()[0]
@@ -272,29 +264,31 @@ def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, 
         stage_id = stage.id
         db.commit()
     entered = Event()
+    pull = bound_pull(documents.v3)
     def observed_lock(db):
         entered.set()
         lock_scheduler(db)
-    monkeypatch.setattr(compute, 'lock_scheduler', observed_lock)
+    monkeypatch.setattr(compute_channel, 'lock_scheduler', observed_lock)
     with session_factory()() as db:
         lock_scheduler(db)
         db.get(JobStage, stage_id).status = 'ready'
         with ThreadPoolExecutor(1) as pool:
-            pending = pool.submit(leases, documents, 'intervening-ordinary')
+            pending = pool.submit(pull, 0, document_count=1)
             try:
                 assert entered.wait(timeout=10)
             finally:
                 db.commit()
             assert pending.result(timeout=10) == []
-    assert image_claim(documents.v3).json()['leases']
+    assert image_claim(documents.v3)
 
 
 def test_claim_query_budget_is_one_aggregate_one_exists_independent_of_backlog(documents):
     configure(documents, capacity=2)
     create(documents)
+    pull = bound_pull(documents.v3)
     def sample():
         with statements() as sql:
-            claimed = leases(documents)[0]
+            claimed = pull(0, document_count=1)[0]
         aggregates = [value for value in sql if 'from execution_leases' in value and 'count(' in value]
         probes = [value for value in sql if 'select exists' in value and 'from job_stages' in value]
         assert len(aggregates) == len(probes) == 1
@@ -312,12 +306,12 @@ def test_claim_query_budget_is_one_aggregate_one_exists_independent_of_backlog(d
     baseline = sample()
     create(documents, 200)
     assert sample() == baseline
-    leases(documents)
-    leases(documents)
+    pull(0, document_count=1)
+    last = pull(0, 'granted', document_count=1)
     with statements() as full_sql:
-        assert leases(documents, 'full-empty') == []
+        assert pull(0, document_count=1) == []
     assert sum('from execution_leases' in sql and 'count(' in sql for sql in full_sql) == 1
     assert not any('select exists' in sql for sql in full_sql)
     with statements() as replay_sql:
-        assert leases(documents, 'full-empty') == []
+        assert pull(0, 'granted', document_count=1) == last
     assert not any('count(' in sql or 'select exists' in sql for sql in replay_sql)

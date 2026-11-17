@@ -28,7 +28,7 @@ def main():
     cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
         .serial_number(x509.random_serial_number()).not_valid_before(datetime.now(timezone.utc) - timedelta(minutes=1))
         .not_valid_after(datetime.now(timezone.utc) + timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName('wire')]), critical=False)
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName('wire'), x509.DNSName('healthy')]), critical=False)
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .sign(key, hashes.SHA256()))
     (report / 'cert.pem').write_bytes(cert.public_bytes(serialization.Encoding.PEM))
@@ -50,8 +50,8 @@ http {
     }
 }
 ''', encoding='utf-8')
-    containers = [name + suffix for suffix in ('-tests', '-wire', '-postgres', '-redis')]
-    tests, wire, postgres, redis = containers
+    containers = [name + suffix for suffix in ('-tests', '-wire', '-healthy', '-postgres', '-redis')]
+    tests, wire, healthy, postgres, redis = containers
     try:
         command('docker', 'build', '-f', ROOT / 'deploy/Dockerfile.network-tests',
                 '-t', 'node-comics-network:test', ROOT, timeout=900)
@@ -70,9 +70,10 @@ http {
             '-e', 'RUN_COMPUTE_NETWORK=1', '-e', 'TEST_PG_HOST=postgres',
             '-e', 'TEST_PG_PASSWORD=isolated-test-only', '-e', 'TEST_REDIS_URL=redis://redis:6379/0',
             'node-comics-network:test')
-        command('docker', 'run', '-d', '--name', wire, '--network', name, '--network-alias', 'wire',
-            '-v', f'{report}:/report:ro', '-v', f'{report / "nginx.conf"}:/usr/local/openresty/nginx/conf/nginx.conf:ro',
-            '-v', f'{ROOT / "deploy/openresty.api.inc"}:/production-api.inc:ro', OPENRESTY)
+        for proxy, alias in ((wire, 'wire'), (healthy, 'healthy')):
+            command('docker', 'run', '-d', '--name', proxy, '--network', name, '--network-alias', alias,
+                '-v', f'{report}:/report:ro', '-v', f'{report / "nginx.conf"}:/usr/local/openresty/nginx/conf/nginx.conf:ro',
+                '-v', f'{ROOT / "deploy/openresty.api.inc"}:/production-api.inc:ro', OPENRESTY)
         exit_code = command('docker', 'wait', tests, timeout=1800)
         output = command('docker', 'logs', tests)
         (report / 'pytest.txt').write_text(output, encoding='utf-8')

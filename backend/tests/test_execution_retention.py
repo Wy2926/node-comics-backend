@@ -107,9 +107,8 @@ def test_running_unsettled_and_unknown_calls_keep_their_checkpoints(client):
 def test_claim_ttl_uses_all_lease_and_job_end_times_and_bounded_batches(client):
     with session_factory()() as db:
         _, node, lease = seed(db, days=8)
-        old = add_claim(db, node, [lease], 8)
-        fresh = add_claim(db, node, [], .5)
-        empties = [add_claim(db, node, [], 2) for _ in range(5)]
+        old = [add_claim(db, node, [lease], 8) for _ in range(5)]
+        fresh = add_claim(db, node, [lease], .5)
         _, _, active = seed(db, days=20, active_lease=True)
         active_key = add_claim(db, node, [active, lease], 20)
         _, _, recent = seed(db, days=1)
@@ -120,10 +119,10 @@ def test_claim_ttl_uses_all_lease_and_job_end_times_and_bounded_batches(client):
         uncertain_key = add_claim(db, node, [uncertain], 20)
         assert cleanup_execution_data(db, claim_batch=2)['claims'] == 2
         assert cleanup_execution_data(db, claim_batch=2)['claims'] == 2
-        assert cleanup_execution_data(db, claim_batch=2)['claims'] == 2
+        assert cleanup_execution_data(db, claim_batch=2)['claims'] == 1
         assert cleanup_execution_data(db, claim_batch=2)['claims'] == 0
         db.commit()
-        for key in [old, *empties]:
+        for key in old:
             assert db.get(ComputeClaim, key) is None
         for key in (fresh, active_key, recent_key, unknown_key, uncertain_key):
             assert db.get(ComputeClaim, key) is not None
@@ -158,15 +157,14 @@ def test_history_compacts_once_preserving_billing_identity_and_terminal_receipts
 def test_database_retention_changes_apply_without_restart(client):
     with session_factory()() as db:
         job, node, lease = seed(db, days=8)
-        empty = add_claim(db, node, [], 2)
         done = add_claim(db, node, [lease], 8)
         row = db.get(SystemSettings, 1)
-        row.values = {**row.values, 'image_result_retention_days': 14, 'empty_claim_retention_days': 3,
+        row.values = {**row.values, 'image_result_retention_days': 14,
             'completed_claim_retention_days': 12, 'execution_detail_retention_days': 120}
         cleanup_execution_data(db)
         db.commit()
         assert db.get(ClassicState, job).translations
-        assert db.get(ComputeClaim, empty) and db.get(ComputeClaim, done)
+        assert db.get(ComputeClaim, done)
 
 
 def test_document_text_expires_without_changing_page_accounting_or_result(client):

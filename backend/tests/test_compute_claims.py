@@ -1,17 +1,17 @@
 """Claim receipt concurrency across the lock-free preparation boundary."""
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
 from threading import Barrier
 
 import pytest
-from sqlalchemy import func, select, text
+from fastapi import HTTPException
+from sqlalchemy import func, select
 
-from app import compute_v3, scheduler
+from app import compute_channel, scheduler
 from app.db import session_factory
 from app.models import Job
-from app.providers import digest
 from app.queue_models import ComputeClaim, ComputeNode, ExecutionLease
-from test_compute_v3 import claim, v3  # noqa: F401
+from compute_pull import bound_pull
+from test_compute_v3 import v3  # noqa: F401
 
 
 def capacity(v3, size):
@@ -24,22 +24,22 @@ def capacity(v3, size):
 
 def synchronized_preparation(monkeypatch, participants):
     barrier = Barrier(participants)
-    original = compute_v3.prepare_claim_candidates
+    original = compute_channel.prepare_claim_candidates
     def prepare(*args, **kwargs):
         snapshot = original(*args, **kwargs)
         barrier.wait(timeout=10)
         return snapshot
-    monkeypatch.setattr(compute_v3, 'prepare_claim_candidates', prepare)
+    monkeypatch.setattr(compute_channel, 'prepare_claim_candidates', prepare)
 
 
 def test_same_claim_receipt_concurrent_retries_allocate_one_batch(v3, monkeypatch):
     v3['create'](12)
     capacity(v3, 12)
     synchronized_preparation(monkeypatch, 3)
+    pull = bound_pull(v3)
     with ThreadPoolExecutor(max_workers=3) as pool:
-        replies = list(pool.map(lambda _: claim(v3, 4, 'shared-receipt'), range(3)))
-    assert all(reply.status_code == 200 for reply in replies), [reply.text for reply in replies]
-    batches = [[lease['lease_id'] for lease in reply.json()['leases']] for reply in replies]
+        replies = list(pool.map(lambda _: pull(4, 'shared-receipt'), range(3)))
+    batches = [[lease['lease_id'] for lease in batch] for batch in replies]
     assert len(batches[0]) == 4 and batches[0] == batches[1] == batches[2]
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 4
@@ -51,101 +51,23 @@ def test_same_claim_id_with_concurrent_changed_count_conflicts(v3, monkeypatch):
     v3['create'](8)
     capacity(v3, 8)
     synchronized_preparation(monkeypatch, 2)
+    pull = bound_pull(v3)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        replies = list(pool.map(lambda count: claim(v3, count, 'conflicting-receipt'), [3, 4]))
-    assert sorted(reply.status_code for reply in replies) == [200, 409]
-    winner = next(reply.json() for reply in replies if reply.status_code == 200)
+        futures = [pool.submit(pull, count, 'conflicting-receipt') for count in (3, 4)]
+    errors = [f.exception() for f in futures if f.exception()]
+    assert len(errors) == 1 and errors[0].detail['code'] == 'CLAIM_CONFLICT'
+    winner, = [f.result() for f in futures if not f.exception()]
     with session_factory()() as db:
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == len(winner['leases'])
+        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == len(winner)
         assert db.scalar(select(func.count()).select_from(ComputeClaim)) == 1
-
-
-def test_legacy_count32_is_bounded_and_receipt_replays_after_configuration_change(v3):
-    v3['create'](12)
-    capacity(v3, 12)
-    first = claim(v3, 32, 'legacy-journal')
-    assert first.status_code == 200, first.text
-    leases = first.json()['leases']
-    assert len(leases) == 4
-    with session_factory()() as db:
-        node = db.get(ComputeNode, v3['node']['node_id'])
-        node.config_version += 1
-        node.enabled = False
-        db.commit()
-    replay = claim(v3, 32, 'legacy-journal')
-    assert replay.status_code == 200, replay.text
-    assert [lease['lease_id'] for lease in replay.json()['leases']] == [lease['lease_id'] for lease in leases]
-    assert claim(v3, 4, 'legacy-journal').status_code == 409
-    with session_factory()() as db:
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 4
-
-
-def test_historical_wide_claim_receipt_replays_every_lease(v3):
-    v3['create'](12)
-    capacity(v3, 12)
-    leases = claim(v3, 4).json()['leases'] + claim(v3, 4).json()['leases']
-    assert len(leases) == 8
-    body = {'request_id': 'historical-wide', 'config_version': 1, 'count': 32}
-    with session_factory()() as db:
-        # Simulate a pre-upgrade receipt. Its exact lease set is durable, even
-        # though the new scheduler grants at most four leases to a new request.
-        db.add(ComputeClaim(node_id=v3['node']['node_id'], request_id=body['request_id'],
-            request_hash=digest(body), lease_ids=[lease['lease_id'] for lease in leases]))
-        db.commit()
-    response = claim(v3, 32, body['request_id'])
-    assert response.status_code == 200, response.text
-    assert [lease['lease_id'] for lease in response.json()['leases']] == [lease['lease_id'] for lease in leases]
-    with session_factory()() as db:
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 8
-
-
-def test_empty_prepared_claim_rechecks_after_commit_and_hints_bounded_retry(v3, monkeypatch):
-    v3['create'](4)
-    request_sessions = []
-    original_prepare = compute_v3.prepare_claim_candidates
-    original_ready = compute_v3.has_claimable_work
-    def stale(db, *args, **kwargs):
-        request_sessions.append(db)
-        return replace(original_prepare(db, *args, **kwargs), signatures={})
-    def ready(db, *args, **kwargs):
-        assert db is not request_sessions[0] and not request_sessions[0].in_transaction()
-        saved = db.get(ComputeClaim, (v3['node']['node_id'], 'stale-empty'))
-        assert saved is not None and saved.lease_ids == []
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 0
-        if db.get_bind().dialect.name == 'postgresql':
-            with session_factory()() as probe:
-                assert probe.scalar(text('SELECT pg_try_advisory_xact_lock(761349211)'))
-                probe.rollback()
-        return original_ready(db, *args, **kwargs)
-    monkeypatch.setattr(compute_v3, 'prepare_claim_candidates', stale)
-    monkeypatch.setattr(compute_v3, 'has_claimable_work', ready)
-    reply = claim(v3, 4, 'stale-empty')
-    assert reply.status_code == 200, reply.text
-    assert reply.json()['leases'] == [] and .1 <= reply.json()['retry_after_seconds'] <= .3
-
-
-def test_empty_receipt_retry_hint_is_dynamic_and_does_not_allocate(v3):
-    empty = claim(v3, 4, 'empty-receipt')
-    assert empty.status_code == 200 and empty.json()['leases'] == []
-    assert 'retry_after_seconds' not in empty.json()
-    v3['create'](4)
-    replay = claim(v3, 4, 'empty-receipt')
-    assert replay.status_code == 200 and replay.json()['leases'] == []
-    assert .1 <= replay.json()['retry_after_seconds'] <= .3
-    with session_factory()() as db:
-        assert db.get(ComputeClaim, (v3['node']['node_id'], 'empty-receipt')).lease_ids == []
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 0
-    granted = claim(v3, 4)
-    assert len(granted.json()['leases']) == 4 and 'retry_after_seconds' not in granted.json()
-    full = claim(v3, 4, 'empty-receipt')
-    assert full.json()['leases'] == [] and 'retry_after_seconds' not in full.json()
 
 
 @pytest.mark.parametrize('mutation', ['configuration', 'cancel_and_shrink'])
 def test_prepared_claim_rechecks_intervening_changes(v3, monkeypatch, mutation):
     jobs = v3['create'](8)
     capacity(v3, 8)
-    original = compute_v3.prepare_claim_candidates
+    pull = bound_pull(v3)
+    original = compute_channel.prepare_claim_candidates
     def prepare(*args, **kwargs):
         snapshot = original(*args, **kwargs)
         with session_factory()() as writer:
@@ -161,14 +83,14 @@ def test_prepared_claim_rechecks_intervening_changes(v3, monkeypatch, mutation):
                 scheduler.touch_job(writer, job)
             writer.commit()
         return snapshot
-    monkeypatch.setattr(compute_v3, 'prepare_claim_candidates', prepare)
-    reply = claim(v3, 4, 'prepared-change')
+    monkeypatch.setattr(compute_channel, 'prepare_claim_candidates', prepare)
     if mutation == 'configuration':
-        assert reply.status_code == 409, reply.text
+        with pytest.raises(HTTPException) as rejected:
+            pull(4, 'prepared-change')
+        assert rejected.value.detail['code'] == 'NODE_CONFIG_CONFLICT'
         expected = 0
     else:
-        assert reply.status_code == 200, reply.text
-        leases = reply.json()['leases']
+        leases = pull(4, 'prepared-change')
         assert len(leases) == 1 and leases[0]['job_id'] != jobs[0]
         expected = 1
     with session_factory()() as db:

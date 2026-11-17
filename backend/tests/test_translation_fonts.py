@@ -235,14 +235,14 @@ def test_default_and_historical_dispatch_require_the_effective_default_font(v3, 
             if legacy_font is not None:
                 entry.config = {**entry.config, 'font_id': legacy_font}
             db.commit()
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
     alternative = next(font for font, languages in FONT_LANGUAGES.items() if 'en' in languages and font != default)
     wrong_registration = {**old_registration, 'supported_font_ids': [alternative]}
     assert client.post(PREFIX + '/nodes/register', headers=v3['auth'], json=wrong_registration).status_code == 200
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
     supported = {**old_registration, 'supported_font_ids': [default]}
     assert client.post(PREFIX + '/nodes/register', headers=v3['auth'], json=supported).status_code == 200
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     assert lease['job_id'] == job_id and lease['config']['font_id'] == default
     resumed = client.post(PREFIX + '/nodes/register', headers=v3['auth'], json=supported)
     assert resumed.status_code == 200 and resumed.json()['leases'][0]['config']['font_id'] == default
@@ -263,17 +263,17 @@ def test_selected_font_dispatch_and_checkpoint_recovery_require_capable_node(v3,
     assert result.status_code == 202, result.text
     job_id = result.json()['id']
     # Existing v3 nodes without a font catalog cannot ignore font_id.
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
     with session_factory()() as db:
         assert not has_claimable_work(db, v3['node']['node_id'], ['page'])
     registration = {**v3['registration'], 'supported_font_ids': ['patrick-hand']}
     assert client.post(PREFIX + '/nodes/register', headers=v3['auth'], json=registration).status_code == 200
-    assert claim(v3).json()['leases'] == []
+    assert claim(v3) == []
     registration['supported_font_ids'] = ['comic-relief', 'comic-relief']
     assert client.post(PREFIX + '/nodes/register', headers=v3['auth'], json=registration).status_code == 200
     with session_factory()() as db:
         assert db.get(ComputeNode, v3['node']['node_id']).runtime_report['supported_font_ids'] == ['comic-relief']
-    lease = claim(v3).json()['leases'][0]
+    lease = claim(v3)[0]
     assert lease['job_id'] == job_id and lease['config']['font_id'] == 'comic-relief'
     analyze(v3, lease)
     text(lease)
@@ -288,7 +288,7 @@ def test_selected_font_dispatch_and_checkpoint_recovery_require_capable_node(v3,
     with session_factory()() as db:
         db.scalar(select(JobStage).where(JobStage.job_id == job_id, JobStage.name == 'page')).available_at = now()
         db.commit()
-    recovered = claim(v3).json()['leases'][0]
+    recovered = claim(v3)[0]
     assert recovered['config']['font_id'] == 'comic-relief'
     assert recovered['analysis_hash'] == resumed['analysis_hash']
     assert recovered['translations'] == resumed['translations']

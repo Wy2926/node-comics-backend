@@ -26,10 +26,10 @@ def test_claim_cleanup_uses_retention_index_with_large_recent_history(client):
     from app.queue_models import ComputeClaim
     from test_execution_retention import seed, add_claim
     with session_factory()() as db:
-        _, node, _ = seed(db, days=2)
-        add_claim(db, node, [], 2)
+        _, node, lease = seed(db, days=8)
+        add_claim(db, node, [lease], 8)
         db.execute(ComputeClaim.__table__.insert(), [{'node_id': node, 'request_id': uid(),
-            'request_hash': 'a' * 64, 'lease_ids': [], 'created_at': now()} for _ in range(50000)])
+            'request_hash': 'a' * 64, 'lease_ids': [lease], 'created_at': now()} for _ in range(50000)])
         db.execute(text('ANALYZE compute_claims'))
         connection, plans = db.connection(), []
 

@@ -1231,88 +1231,6 @@
         }
       }
     },
-    "/internal/compute/v3/nodes/{node_id}/claim": {
-      "post": {
-        "tags": [
-          "compute v3"
-        ],
-        "summary": "Claim",
-        "operationId": "claim_internal_compute_v3_nodes__node_id__claim_post",
-        "parameters": [
-          {
-            "name": "node_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Node Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "x-node-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Node-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/app__compute_v3__ClaimRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/internal/compute/v3/nodes/{node_id}/heartbeat": {
       "post": {
         "tags": [
@@ -2472,88 +2390,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SyncRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/documents/compute/v2/nodes/{node_id}/claim": {
-      "post": {
-        "tags": [
-          "document compute"
-        ],
-        "summary": "Claim",
-        "operationId": "claim_internal_documents_compute_v2_nodes__node_id__claim_post",
-        "parameters": [
-          {
-            "name": "node_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Node Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "x-node-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Node-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/app__documents__compute__ClaimRequest"
               }
             }
           }
@@ -10466,18 +10302,6 @@
             "const": 3,
             "title": "Protocol Version"
           },
-          "control_channel": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "websocket"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Control Channel"
-          },
           "engine_version": {
             "type": "string",
             "maxLength": 120,
@@ -10532,10 +10356,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "enum": [
-                  1,
-                  2
-                ]
+                "const": 2
               },
               {
                 "type": "null"
@@ -10618,12 +10439,6 @@
             "maximum": 365.0,
             "minimum": 1.0,
             "title": "Image Result Retention Days"
-          },
-          "empty_claim_retention_days": {
-            "type": "integer",
-            "maximum": 365.0,
-            "minimum": 1.0,
-            "title": "Empty Claim Retention Days"
           },
           "completed_claim_retention_days": {
             "type": "integer",
@@ -10734,7 +10549,6 @@
           "free_daily_pages",
           "image_input_retention_hours",
           "image_result_retention_days",
-          "empty_claim_retention_days",
           "completed_claim_retention_days",
           "execution_detail_retention_days",
           "free_images_per_minute",
@@ -12137,36 +11951,6 @@
         ],
         "title": "ZipReference"
       },
-      "app__compute_v3__ClaimRequest": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Request Id"
-          },
-          "config_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Config Version"
-          },
-          "count": {
-            "type": "integer",
-            "maximum": 32.0,
-            "minimum": 1.0,
-            "title": "Count"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id",
-          "config_version",
-          "count"
-        ],
-        "title": "ClaimRequest"
-      },
       "app__compute_v3__CompletionRequest": {
         "properties": {
           "lease_token": {
@@ -12242,35 +12026,6 @@
           "leases"
         ],
         "title": "HeartbeatRequest"
-      },
-      "app__documents__compute__ClaimRequest": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Request Id"
-          },
-          "config_version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Config Version"
-          },
-          "count": {
-            "type": "integer",
-            "const": 1,
-            "title": "Count",
-            "default": 1
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "request_id",
-          "config_version"
-        ],
-        "title": "ClaimRequest"
       },
       "app__documents__compute__CompletionRequest": {
         "properties": {

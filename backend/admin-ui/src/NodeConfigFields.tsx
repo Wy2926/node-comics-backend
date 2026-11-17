@@ -6,6 +6,7 @@ export type ConfigSchema = {
 const labels: Record<string, string> = {
   execution_slots: '最大在途页数', document_slots: '文件保守并发（0 为关闭）',
   performance_weight: '处理能力权重（越大越优先）',
+  poll_seconds: '空闲补领间隔（秒）',
   heartbeat_seconds: '心跳间隔（秒）',
   request_seconds: '控制请求超时（秒）',
   page_seconds: '整页处理时限（秒）', text_wait_seconds: '等待译文时限（秒）',

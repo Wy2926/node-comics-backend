@@ -14,7 +14,7 @@ from test_document_compute import (
 )
 from test_document_borrowing import (
     test_idle_pages_borrow_total_capacity_with_fifo_and_one_lease_receipts,
-    test_disabled_document_slots_preserve_active_and_empty_receipts,
+    test_disabled_document_slots_preserve_grants_without_allocating,
     test_prepare_and_zip_do_not_borrow_but_ready_pages_can,
     test_ordinary_arrival_stops_new_document_claims_without_preemption,
     test_active_ordinary_keeps_baseline_even_with_spare_capacity,

@@ -145,17 +145,15 @@ def test_document_worker_is_required_only_for_cluster_when_enabled(client, docum
     assert not readiness()[1]
 
 
-@pytest.mark.parametrize('mutation', ['ready', 'legacy', 'old-document-protocol', 'disabled', 'stale',
+@pytest.mark.parametrize('mutation', ['ready', 'image-only', 'disabled', 'stale',
     'not-ready', 'old-compute-protocol', 'config-pending', 'config-error', 'control', 'document-slots-zero'])
 def test_document_node_uses_registered_protocol_and_runtime_gates(document_health, mutation):
     from app.queue_models import ComputeNode
     report_progress('document-worker', instance='test-document-worker')
     with session_factory()() as db:
         node = db.get(ComputeNode, document_health)
-        if mutation == 'legacy':
+        if mutation == 'image-only':
             node.runtime_report = {'protocol_version': 3, 'ready': True}
-        elif mutation == 'old-document-protocol':
-            node.runtime_report = {**node.runtime_report, 'document_protocol': 1}
         elif mutation == 'disabled':
             node.enabled = False
         elif mutation == 'stale':

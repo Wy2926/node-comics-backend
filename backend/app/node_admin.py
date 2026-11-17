@@ -128,6 +128,7 @@ def rotate(node_id: str, user: User = Depends(admin), db: Session = Depends(get_
     node = compute_node(db, node_id, image_only=True)
     token = secrets.token_urlsafe(48)
     node.credential_hash = token_hash(token)
+    node.runtime_report = {**node.runtime_report, 'channel_id': None, 'dispatch_slots': 0, 'dispatch_documents': 0}
     node.applied_config_version = 0
     record_audit(db, user.id, 'node.rotate_credential', 'compute_node', node.id,
                  details={'previous_credential_revoked': True})

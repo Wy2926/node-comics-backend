@@ -31,36 +31,28 @@ from test_compute_v3 import (
 from test_compute_claims import (
     test_same_claim_receipt_concurrent_retries_allocate_one_batch,
     test_same_claim_id_with_concurrent_changed_count_conflicts,
-    test_legacy_count32_is_bounded_and_receipt_replays_after_configuration_change,
-    test_historical_wide_claim_receipt_replays_every_lease,
-    test_empty_prepared_claim_rechecks_after_commit_and_hints_bounded_retry,
-    test_empty_receipt_retry_hint_is_dynamic_and_does_not_allocate,
     test_prepared_claim_rechecks_intervening_changes,
 )
 from test_compute_multinode import (
     test_nodes_claim_with_independent_capacity_and_receipts,
     test_three_simultaneous_nodes_fill_slots_despite_shared_candidates,
-    test_idle_queue_has_one_election_and_repeated_invalidations_are_bounded,
     test_retry_preserves_missing_source_cleanup_and_releases_quota_once,
-    test_retry_releases_lock_and_rechecks_current_receipt_and_policy,
     test_idle_or_incompatible_peer_never_reserves_work,
     test_lost_node_work_recovers_on_peer_and_old_lease_cannot_publish,
 )
 from test_compute_fastpaths import (
     test_input_download_only_reads_identity_and_file_metadata,
     test_full_node_and_replay_do_not_rank_the_queue,
-    test_empty_replay_only_probes_existence_and_retry_hint_is_jittered,
-    test_capacity_shrink_after_preparation_does_not_trigger_reselection,
-    test_exhausted_queue_does_not_run_a_second_election,
 )
 from test_compute_channel import (
-    test_parallel_replayed_offer_allocates_once,
-    test_idle_offer_pushes_new_work_without_polling_and_requires_ack,
-    test_disconnect_before_ack_replays_only_original_leases,
-    test_new_connection_fences_old_connection_without_clearing_new_offer,
-    test_expired_offer_does_not_block_even_with_live_http_heartbeat,
-    test_pending_offer_renews_capacity_without_creating_receipts,
-    test_same_offer_before_ack_replays_but_changed_content_conflicts,
+    test_idle_hint_never_allocates_before_a_fresh_pull,
+    test_disconnect_after_pull_replays_only_original_leases,
+    test_new_connection_fences_old_connection,
+    test_expired_capacity_does_not_block_even_with_live_http_heartbeat,
+    test_idle_snapshot_never_renews_advertised_capacity,
+    test_same_pull_replays_but_changed_content_conflicts,
+    test_fresh_preference_then_steal_with_live_unresponsive_peer,
+    test_committed_pull_has_bounded_handoff_and_only_heartbeat_extends_it,
 )
 from test_node_scheduling import test_weight_two_distributes_six_pages_four_to_two
 

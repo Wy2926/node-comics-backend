@@ -17,6 +17,7 @@ from app.documents import workflow
 from app.entitlement_models import QuotaPeriod
 from app.models import Job, Ledger, now
 from app.queue_models import ComputeNode, ExecutionLease, JobStage
+from compute_pull import bound_pull
 from test_compute_v3 import v3, claim as image_claim, request as image_request
 from test_document_quota_api import document_case, create as create_upload, purchase
 from test_node_management import provision
@@ -83,9 +84,8 @@ def request(case, path, body):
     return case.v3['client'].post(PREFIX + path, headers=case.v3['auth'], json=body)
 
 
-def claim(case, request_id=None, **changes):
-    return request(case, f'/nodes/{case.v3["node"]["node_id"]}/claim',
-        {'request_id': request_id or uuid4().hex, 'config_version': 1, 'count': 1, **changes})
+def claim(case, request_id=None):
+    return image_claim(case.v3, 0, request_id, document_count=1)
 
 
 def auth(lease):
@@ -117,9 +117,9 @@ def freeze(case, lease, ref=None):
 
 def zip_lease(case):
     create(case)
-    lease = claim(case).json()['leases'][0]
+    lease = claim(case)[0]
     assert complete(case, lease, no_text=True).status_code == 200
-    lease = claim(case).json()['leases'][0]
+    lease = claim(case)[0]
     assert lease['action'] == 'doc_zip'
     return lease
 
@@ -132,21 +132,18 @@ def other_node(case):
     return SimpleNamespace(v3=value)
 
 
-@pytest.mark.parametrize('protocol', [None, 1])
-def test_v1_and_image_only_nodes_cannot_claim_documents(documents, protocol):
+def test_image_only_node_cannot_claim_documents(documents):
     create(documents)
-    response = image_request(documents.v3, '/nodes/register', {**documents.v3['registration'], 'document_protocol': protocol})
+    response = image_request(documents.v3, '/nodes/register', documents.v3['registration'])
     assert response.status_code == 200
-    assert claim(documents).json()['error']['code'] == 'PROTOCOL_MISMATCH'
+    assert claim(documents) == []
     with session_factory()() as db:
         assert db.get(ComputeNode, documents.v3['node']['node_id']).capabilities == ['page']
-    assert documents.v3['client'].post('/internal/documents/compute/v1/nodes/anything/claim',
-        headers=documents.v3['auth'], json={}).status_code == 404
 
 
 def test_prepare_pins_owner_and_reserves_only_after_bounded_manifest(documents):
     job_id = create(documents, prepared=False)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert lease['action'] == 'doc_prepare' and lease['workspace_generation'] == 1
     assert lease['source']['ref']['mime'] == 'application/zip'
     assert lease['file_limits']['max_page_pixels'] > 0 and lease['limits']['max_spool_bytes'] > 0
@@ -156,7 +153,7 @@ def test_prepare_pins_owner_and_reserves_only_after_bounded_manifest(documents):
         assert doc.owner_node_id == documents.v3['node']['node_id'] and doc.reserved_at is None
         assert db.get(QuotaPeriod, documents.period_id).reserved == 0
         assert workflow.claim_control(db, 'fixture') is None
-    assert claim(other_node(documents)).json()['leases'] == []
+    assert claim(other_node(documents)) == []
     assert complete(documents, lease, values={'pages': manifest(2)[::-1]}).status_code == 422
     accepted = complete(documents, lease, values={'pages': manifest(2)})
     assert accepted.status_code == 200, accepted.text
@@ -182,9 +179,7 @@ def test_every_node_stage_and_sync_preserve_configured_file_limits(documents, mo
     job_id = create(documents, prepared=False)
 
     def next_stage(action):
-        response = claim(documents)
-        assert response.status_code == 200, response.text
-        lease = response.json()['leases'][0]
+        lease = claim(documents)[0]
         assert lease['action'] == action
         assert lease['file_limits'] == lease['limits']['file_limits'] == expected
         synced = request(documents, f'/nodes/{documents.v3["node"]["node_id"]}/sync',
@@ -217,11 +212,11 @@ def test_every_node_stage_and_sync_preserve_configured_file_limits(documents, mo
 
 def test_unreserved_pages_and_other_owners_never_claim(documents):
     job_id = create(documents)
-    assert claim(other_node(documents)).json()['leases'] == []
+    assert claim(other_node(documents)) == []
     with session_factory()() as db:
         db.get(Document, job_id).reserved_at = None
         db.commit()
-    assert claim(documents).json()['leases'] == []
+    assert claim(documents) == []
 
 
 def test_document_backlog_never_hides_interactive_work_and_capacity_is_shared(documents):
@@ -229,43 +224,41 @@ def test_document_backlog_never_hides_interactive_work_and_capacity_is_shared(do
     create(documents, 200)
     configure_system_limits(free_daily_pages=20)
     documents.v3['create']()
-    assert claim(documents).json()['leases'] == []
-    interactive = image_claim(documents.v3).json()['leases']
-    background = claim(documents).json()['leases']
+    assert claim(documents) == []
+    interactive = image_claim(documents.v3)
+    background = claim(documents)
     assert len(interactive) == len(background) == 1
-    assert claim(documents).json()['leases'] == []
+    assert claim(documents) == []
     with session_factory()() as db:
         node = db.get(ComputeNode, documents.v3['node']['node_id'])
         node.capacity = 2
         node.desired_config = {**node.desired_config, 'document_slots': 2}
         db.commit()
-    assert claim(documents).json()['leases'] == []
+    assert claim(documents) == []
     response = image_request(documents.v3, '/nodes/register', {**documents.v3['registration'], 'document_protocol': 2})
     assert [item['lease_id'] for item in response.json()['leases']] == [interactive[0]['lease_id']]
 
 
 def test_concurrent_claim_receipt_and_configuration_replay(documents):
     create(documents, 10)
+    pull = bound_pull(documents.v3)
     with ThreadPoolExecutor(4) as pool:
-        replies = list(pool.map(lambda _: claim(documents, 'lost-response'), range(4)))
-    assert all(reply.status_code == 200 for reply in replies)
-    ids = [reply.json()['leases'][0]['lease_id'] for reply in replies]
+        replies = list(pool.map(lambda _: pull(0, 'lost-response', document_count=1), range(4)))
+    ids = [batch[0]['lease_id'] for batch in replies]
     assert len(set(ids)) == 1
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(ExecutionLease).where(
             ExecutionLease.node_id == documents.v3['node']['node_id'],
             ExecutionLease.completed_at.is_(None))) == 1
-    with session_factory()() as db:
         node = db.get(ComputeNode, documents.v3['node']['node_id'])
         node.enabled, node.config_version = False, 2
         db.commit()
-    assert claim(documents, 'lost-response').json()['leases'][0]['lease_id'] == ids[0]
-    assert claim(documents, 'lost-response', config_version=2).status_code == 409
+    assert claim(documents, 'lost-response')[0]['lease_id'] == ids[0]
 
 
 def test_local_ocr_completion_replay_has_no_transfer_and_releases_before_text(documents):
     job_id = create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert lease['input'] == INPUT and 'inputs' not in lease
     accepted = complete(documents, lease)
     assert accepted.status_code == 200, accepted.text
@@ -283,7 +276,7 @@ def test_local_ocr_completion_replay_has_no_transfer_and_releases_before_text(do
         assert central and central.node_id == 'control-document'
         assert central.limits['workspace_generation'] == 1
         db.commit()
-    assert claim(documents).json()['leases'] == []
+    assert claim(documents) == []
 
 
 @pytest.mark.parametrize('change', [
@@ -295,7 +288,7 @@ def test_local_ocr_completion_replay_has_no_transfer_and_releases_before_text(do
 ])
 def test_local_checkpoint_shape_and_scope_are_bounded(documents, change):
     create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     value = result(lease)
     change(value)
     assert complete(documents, lease, values=value).status_code == 422
@@ -304,7 +297,7 @@ def test_local_checkpoint_shape_and_scope_are_bounded(documents, change):
 
 def test_no_text_uses_original_and_skips_text_and_render(documents):
     job_id = create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert complete(documents, lease, no_text=True).status_code == 200
     with session_factory()() as db:
         page = db.get(DocumentPage, (job_id, 1))
@@ -316,7 +309,7 @@ def test_no_text_uses_original_and_skips_text_and_render(documents):
 
 def test_render_has_inline_translations_and_same_dimension_local_output(documents):
     job_id = create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert complete(documents, lease).status_code == 200
     translations = {'analysis_hash': 'e' * 64, 'language': 'zh-Hans', 'translations': {'0': 'translated'}, 'revision': 'f' * 64}
     with session_factory()() as db:
@@ -325,7 +318,7 @@ def test_render_has_inline_translations_and_same_dimension_local_output(document
         stage.status = 'succeeded'
         workflow.on_stage_completed(db, db.get(Job, job_id), stage)
         db.commit()
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert lease['action'] == 'doc_render' and lease['translations'] == translations
     bad = result(lease)
     bad['output_ref']['width'] += 1
@@ -340,12 +333,12 @@ def test_render_has_inline_translations_and_same_dimension_local_output(document
 
 def test_only_zip_can_get_upload_authorization_and_final_receipt_settles_once(documents):
     create(documents)
-    ocr = claim(documents).json()['leases'][0]
+    ocr = claim(documents)[0]
     fake_zip = {'key': 'isolated-documents/output/forbidden.zip', 'sha256': 'f' * 64, 'byte_size': 100, 'mime': 'application/zip'}
     assert freeze(documents, ocr, fake_zip).status_code == 422
     assert request(documents, f'/leases/{ocr["lease_id"]}/inputs', auth(ocr)).status_code == 422
     assert complete(documents, ocr, no_text=True).status_code == 200
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert lease['action'] == 'doc_zip' and lease['pages'] == [{'page_index': 1, 'output_ref': INPUT}]
     assert complete(documents, lease).status_code == 409
     assert freeze(documents, lease).status_code == 200
@@ -374,7 +367,7 @@ def test_zip_upload_maximum_is_four_gib_not_legacy_image_limit(documents):
 def test_expired_stage_generation_and_wrong_workspace_cannot_publish(documents):
     from app.errors import ProcessingError
     job_id = create(documents)
-    old = claim(documents).json()['leases'][0]
+    old = claim(documents)[0]
     assert complete(documents, {**old, 'workspace_generation': 2}).status_code == 409
     assert complete(documents, {**old, 'lease_token': 'other'}).status_code == 403
     with session_factory()() as db:
@@ -384,15 +377,38 @@ def test_expired_stage_generation_and_wrong_workspace_cannot_publish(documents):
     with session_factory()() as db:
         workflow.stage_for(db, job_id, 'doc_ocr', 1).available_at = now()
         db.commit()
-    replacement = claim(documents).json()['leases'][0]
+    replacement = claim(documents)[0]
     assert replacement['generation'] == old['generation'] + 1
     assert complete(documents, old).status_code == 409
     assert complete(documents, replacement).status_code == 200
 
 
+def test_lost_initial_parser_can_move_but_late_manifest_cannot_reserve(documents):
+    from app.dispatcher import recover_lease
+    job_id = create(documents, prepared=False)
+    old = claim(documents)[0]
+    other = other_node(documents)
+    with session_factory()() as db:
+        db.get(ExecutionLease, old['lease_id']).expires_at = now() - timedelta(seconds=1)
+        db.commit()
+    recover_lease(old['lease_id'])
+    with session_factory()() as db:
+        document = db.get(Document, job_id)
+        assert document.owner_node_id is None and document.workspace_generation == old['workspace_generation'] + 1
+        workflow.stage_for(db, job_id, 'doc_prepare').available_at = now()
+        db.get(ComputeNode, documents.v3['node']['node_id']).enabled = False
+        db.commit()
+    replacement = claim(other)[0]
+    assert complete(documents, old).status_code == 409
+    assert complete(other, replacement).status_code == 200
+    with session_factory()() as db:
+        assert db.get(Document, job_id).owner_node_id == other.v3['node']['node_id']
+        assert db.get(QuotaPeriod, documents.period_id).reserved == 1
+
+
 def test_missing_workspace_before_llm_rebuilds_without_double_reservation(documents):
     job_id = create(documents, 2)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     assert complete(documents, lease, values={'error': 'DOCUMENT_WORKSPACE_MISSING'}).status_code == 200
     with session_factory()() as db:
         document = db.get(Document, job_id)
@@ -401,7 +417,7 @@ def test_missing_workspace_before_llm_rebuilds_without_double_reservation(docume
         assert workflow.stage_for(db, job_id, 'doc_prepare').status == 'ready'
         assert workflow.stage_for(db, job_id, 'doc_ocr', 1).status == 'waiting'
     assert complete(documents, lease).status_code == 409
-    preparation = claim(documents).json()['leases'][0]
+    preparation = claim(documents)[0]
     assert preparation['action'] == 'doc_prepare' and preparation['workspace_generation'] == 2
     assert complete(documents, preparation, values={'pages': manifest(2)}).status_code == 200
     with session_factory()() as db:
@@ -416,13 +432,13 @@ def test_workspace_reset_fences_other_inflight_pages_and_preserves_frozen_manife
         node = db.get(ComputeNode, documents.v3['node']['node_id'])
         node.desired_config = {**node.desired_config, 'document_slots': 2}
         db.commit()
-    first, second = claim(documents).json()['leases'][0], claim(documents).json()['leases'][0]
+    first, second = claim(documents)[0], claim(documents)[0]
     assert complete(documents, first, values={'error': 'DOCUMENT_WORKSPACE_MISSING'}).status_code == 200
     assert complete(documents, second).status_code == 409
     heartbeat = request(documents, f'/nodes/{documents.v3["node"]["node_id"]}/heartbeat',
         {'leases': [{'lease_id': second['lease_id'], **auth(second)}]}).json()
     assert heartbeat['leases'][0]['status'] == 'terminal'
-    preparation = claim(documents).json()['leases'][0]
+    preparation = claim(documents)[0]
     changed = manifest(2)
     changed[0]['input_ref']['sha256'] = 'a' * 64
     rejected = complete(documents, preparation, values={'pages': changed})
@@ -436,7 +452,7 @@ def test_workspace_reset_fences_other_inflight_pages_and_preserves_frozen_manife
 @pytest.mark.parametrize(('state', 'expected'), [('sending', 'outcome_unknown'), ('unknown', 'outcome_unknown'), ('received', 'failed')])
 def test_missing_workspace_after_llm_never_rebuilds_or_resends(documents, state, expected):
     job_id = create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     with session_factory()() as db:
         db.get(Document, job_id).text_state = state
         db.commit()
@@ -446,7 +462,7 @@ def test_missing_workspace_after_llm_never_rebuilds_or_resends(documents, state,
         assert db.get(Document, job_id).workspace_generation == 1
         assert workflow.claim_control(db, 'fixture') is None
         assert db.get(QuotaPeriod, documents.period_id).reserved == (0 if expected == 'failed' else 1)
-    assert claim(documents).json()['leases'] == []
+    assert claim(documents) == []
 
 
 def test_sync_reports_owned_idle_workspaces_terminal_cleanup_and_explicit_revocation(documents):
@@ -486,7 +502,7 @@ def test_offline_owner_has_finite_recovery_grace_without_resending_text(document
 def test_offline_expiry_skips_active_lease_and_rechecks_reconnected_owner(documents, monkeypatch):
     from app.documents.config import get_document_settings
     job_id = create(documents)
-    lease = claim(documents).json()['leases'][0]
+    lease = claim(documents)[0]
     with session_factory()() as db:
         node = db.get(ComputeNode, documents.v3['node']['node_id'])
         node.heartbeat_at = now() - timedelta(hours=get_document_settings().waiting_retention_hours, seconds=1)
@@ -568,6 +584,7 @@ def test_interactive_claim_has_constant_query_count_with_200_document_pages(docu
     from conftest import configure_system_limits
     configure_system_limits(free_daily_pages=20)
     documents.v3['create']()
+    pull = bound_pull(documents.v3)
     def sample():
         statements = []
         def record(_connection, _cursor, statement, *_args):
@@ -575,13 +592,12 @@ def test_interactive_claim_has_constant_query_count_with_200_document_pages(docu
         event.listen(engine(), 'before_cursor_execute', record)
         started = perf_counter()
         try:
-            response = image_claim(documents.v3)
+            lease, = pull()
             elapsed = perf_counter() - started
         finally:
             event.remove(engine(), 'before_cursor_execute', record)
-        assert response.status_code == 200 and len(response.json()['leases']) == 1
         with session_factory()() as db:
-            lease = db.get(ExecutionLease, response.json()['leases'][0]['lease_id'])
+            lease = db.get(ExecutionLease, lease['lease_id'])
             release_lease(db, lease, 'failed')
             db.get(JobStage, lease.stage_id).status = 'ready'
             db.commit()
