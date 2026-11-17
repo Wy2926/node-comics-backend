@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import uuid4
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
+from .quota_amounts import QUOTA_TYPE
 
 IMAGE_RESULT_EXPIRY_FILTER = ("workflow_kind = 'image' AND quota_kind != 'guest_trial' "
     "AND status IN ('succeeded', 'no_text') AND discard_output IS FALSE")
@@ -89,7 +91,8 @@ class Job(Base):
     request_hash: Mapped[str] = mapped_column(String(64))
     cache_key: Mapped[str] = mapped_column(String(64), index=True)
     config: Mapped[dict] = mapped_column(JSON)
-    quota_pages: Mapped[int] = mapped_column(Integer)
+    quota_pages: Mapped[Decimal] = mapped_column(QUOTA_TYPE)
+    quota_multiplier: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=1, server_default='1')
     quota_kind: Mapped[str] = mapped_column(String(30))
     quota_period_id: Mapped[str | None] = mapped_column(ForeignKey("quota_periods.id"), index=True)
     entitlement: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -107,6 +110,7 @@ class Job(Base):
     unknown_since: Mapped[datetime | None] = mapped_column(DateTime)
     details_compacted_at: Mapped[datetime | None] = mapped_column(DateTime)
     __table_args__ = (UniqueConstraint("owner_id", "operation", "idempotency_key"),
+                     CheckConstraint('quota_multiplier > 0 AND quota_multiplier <= 10000', name='ck_job_quota_multiplier'),
                      CheckConstraint("workflow_kind IN ('image', 'document')", name='ck_job_workflow'),
                      Index('ix_jobs_owner_workflow_created', 'owner_id', 'workflow_kind', 'created_at', 'id'),
                      Index("ix_jobs_created_at", "created_at"), Index("ix_jobs_completed_at", "completed_at"),
@@ -148,7 +152,7 @@ class Ledger(Base):
     quota_kind: Mapped[str | None] = mapped_column(String(30))
     transaction_key: Mapped[str] = mapped_column(String(200), unique=True)
     kind: Mapped[str] = mapped_column(String(20))
-    amount: Mapped[int] = mapped_column(Integer)
+    amount: Mapped[Decimal] = mapped_column(QUOTA_TYPE)
     note: Mapped[str] = mapped_column(String(200), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     __table_args__ = (Index("ix_ledger_owner_created", "owner_id", "created_at"),)

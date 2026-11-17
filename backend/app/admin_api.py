@@ -15,6 +15,7 @@ from .entitlements import change_membership, compensate, entitlements_json
 from .models import Attempt, Job, TextCall, User, now
 from .queue_models import ComputeNode, ExecutionLease
 from .request_models import RequestBody
+from .quota_amounts import QuotaAmount
 
 router = APIRouter()
 
@@ -29,7 +30,7 @@ class MembershipRequest(RequestBody):
 
 class CompensationRequest(RequestBody):
     kind: Literal["classic_daily", "classic_monthly"]
-    pages: int = Field(ge=1, le=1_000_000, strict=True)
+    pages: QuotaAmount = Field(gt=0, le=1_000_000)
     note: str = Field(min_length=1, max_length=200)
 
 

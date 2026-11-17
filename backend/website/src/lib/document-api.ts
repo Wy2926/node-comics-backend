@@ -4,7 +4,7 @@ export interface DocumentCapabilities {
   enabled: boolean;
   limits: { max_bytes: number; max_pages: number; part_bytes: number; waiting_hours: number };
   languages: { id: string; label: string }[];
-  models: { id: string; name: string }[];
+  models: { id: string; name: string; quota_multiplier?: number; requires_paid?: boolean }[];
 }
 export interface DocumentTask {
   id: string;
@@ -17,6 +17,7 @@ export interface DocumentTask {
   page_count: number | null;
   target_language: string;
   model: { id: string; name: string };
+  quota_multiplier?: number;
   progress: Record<string, number>;
   quota: { reserved: number; used: number; released: number; needed: number | null; available: number | null; difference: number | null; checked_at: string | null };
   cancellable: boolean;

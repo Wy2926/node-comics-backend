@@ -35,7 +35,7 @@ export function MembershipActions({user, onChanged}: {user: UserDetail; onChange
         if (!note.trim()) throw Error('请填写操作原因。');
         if (expire && !extendingGift) throw Error('当前没有可结束的赠送会员。');
         if (plus && (!Number.isInteger(days) || days < 1 || days > 3660)) throw Error('会员天数需为 1–3660 的整数。');
-        if ((grant || compensation) && (!Number.isInteger(pages) || pages < 1 || pages > 1000000)) throw Error('页数需为 1–1000000 的整数。');
+        if ((grant || compensation) && (!/^\d+(\.\d{1,4})?$/.test(String(pages)) || pages <= 0 || pages > 1000000)) throw Error('额度需大于 0、不超过 1000000，最多 4 位小数。');
         const customMonthlyPages = monthlyPages.trim() ? Number(monthlyPages) : undefined;
         if (plus && customMonthlyPages !== undefined && (!Number.isInteger(customMonthlyPages) || customMonthlyPages < 0 || customMonthlyPages > 1000000)) throw Error('每 30 天翻译页数需为 0–1000000 的整数。');
         if (grant && (!expires || new Date(expires).getTime() <= Math.max(Date.now(), starts ? new Date(starts).getTime() : 0))) throw Error('到期时间需晚于现在和生效时间。');
@@ -78,7 +78,7 @@ export function MembershipActions({user, onChanged}: {user: UserDetail; onChange
           {!extendingGift && <label>每 30 天翻译页数（可选）<input type="number" min={0} max={1000000} value={monthlyPages} onChange={e => setMonthlyPages(e.target.value)} placeholder="留空表示不限量"/></label>}
         </> : kind === 'expire' ? null : <>
           {kind === 'compensation' && <label>补偿额度<select aria-label="补偿额度" value={quotaKind} onChange={e => setQuotaKind(e.target.value)}><option value="classic_daily">免费每日额度</option><option value="classic_monthly">订阅月度额度</option></select></label>}
-          <label>{kind === 'compensation' ? '补偿页数' : '赠送页数'}<input type="number" min={1} max={1000000} required value={pages} onChange={e => setPages(Number(e.target.value))}/></label>
+          <label>{kind === 'compensation' ? '补偿额度' : '赠送额度'}<input type="number" min={0.0001} max={1000000} step={0.0001} required value={pages} onChange={e => setPages(Number(e.target.value))}/></label>
           {kind !== 'compensation' && <>
           <label>生效时间（留空立即生效）<input type="datetime-local" value={starts} onChange={e => setStarts(e.target.value)}/></label>
           <label>到期时间<input type="datetime-local" required value={expires} onChange={e => setExpires(e.target.value)}/></label>

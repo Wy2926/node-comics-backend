@@ -35,7 +35,7 @@ export const documentFields = [
   {key: 'timeout_seconds', title: '整本请求超时（秒）', min: 30, max: 3600},
   {key: 'max_response_bytes', title: '整本响应上限（字节）', min: 1024, max: 134217728},
 ] as const;
-export type ProviderDraft = Record<Exclude<keyof TranslationProviderConfig, 'document'> | 'name' | 'channel' | 'api_key' | 'text_weight' | 'title_weight' | 'requests_per_minute', string> & {enabled: boolean; text_plan_ids: string[] | null; document: DocumentModelLimits};
+export type ProviderDraft = Record<Exclude<keyof TranslationProviderConfig, 'document'> | 'name' | 'channel' | 'api_key' | 'text_weight' | 'title_weight' | 'requests_per_minute' | 'quota_multiplier', string> & {enabled: boolean; text_plan_ids: string[] | null; document: DocumentModelLimits};
 export type ProviderField = Exclude<keyof ProviderDraft, 'enabled' | 'text_plan_ids' | 'document'>;
 export type ProviderErrors = Partial<Record<ProviderField | 'text_plan_ids' | 'document', string>>;
 
@@ -48,6 +48,7 @@ export function providerDraft(provider?: TranslationProvider): ProviderDraft {
     name: provider?.name ?? '', channel: provider?.channel ?? 'openai', enabled: provider?.enabled ?? true, api_key: '',
     text_weight: String(provider?.text_weight ?? 1),
     text_plan_ids: provider?.text_plan_ids ?? null,
+    quota_multiplier: String(provider?.quota_multiplier ?? 1),
     title_weight: String(provider?.title_weight ?? 1),
     requests_per_minute: String(provider?.requests_per_minute ?? 60),
   };
@@ -76,6 +77,9 @@ export function validateProvider(draft: ProviderDraft, channels: TranslationChan
   if (!channelProtocols(channels, draft.channel).includes(draft.protocol as TranslationProtocol)) errors.protocol = '请选择此渠道支持的接口协议。';
   if (!Object.hasOwn(reasoningLabels, draft.reasoning_effort)) errors.reasoning_effort = '请选择有效的思考程度。';
   if (draft.text_plan_ids !== null && !draft.text_plan_ids.length) errors.text_plan_ids = '请至少选择一个正文适用套餐，或改为全部套餐。';
+  if (!/^\d+(\.\d{1,4})?$/.test(draft.quota_multiplier) || Number(draft.quota_multiplier) <= 0 || Number(draft.quota_multiplier) > 10000) {
+    errors.quota_multiplier = '请输入大于 0、不超过 10000 的倍率，最多 4 位小数。';
+  }
   const slugs = providerSlugs(draft.openrouter_providers);
   if (slugs.length && !isOpenRouterUrl(draft.base_url)) errors.openrouter_providers = '指定上游供应商需要使用 OpenRouter API 地址；其他服务请清空此项。';
   else if (slugs.length > 20 || slugs.some(slug => !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$/.test(slug))) errors.openrouter_providers = '最多填写 20 个供应商 ID，每个不超过 100 字符；只支持字母、数字、点、短横线、下划线和斜线。';
@@ -117,6 +121,7 @@ export function providerInput(draft: ProviderDraft): TranslationProviderInput {
     name: draft.name.trim(), channel: 'openai', enabled: draft.enabled,
     text_weight: Number(draft.text_weight), title_weight: Number(draft.title_weight),
     text_plan_ids: draft.text_plan_ids,
+    quota_multiplier: Number(draft.quota_multiplier),
     requests_per_minute: Number(draft.requests_per_minute),
     config: {
       document: {...draft.document},

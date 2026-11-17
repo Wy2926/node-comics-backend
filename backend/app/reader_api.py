@@ -280,7 +280,7 @@ class UsageSummary(BaseModel):
     free_delivered: int
     included_delivered: int
     by_mode: dict[str, int]
-    quota_used: dict[str, int]
+    quota_used: dict[str, float]
     days: list[UsageDay]
 
 

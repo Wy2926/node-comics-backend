@@ -17,6 +17,7 @@ from .db import get_db, session_factory
 from .errors import problem
 from .models import User, now, uid
 from .request_models import RequestBody
+from .quota_amounts import QuotaAmount
 from .scheduler import lock_scheduler
 from .translation_channels import CHANNELS
 from .translation_models import TranslationProvider, TranslationProviderRevision
@@ -31,6 +32,7 @@ class ProviderWrite(RequestBody):
     channel: str = Field(min_length=1, max_length=40)
     enabled: bool = Field(default=True, strict=True)
     text_weight: int = Field(default=1, ge=0, le=10000, strict=True)
+    quota_multiplier: QuotaAmount = Field(default=1, gt=0, le=10000)
     text_plan_ids: list[Annotated[str, Field(pattern=r'^[a-z][a-z0-9_-]{0,63}$', strict=True)]] | None = Field(
         default=None, min_length=1, max_length=100)
     title_weight: int = Field(default=1, ge=0, le=10000, strict=True)
@@ -90,6 +92,7 @@ def provider_json(db, provider):
     return {'id': provider.id, 'name': provider.name, 'channel': provider.channel,
             'enabled': provider.enabled, 'text_weight': provider.text_weight,
             'text_plan_ids': provider.text_plan_ids,
+            'quota_multiplier': float(provider.quota_multiplier),
             'title_weight': provider.title_weight,
             'requests_per_minute': provider.requests_per_minute,
             'revision_id': provider.revision_id, 'credential_configured': revision is not None,
@@ -101,6 +104,7 @@ def provider_json(db, provider):
 def _provider_query(provider_id=None, *, purpose='text'):
     weight = PURPOSE_WEIGHTS[purpose]
     query = select(TranslationProvider.id, TranslationProvider.name, weight.label('weight'), TranslationProvider.text_plan_ids,
+        TranslationProvider.quota_multiplier,
         TranslationProviderRevision.id.label('revision_id'), TranslationProviderRevision.channel,
         TranslationProviderRevision.config).join(TranslationProviderRevision,
             TranslationProviderRevision.id == TranslationProvider.revision_id).where(
@@ -188,6 +192,8 @@ def write_provider(db, body, provider=None):
     # Older admin clients must not silently widen an existing restricted pool.
     if 'text_plan_ids' in body.model_fields_set:
         provider.text_plan_ids = body.text_plan_ids
+    if 'quota_multiplier' in body.model_fields_set:
+        provider.quota_multiplier = body.quota_multiplier
     provider.title_weight = body.title_weight
     provider.requests_per_minute = body.requests_per_minute
     provider.updated_at = now()

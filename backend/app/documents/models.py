@@ -1,9 +1,11 @@
 """Document manifests and central text receipts; page files stay on their owner."""
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from ..db import Base
 from ..models import now, uid
+from ..quota_amounts import QUOTA_TYPE
 
 
 class Document(Base):
@@ -48,17 +50,20 @@ class DocumentQuotaAllocation(Base):
     billing_term_id: Mapped[str | None] = mapped_column(ForeignKey('billing_terms.id'))
     entitlement: Mapped[dict] = mapped_column(JSON)
     pages: Mapped[int] = mapped_column(Integer)
-    reserved: Mapped[int] = mapped_column(Integer)
-    used: Mapped[int] = mapped_column(Integer, default=0)
-    released: Mapped[int] = mapped_column(Integer, default=0)
+    quota_multiplier: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=1, server_default='1')
+    reserved: Mapped[Decimal] = mapped_column(QUOTA_TYPE)
+    used: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=0)
+    released: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=0)
     __table_args__ = (
         UniqueConstraint('job_id', 'period_id', name='uq_document_period'),
         UniqueConstraint('job_id', 'billing_term_id', name='uq_document_unlimited_term'),
         UniqueConstraint('id', 'job_id', name='uq_document_allocation_job'),
         CheckConstraint('(period_id IS NOT NULL AND billing_term_id IS NULL) OR '
                         '(period_id IS NULL AND billing_term_id IS NOT NULL)', name='ck_document_allocation_source'),
+        CheckConstraint('quota_multiplier > 0 AND quota_multiplier <= 10000', name='ck_document_quota_multiplier'),
         CheckConstraint('pages BETWEEN 1 AND 200 AND reserved >= 0 AND used >= 0 AND released >= 0 '
-                        'AND pages = reserved + used + released', name='ck_document_allocation_balance'),
+                        'AND round(pages * quota_multiplier, 4) = round(reserved + used + released, 4)',
+                        name='ck_document_allocation_balance'),
     )
 
 

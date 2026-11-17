@@ -1,5 +1,6 @@
 """Small authenticated JSON requests; document bytes never transit the API."""
 from datetime import timedelta
+from decimal import Decimal
 import math
 from typing import Annotated, Literal
 from uuid import UUID
@@ -122,15 +123,17 @@ def document_json(db, job, document, *, context=None):
     progress, quota = context if context is not None else _snapshot_context(db, [job.id])
     totals = quota.get(job.id, (0, 0, 0))
     gift = (job.entitlement or {}).get('document_unlimited_gift', {})
-    totals = tuple(amount + gift.get(field, 0) for amount, field in zip(totals, ('reserved', 'used', 'released')))
+    totals = tuple(amount + Decimal(str(gift.get(field, 0))) for amount, field in zip(totals, ('reserved', 'used', 'released')))
     checked_quota = (job.entitlement or {}).get('document_quota', {})
     cfg = get_document_settings()
     return {'id': job.idempotency_key, 'status': job.status, 'phase': job.phase, 'version': job.version,
         'filename': document.filename, 'source_type': document.source_type, 'byte_size': document.source_size,
         'page_count': document.page_count, 'target_language': job.target_language,
         'model': {'id': job.config['text']['provider_id'], 'name': job.config['document']['model_name']},
+        'quota_multiplier': job.quota_multiplier,
         'progress': progress.get(job.id, {}), 'quota': {**dict(zip(('reserved', 'used', 'released'), totals)),
-            'needed': document.page_count, 'available': checked_quota.get('available'),
+            'needed': document.page_count * job.quota_multiplier if document.page_count is not None else None,
+            'available': checked_quota.get('available'),
             'difference': checked_quota.get('difference'), 'checked_at': checked_quota.get('checked_at')},
         'cancellable': document.reserved_at is None and job.status not in TERMINAL,
         'resumable': job.status == 'awaiting_quota' and document.reserved_at is None and document.expires_at > now(),
@@ -153,7 +156,7 @@ def _document_models(db, user, model_id=None):
     for row in rows:
         if not (row.config.get('document') or {}).get('enabled'):
             continue
-        policy, reason = resolve(row.text_plan_ids)
+        policy, reason = resolve(row.text_plan_ids, row.quota_multiplier)
         if reason != 'not_allowed':
             candidates.append((row, policy))
     return candidates
@@ -171,7 +174,7 @@ def _model(db, user, body):
     config['document'] = {'service_plans': row.text_plan_ids, 'model_name': row.name}
     config['font_id'] = resolve_font(None, body.target_language)
     config['version'] = digest(config)
-    return config, policy
+    return config, policy, row.quota_multiplier
 
 
 @router.get('/capabilities')
@@ -182,7 +185,9 @@ def document_capabilities(user: User = Depends(guarded_user), db: Session = Depe
                    'part_bytes': cfg.upload_part_bytes, 'waiting_hours': cfg.waiting_retention_hours},
         'source_types': ['pdf', 'zip', 'cbz'], 'output_type': 'zip',
         'languages': [{'id': key, 'label': label} for key, label in LANGUAGES.items()],
-        'models': [{'id': row.id, 'name': row.name} for row, _ in _document_models(db, user)] if cfg.enabled else []}
+        'models': [{'id': row.id, 'name': row.name, 'quota_multiplier': row.quota_multiplier,
+                    'requires_paid': row.text_plan_ids is not None and 'free' not in row.text_plan_ids}
+                   for row, _ in _document_models(db, user)] if cfg.enabled else []}
 
 
 def _ensure_upload(db, job, document):
@@ -221,13 +226,13 @@ def create_document(request_id: UUID, body: DocumentInput, request: Request, use
             problem('IDEMPOTENCY_CONFLICT', '此操作编号已用于其他文件或参数', 409)
         job, document = previous, db.get(Document, previous.id)
     else:
-        config, policy = _model(db, user, body)
+        config, policy, quota_multiplier = _model(db, user, body)
         at = now()
         from ..client_address import client_ip
         job = Job(id=uid(), owner_id=user.id, submitted_ip=client_ip(request), mode='classic', workflow_kind='document',
             target_language=body.target_language, operation=OPERATION, idempotency_key=str(request_id),
             source_sha256=body.sha256, request_hash=request_hash, cache_key=digest([user.id, request_hash]),
-            config=config, quota_pages=0, quota_kind='document_pages', settlement='unreserved',
+            config=config, quota_pages=0, quota_multiplier=quota_multiplier, quota_kind='document_pages', settlement='unreserved',
             entitlement={'plan': policy.plan, 'service_plan': policy.service_plan, 'priority': 0},
             version=1, status='uploading', phase='uploading', created_at=at)
         db.add(job)

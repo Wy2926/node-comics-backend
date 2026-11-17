@@ -133,6 +133,7 @@
   min-height: 48px;
 }
 .translation-model-picker {
+  --model-tone: var(--accent);
   display: grid;
   gap: 7px;
   flex: 1 1 240px;
@@ -147,11 +148,26 @@
 .translation-model-picker summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   cursor: pointer;
   overflow-wrap: anywhere;
   list-style: none;
+}
+.translation-model-picker [data-kind='free'] { --model-tone: var(--success); }
+.translation-model-picker [data-kind='paid'] { --model-tone: var(--warning); }
+.translation-model-picker [data-kind='unknown'] { --model-tone: var(--muted); }
+.translation-model-picker details[open] > summary { border-color: var(--model-tone); }
+.translation-model-picker summary[aria-disabled='true'] {
+  --model-tone: var(--muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.translation-model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .translation-model-picker summary::-webkit-details-marker {
   display: none;
@@ -171,48 +187,61 @@
 .translation-model-options {
   position: absolute;
   inset-inline: 0;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   z-index: 10;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding: 8px;
   background: var(--surface);
   border: var(--comic-border);
   border-radius: var(--comic-card-radius);
-  box-shadow: var(--comic-shadow);
-  max-height: 360px;
+  box-shadow: var(--site-elevation);
+  max-height: min(400px, 60dvh, var(--model-menu-space, 60dvh));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.translation-model-picker details[data-placement='above'] .translation-model-options {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
 .translation-model-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
 }
-.translation-model-option[data-paid='false'] + .translation-model-option[data-paid='true'] {
+.translation-model-option[data-kind='automatic'] {
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.translation-model-option:not([data-kind='paid']) + .translation-model-option[data-kind='paid'] {
   border-top: 1px solid var(--line);
-  padding-top: 6px;
+  padding-top: 8px;
+  margin-top: 4px;
 }
 .translation-model-choice {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   display: grid;
-  gap: 5px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   text-align: start;
-  padding: 10px;
-  border-radius: var(--comic-control-radius);
+  padding: 11px 10px;
+  border-radius: var(--comic-card-radius);
   min-height: var(--comic-control-height);
   border: 1px solid transparent;
   background: var(--surface);
   color: var(--ink);
   text-decoration: none;
 }
-.translation-model-choice[aria-pressed='true'],
-.translation-model-choice:hover,
-.translation-model-choice:focus-visible {
-  border-color: var(--accent);
-  background: var(--comic-control-selected-bg);
+.translation-model-option[data-kind='automatic'] .translation-model-choice,
+.translation-model-option[data-kind='paid'] .translation-model-choice {
+  background: color-mix(in srgb, var(--model-tone) 5%, var(--surface));
+}
+.translation-model-picker .translation-model-choice[aria-pressed='true'],
+.translation-model-picker .translation-model-choice:hover:not(:disabled),
+.translation-model-picker .translation-model-choice:focus-visible {
+  border-color: color-mix(in srgb, var(--model-tone) 45%, var(--line));
+  background: color-mix(in srgb, var(--model-tone) 9%, var(--surface));
 }
 .translation-model-option > button:disabled {
   opacity: 1;
@@ -220,31 +249,72 @@
   cursor: not-allowed;
 }
 .translation-model-option strong {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: block;
   overflow-wrap: anywhere;
   font-size: var(--comic-control-font-size-compact);
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.45;
 }
-.translation-model-option small {
-  justify-self: start;
-  padding: 1px 6px;
-  border: var(--comic-badge-border);
-  border-radius: var(--comic-badge-radius);
+.translation-model-copy { display: grid; gap: 7px; min-width: 0; }
+.translation-model-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--comic-card-radius);
+  color: var(--model-tone);
+  background: color-mix(in srgb, var(--model-tone) 10%, var(--surface));
+}
+.translation-model-icon svg { width: 19px; height: 19px; }
+.translation-model-picker summary .translation-model-icon { width: 26px; height: 26px; }
+.translation-model-picker summary .translation-model-icon svg { width: 17px; height: 17px; }
+.translation-model-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.translation-model-rate {
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--model-tone) 20%, var(--line));
+  border-radius: var(--comic-control-radius);
+  background: var(--surface);
+  color: var(--model-tone);
   font-size: 0.72rem;
-  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 .translation-model-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 5px 9px;
 }
+.translation-model-badges small { font-size: 0.67rem; line-height: 1.5; }
+.translation-model-tier {
+  padding: 1px 6px;
+  border-radius: var(--comic-badge-radius);
+  color: var(--model-tone);
+  background: color-mix(in srgb, var(--model-tone) 10%, var(--surface));
+}
+.translation-model-status { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.translation-model-status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--success);
+}
+.translation-model-option[data-available='false'] .translation-model-status::before { background: var(--muted); }
+.translation-model-check { width: 18px; height: 18px; color: var(--model-tone); }
 .translation-model-upgrade {
-  flex-shrink: 0;
-  font-size: 0.72rem;
-  color: var(--accent);
+  font-size: 0.67rem;
+  color: var(--model-tone);
+  text-align: end;
 }
 .translation-details {
   max-width: 1040px;

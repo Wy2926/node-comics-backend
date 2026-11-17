@@ -5,19 +5,20 @@ from sqlalchemy.orm import Session
 from app.models import ClassicState, Job, User
 from app.translation_models import TranslationProvider, TranslationProviderRevision
 from app.translation_providers import resolve_credentials
-from test_job_results_migration import migrate
+from test_job_results_migration import before_quota_multiplier, migrate
 from test_request_limits_migration import isolated_migration_database  # noqa: F401
 
 
 def test_upgrade_rotates_only_grouped_active_revisions(isolated_migration_database):
     engine = isolated_migration_database
     migrate(engine, 'cleanup_indexes_0026')
+    providers_table, jobs_table = (before_quota_multiplier(model) for model in (TranslationProvider, Job))
     with Session(engine) as db:
         db.add(User(id='reader', subject='reader', name='test'))
         # More than one bounded migration batch, including disabled suppliers.
         for index in range(105):
             key = f'provider-{index:03}'
-            db.add(TranslationProvider(id=key, name=key, channel='openai', enabled=index != 1,
+            db.execute(providers_table.insert().values(id=key, name=key, channel='openai', enabled=index != 1,
                 revision_id=key, requests_per_minute=60))
         db.flush()
         for index in range(105):
@@ -29,17 +30,17 @@ def test_upgrade_rotates_only_grouped_active_revisions(isolated_migration_databa
         db.flush()
         profile = {'provider_id': 'provider-000', 'revision_id': 'provider-000', 'channel': 'openai',
                    'model': 'frozen', 'group_bytes': 1800}
-        db.add(Job(id='existing', owner_id='reader', mode='classic', target_language='en', status='running',
+        db.execute(jobs_table.insert().values(id='existing', owner_id='reader', mode='classic', target_language='en', status='running',
             config={'text': profile}, operation='translation', idempotency_key='existing',
             request_hash='a' * 64, cache_key='b' * 64, quota_pages=1, quota_kind='classic_free'))
         db.flush()
         db.add(ClassicState(job_id='existing', analysis={'segments': []}, translations={'old': 'paid'}))
         db.commit()
-        before = [db.execute(select(model.__table__)).all() for model in (Job, ClassicState, TranslationProviderRevision)]
+        before = [db.execute(select(table)).all() for table in (jobs_table, ClassicState.__table__, TranslationProviderRevision.__table__)]
     migrate(engine, 'head')
     migrate(engine, 'head')
     with Session(engine) as db:
-        assert [db.execute(select(model.__table__)).all() for model in (Job, ClassicState)] == before[:2]
+        assert [db.execute(select(table)).all() for table in (jobs_table, ClassicState.__table__)] == before[:2]
         for old in before[2]:
             assert db.execute(select(TranslationProviderRevision.__table__).where(
                 TranslationProviderRevision.id == old.id)).one() == old

@@ -4,7 +4,7 @@ from .assets import available, descriptor_available
 from .translation_requests import TranslationRequest
 from .errors import problem
 from .models import Asset, Job, now, uid
-from .entitlements import admission_policy, free_model_policy, locked_user, require_entitlement, reserve, settle
+from .entitlements import admission_policy, locked_user, require_entitlement, reserve, settle
 from .providers import configuration, digest
 from .scheduler import ACTIVE, ensure_stages, lock_scheduler, touch_job
 from .translation_fonts import resolve_font
@@ -27,7 +27,8 @@ def job_json(db, job):
             "output_asset_id": output.id if result_available else None, "image_sha256": job.source_sha256,
             "result_available": bool(result_available), "result_expired": bool(job.output_asset_id and not result_available),
             "mode": job.mode, "target_language": job.target_language, "status": job.status, "phase": job.phase,
-            "quota_pages": job.quota_pages, "quota_kind": job.quota_kind, "quota_period_id": job.quota_period_id,
+            "quota_pages": float(job.quota_pages), "quota_kind": job.quota_kind, "quota_period_id": job.quota_period_id,
+            "quota_multiplier": float(job.quota_multiplier),
             "settlement": job.settlement, "version": job.version,
             "cancel_requested": job.cancel_requested,
             "error": {"code": job.error_code, "message": job.error_message} if job.error_code else None,
@@ -146,22 +147,23 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
         if last and (last.status in {'failed', 'cancelled', 'unknown_released'} or
                 (last.status in ACTIVE and (last.cancel_requested or last.discard_output))):
             return remember_request(db, user.id, key, request_hash, last)
-    # Model access is verified server-side. A free model still costs a page:
-    # free allowances first, then the selected subscription/purchased allowance.
+    # Pricing is frozen outside the model config so price edits preserve cache identity.
     from .translation_models import TranslationProvider
     provider = db.get(TranslationProvider, config['text']['provider_id'])
+    if not model_id and provider:
+        from .translation_selection import policy_resolver
+        policy, model_reason = policy_resolver(db, user, at)(provider.text_plan_ids, provider.quota_multiplier)
     if model_reason == 'not_allowed':
         problem('TRANSLATION_MODEL_NOT_ALLOWED', '当前权益不支持所选模型，请升级或选择其他模型', 403)
     if model_reason == 'quota_exhausted':
-        problem('DAILY_QUOTA_EXHAUSTED', '可用于所选模型的翻译页数已用完', 403)
-    if not model_id and provider and (provider.text_plan_ids is None or 'free' in provider.text_plan_ids):
-        policy = free_model_policy(db, user, policy, at)
+        problem('DAILY_QUOTA_EXHAUSTED', '可用于所选模型的翻译额度不足', 403)
     kind = require_entitlement(user, mode, db=db, policy=policy)
     version = (db.scalar(select(func.max(Job.version)).where(Job.owner_id == user.id, Job.cache_key == ck)) or 0) + 1
     job = Job(id=uid(), owner_id=user.id, input_asset_id=asset.id if asset else None, source_sha256=sha,
         mode=mode, target_language=language, submitted_ip=submitted_ip,
         operation=operation, idempotency_key=key, request_hash=request_hash, cache_key=ck, config=config,
-        quota_pages=0, quota_kind=kind, settlement="free", version=version,
+        quota_pages=0, quota_multiplier=provider.quota_multiplier if provider else 1,
+        quota_kind=kind, settlement="free", version=version,
         status="queued" if asset else "awaiting_upload", phase="queued" if asset else "awaiting_upload", created_at=at)
     db.add(job)
     db.flush()

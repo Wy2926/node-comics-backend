@@ -12,6 +12,7 @@ from .providers import digest
 from .billing_access import active_benefits, active_terms, first_purchase, first_subscription
 from .system_settings import get_request_limits
 from .admin_audit import record_audit
+from .quota_amounts import MIN_QUOTA, quota_number
 
 DAILY = "classic_daily"
 MONTHLY = "classic_monthly"
@@ -223,14 +224,14 @@ def available_periods(db, user, mode, kind, at):
     return sorted(periods, key=lambda row: (row.ends_at or datetime.max, row.starts_at, row.id))
 
 
-def _first_period(db, user, mode, kind, at):
+def _first_period(db, user, mode, kind, at, amount=MIN_QUOTA):
     stored = db.scalar(_period_query(user, mode, at).where(QuotaPeriod.source == 'grant',
         QuotaPeriod.kind.in_((DAILY, 'classic_grant')),
-        QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved)
+        func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= amount)
         .order_by(QuotaPeriod.ends_at.asc().nulls_last(), QuotaPeriod.starts_at, QuotaPeriod.id).limit(1))
     automatic = _automatic_period(db, user, kind, at)
     candidates = [period for period in (stored, automatic) if period is not None
-                  and period.granted > period.used + period.reserved]
+                  and period.granted - period.used - period.reserved >= amount]
     return min(candidates, key=lambda row: (row.ends_at or datetime.max, row.starts_at, row.id), default=None)
 
 
@@ -248,7 +249,7 @@ class AdmissionPolicy:
         return int(self.plan not in ('free', 'guest') or self.kind in (MONTHLY, PURCHASE, UNLIMITED))
 
 
-def admission_policy(db, user, mode='classic', at=None, *, benefits=None, service_plans=None, choices=None):
+def admission_policy(db, user, mode='classic', at=None, *, benefits=None, service_plans=None, choices=None, amount=MIN_QUOTA):
     """Read-only until reserve; callers resolve UUID/cache reuse before enforcing it."""
     at = at or now()
     if user.kind == 'guest':
@@ -261,25 +262,30 @@ def admission_policy(db, user, mode='classic', at=None, *, benefits=None, servic
     kind = quota_kind(user, mode, at, db, benefits=access)
     if kind in (UNLIMITED, 'unavailable'):
         return AdmissionPolicy(benefits['plan'], access['service_plan'], kind, access['hourly_image_limit'])
-    subscription = first_subscription(db, user.id, at, service_plans=service_plans) if access['paid'] else None
+    subscription = first_subscription(db, user.id, at, service_plans=service_plans, amount=amount) if access['paid'] else None
     gift = _automatic_period(db, user, MONTHLY, at) if service_plans is None or 'plus' in service_plans else None
-    if gift and gift.granted > gift.used + gift.reserved and (not subscription or gift.ends_at <= subscription[0].ends_at):
+    if gift and gift.granted - gift.used - gift.reserved >= amount and (not subscription or gift.ends_at <= subscription[0].ends_at):
         return AdmissionPolicy(benefits['plan'], 'plus', MONTHLY, None, gift)
     if subscription:
         period, revision = subscription
         return AdmissionPolicy(benefits['plan'], revision.service_plan_id or revision.plan_id,
                                MONTHLY, revision.hourly_image_limit, period)
-    purchase = first_purchase(db, user.id, at, service_plans=service_plans)
+    purchase = first_purchase(db, user.id, at, service_plans=service_plans, amount=amount)
     if purchase:
         period, revision = purchase
         return AdmissionPolicy(benefits['plan'], revision.service_plan_id, PURCHASE, revision.hourly_image_limit, period)
+    if service_plans is not None and amount > MIN_QUOTA:
+        access_purchase = first_purchase(db, user.id, at, service_plans=service_plans)
+        if access_purchase:
+            _, revision = access_purchase
+            return AdmissionPolicy(benefits['plan'], revision.service_plan_id, PURCHASE, revision.hourly_image_limit)
     # The subscription identity remains, but free pages never authorize paid models.
     if service_plans is not None and 'free' not in service_plans:
         return AdmissionPolicy(benefits['plan'], access['service_plan'], MONTHLY, access['hourly_image_limit'])
-    return AdmissionPolicy(benefits['plan'], 'free', DAILY, benefits['hourly_image_limit'], _first_period(db, user, mode, DAILY, at))
+    return AdmissionPolicy(benefits['plan'], 'free', DAILY, benefits['hourly_image_limit'], _first_period(db, user, mode, DAILY, at, amount))
 
 
-def free_model_policy(db, user, policy, at=None):
+def free_model_policy(db, user, policy, at=None, *, amount=MIN_QUOTA):
     """Free models spend free pages first, then the same paid allowance.
 
     A model being accessible for free never means that its usage is unmetered.
@@ -288,7 +294,7 @@ def free_model_policy(db, user, policy, at=None):
     if user.kind == 'guest':
         return policy
     at = at or now()
-    free = policy.period if policy.kind == DAILY else _first_period(db, user, 'classic', DAILY, at)
+    free = policy.period if policy.kind == DAILY else _first_period(db, user, 'classic', DAILY, at, amount)
     if free:
         return AdmissionPolicy(policy.plan, 'free', DAILY, policy.hourly_image_limit if policy.plan != 'free' else None, free)
     return replace(policy, service_plan='free')
@@ -305,15 +311,15 @@ def _purchase_totals(db, user, at):
 
 
 def purchase_quota_json(totals):
-    return {field: totals[field] for field in ('granted', 'used', 'reserved')} | {
-        'available': totals['granted'] - totals['used'] - totals['reserved'],
+    return {field: float(totals[field]) for field in ('granted', 'used', 'reserved')} | {
+        'available': float(totals['granted'] - totals['used'] - totals['reserved']),
         'next_expiry_at': iso(totals['next_expiry_at'])}
 
 
 def period_json(period):
     return {"id": period.id, "kind": period.kind, "source": period.source,
-            "mode": period.mode, "granted": period.granted, "used": period.used, "reserved": period.reserved,
-            "available": period.granted - period.used - period.reserved,
+            "mode": period.mode, "granted": float(period.granted), "used": float(period.used), "reserved": float(period.reserved),
+            "available": float(period.granted - period.used - period.reserved),
             "starts_at": iso(period.starts_at), "expires_at": iso(period.ends_at),
             "grants_access": bool(period.grants_access), "note": period.note or ""}
 
@@ -336,8 +342,9 @@ def allowance_json(db, user, kind, at=None, *, purchase_totals=None, periods=Non
     starts = [row.starts_at for row in periods] + ([purchases['starts_at']] if purchases and purchases['starts_at'] else [])
     expiries = [row.ends_at for row in periods if row.ends_at] + ([purchases['next_expiry_at']]
         if purchases and purchases['next_expiry_at'] else [])
-    return {"id": spec["id"] if spec else digest([row.id for row in periods]), "kind": kind, **totals,
-            "available": totals["granted"] - totals["used"] - totals["reserved"],
+    return {"id": spec["id"] if spec else digest([row.id for row in periods]), "kind": kind,
+            **{field: float(value) for field, value in totals.items()},
+            "available": float(totals["granted"] - totals["used"] - totals["reserved"]),
             "starts_at": iso(min(starts)),
             "resets_at": iso(spec["ends_at"]) if spec else
                 (iso(min(row.ends_at for row in periods if row.source in ('membership', 'subscription')))
@@ -354,8 +361,8 @@ def entitlements_json(db, user, at=None):
     periods = available_periods(db, user, 'classic', policy.kind, at)
     def balance(sources, periodic_sources):
         buckets = [row for row in periods if row.source in sources]
-        return {field: sum(getattr(row, field) for row in buckets) for field in ('granted', 'used', 'reserved')} | {
-            'available': sum(row.granted - row.used - row.reserved for row in buckets),
+        return {field: float(sum(getattr(row, field) for row in buckets)) for field in ('granted', 'used', 'reserved')} | {
+            'available': float(sum(row.granted - row.used - row.reserved for row in buckets)),
             'resets_at': iso(min((row.ends_at for row in buckets
                 if row.source in periodic_sources and row.ends_at), default=None)),
             'next_expiry_at': iso(min((row.ends_at for row in buckets
@@ -378,8 +385,8 @@ def entitlements_json(db, user, at=None):
             "hourly_image_rate_limit": ({"window_seconds": 3600, "limit": policy.hourly_image_limit}
                 if policy.hourly_image_limit is not None else None),
             "modes": modes, "generated_at": iso(at),
-            "pending_previous_period_pages": db.scalar(select(func.coalesce(func.sum(QuotaPeriod.reserved), 0))
-                .where(QuotaPeriod.owner_id == user.id, QuotaPeriod.ends_at <= at))}
+            "pending_previous_period_pages": float(db.scalar(select(func.coalesce(func.sum(QuotaPeriod.reserved), 0))
+                .where(QuotaPeriod.owner_id == user.id, QuotaPeriod.ends_at <= at)))}
 
 
 def require_entitlement(user, mode, *, db, policy):
@@ -395,24 +402,26 @@ def require_entitlement(user, mode, *, db, policy):
 
 def reserve_period(db, period_id, pages, at):
     """Conditionally reserve finite pages; the caller owns the account transaction."""
-    if pages < 1:
+    if pages <= 0:
         raise ValueError('Reservation must contain pages')
+    # SQLite evaluates NUMERIC arithmetic as floats; round writes and comparisons to the stored scale.
     updated = db.execute(update(QuotaPeriod).where(QuotaPeriod.id == period_id,
         QuotaPeriod.revoked_at.is_(None), QuotaPeriod.starts_at <= at,
         or_(QuotaPeriod.ends_at.is_(None), QuotaPeriod.ends_at > at),
-        QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved >= pages)
-        .values(reserved=QuotaPeriod.reserved + pages))
+        func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= pages)
+        .values(reserved=func.round(QuotaPeriod.reserved + pages, 4)))
     if updated.rowcount != 1:
         problem('QUOTA_CONFLICT', '额度正在变化，请刷新后重试', 409)
 
 
 def finish_period(db, period_id, reserved_pages, used_pages):
     """Settle the original bucket even after expiry/revocation, never a new period."""
-    if not 0 <= used_pages <= reserved_pages or reserved_pages < 1:
+    if not 0 <= used_pages <= reserved_pages or reserved_pages <= 0:
         raise ValueError('Invalid settlement page count')
     updated = db.execute(update(QuotaPeriod).where(QuotaPeriod.id == period_id,
         QuotaPeriod.reserved >= reserved_pages).values(
-            reserved=QuotaPeriod.reserved - reserved_pages, used=QuotaPeriod.used + used_pages))
+            reserved=func.round(QuotaPeriod.reserved - reserved_pages, 4),
+            used=func.round(QuotaPeriod.used + used_pages, 4)))
     if updated.rowcount != 1:
         problem('QUOTA_CONFLICT', '额度结算状态不一致', 409)
 
@@ -424,7 +433,7 @@ def reserve(db, user, job, at=None, *, policy=None):
         from .guests import reserve_guest
         reserve_guest(db, user, job, at)
         return
-    policy = policy or admission_policy(db, user, job.mode, at)
+    policy = policy or admission_policy(db, user, job.mode, at, amount=job.quota_multiplier)
     kind = require_entitlement(user, job.mode, db=db, policy=policy)
     job.quota_kind = kind
     job.entitlement = {"plan": policy.plan, "service_plan": policy.service_plan,
@@ -439,15 +448,15 @@ def reserve(db, user, job, at=None, *, policy=None):
     period = policy.period
     if period is None:
         spec = period_spec(user, kind, at, db=db)
-        problem("DAILY_QUOTA_EXHAUSTED", "可用常规翻译页数已用完", 403,
+        problem("DAILY_QUOTA_EXHAUSTED", "可用常规翻译额度不足", 403,
                 resets_at=iso(spec["ends_at"]) if spec else None)
     if period not in db:
         db.add(period)
         db.flush()
-    reserve_period(db, period.id, 1, at)
-    job.quota_period_id, job.quota_pages, job.settlement, job.quota_kind = period.id, 1, "reserved", period.kind
+    reserve_period(db, period.id, job.quota_multiplier, at)
+    job.quota_period_id, job.quota_pages, job.settlement, job.quota_kind = period.id, job.quota_multiplier, "reserved", period.kind
     db.add(Ledger(owner_id=user.id, job_id=job.id, period_id=period.id, quota_kind=period.kind,
-                  transaction_key=f"{job.id}:reserve", kind="reserve", amount=1))
+                  transaction_key=f"{job.id}:reserve", kind="reserve", amount=job.quota_pages))
 
 
 def settle(db, job, *, success):
@@ -559,7 +568,7 @@ def compensate(db, owner_id, operator_id, key, *, kind, pages, note):
         problem('GUEST_FORBIDDEN', '游客不能获得账户额度', 403)
     if user is None:
         problem("NOT_FOUND", "用户不存在", 404)
-    request_hash = digest([owner_id, kind, pages, note])
+    request_hash = digest([owner_id, kind, quota_number(pages), note])
     previous = db.scalar(select(MembershipOperation).where(MembershipOperation.transaction_key == transaction_key))
     if previous:
         if previous.request_hash != request_hash:
@@ -580,14 +589,14 @@ def compensate(db, owner_id, operator_id, key, *, kind, pages, note):
         db.add(period)
         db.flush()
     before = period.granted
-    db.execute(update(QuotaPeriod).where(QuotaPeriod.id == period.id).values(granted=QuotaPeriod.granted + pages))
+    db.execute(update(QuotaPeriod).where(QuotaPeriod.id == period.id).values(granted=func.round(QuotaPeriod.granted + pages, 4)))
     db.add(Ledger(owner_id=user.id, period_id=period.id, quota_kind=kind, transaction_key=transaction_key,
                   kind="compensation", amount=pages, note=note))
     db.flush()
     result = {"user_id": user.id, "entitlements": entitlements_json(db, user)}
     db.add(MembershipOperation(transaction_key=transaction_key, owner_id=user.id, operator_id=operator_id,
                                request_hash=request_hash, result=result,
-                               details={"kind": kind, "pages": pages, "note": note, "period_id": period.id}))
+                               details={"kind": kind, "pages": quota_number(pages), "note": note, "period_id": period.id}))
     record_audit(db, operator_id, "quota.compensate", "quota_period", period.id,
                  before={"granted": before}, after={"granted": before + pages},
                  details={"owner_id": owner_id, "kind": kind, "pages": pages}, note=note, operation_key=transaction_key)

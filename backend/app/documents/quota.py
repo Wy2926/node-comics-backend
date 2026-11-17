@@ -1,5 +1,6 @@
 """Atomic whole-document reservations over the existing page allowance buckets."""
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy import and_, func, or_, select
 from ..billing_models import BillingOrder, BillingPlanRevision, BillingPrice, BillingTerm
 from ..entitlement_models import QuotaPeriod
@@ -41,7 +42,7 @@ def _order(option):
     return period.ends_at or datetime.max, period.starts_at, period.id
 
 
-def _options(db, user, scope, at):
+def _options(db, user, scope, at, multiplier):
     """Each finite query is bounded by the maximum number of payable pages."""
     free = []
     if _eligible(scope, 'free'):
@@ -50,11 +51,11 @@ def _options(db, user, scope, at):
             QuotaPeriod.revoked_at.is_(None),
             QuotaPeriod.kind.in_((DAILY, 'classic_grant')), QuotaPeriod.starts_at <= at,
             or_(QuotaPeriod.ends_at.is_(None), QuotaPeriod.ends_at > at),
-            QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved).order_by(
+            func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= multiplier).order_by(
                 QuotaPeriod.ends_at.asc().nulls_last(), QuotaPeriod.starts_at, QuotaPeriod.id).limit(MAX_PAGES)
         free = [(period, None, 'free', None) for period in db.scalars(query)]
         daily = _automatic_period(db, user, DAILY, at)
-        if daily and daily.revoked_at is None and daily.granted > daily.used + daily.reserved:
+        if daily and daily.revoked_at is None and daily.granted - daily.used - daily.reserved >= multiplier:
             free.append((daily, None, 'free', None))
     for option in sorted(free, key=_order):
         yield option
@@ -84,18 +85,19 @@ def _options(db, user, scope, at):
             QuotaPeriod.revoked_at.is_(None),
             BillingTerm.revoked_at.is_(None), BillingTerm.starts_at <= at, BillingTerm.ends_at > at,
             QuotaPeriod.starts_at <= at, QuotaPeriod.ends_at > at,
-            QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved)
+            func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= multiplier)
     if scope is not None and 'free' not in scope:
         query = query.where(func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(scope))
     monthly = [(period, None, revision.service_plan_id or revision.plan_id, revision)
                for period, revision in db.execute(query.order_by(QuotaPeriod.ends_at,
                    QuotaPeriod.starts_at, QuotaPeriod.id).limit(MAX_PAGES))]
     gift = _automatic_period(db, user, MONTHLY, at) if _eligible(scope, 'plus') else None
-    if gift and gift.revoked_at is None and gift.granted > gift.used + gift.reserved:
+    if gift and gift.revoked_at is None and gift.granted - gift.used - gift.reserved >= multiplier:
         monthly.append((gift, None, 'plus', None))
     yield from sorted(monthly, key=_order)
 
-    query = _purchases(user.id, at)
+    query = _purchases(user.id, at).where(
+        func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= multiplier)
     if scope is not None and 'free' not in scope:
         query = query.where(BillingPlanRevision.service_plan_id.in_(scope))
     for period, revision in db.execute(query.order_by(QuotaPeriod.ends_at.asc().nulls_last(),
@@ -129,16 +131,18 @@ def reserve_document(db, job):
     if 'document' not in job.config or 'service_plans' not in job.config['document']:
         problem('DOCUMENT_CONFIG_INVALID', '文件任务缺少冻结的模型权限', 409)
     scope = job.config['document']['service_plans']
+    multiplier = job.quota_multiplier
     plan, remaining = [], count
-    for period, term, service, revision in _options(db, user, scope, at):
-        amount = min(remaining, period.granted - period.used - period.reserved) if period else remaining
+    for period, term, service, revision in _options(db, user, scope, at, multiplier):
+        amount = min(remaining, int((period.granted - period.used - period.reserved) // multiplier)) if period else remaining
         if amount:
             plan.append((period, term, service, revision, amount))
             remaining -= amount
         if not remaining:
             break
-    job.entitlement = {**job.entitlement, 'document_quota': {'needed': count,
-        'available': count - remaining, 'difference': remaining, 'checked_at': at.isoformat() + 'Z'}}
+    job.entitlement = {**job.entitlement, 'document_quota': {'needed': float(count * multiplier),
+        'available': float((count - remaining) * multiplier), 'difference': float(remaining * multiplier),
+        'checked_at': at.isoformat() + 'Z'}}
     if remaining:
         job.status, job.phase = 'awaiting_quota', 'awaiting_quota'
         job.error_code, job.error_message = 'DOCUMENT_QUOTA_INSUFFICIENT', '可用额度不足，请补充后手动继续，或取消任务'
@@ -147,24 +151,26 @@ def reserve_document(db, job):
 
     offset = 0
     for period, term, service, revision, amount in plan:
+        units = amount * multiplier
         if period is None and term is None:
             # Operator gifts have neither a billing term nor a finite bucket.
             # Freeze their execution usage in the existing job snapshot; pages
             # without an allocation belong to this one unlimited gift.
             job.entitlement = {**job.entitlement, 'document_unlimited_gift': {
                 'membership_id': user.membership_id, 'pages': amount,
-                'reserved': amount, 'used': 0, 'released': 0}}
+                'reserved': float(units), 'used': 0, 'released': 0}}
             db.add(Ledger(owner_id=job.owner_id, job_id=job.id, quota_kind='classic_unlimited',
-                transaction_key=f'document:{job.id}:gift:reserve', kind='reserve', amount=amount))
+                transaction_key=f'document:{job.id}:gift:reserve', kind='reserve', amount=units))
             offset += amount
             continue
         if period:
             if period not in db:
                 db.add(period)
                 db.flush()
-            reserve_period(db, period.id, amount, at)
+            reserve_period(db, period.id, units, at)
         allocation = DocumentQuotaAllocation(id=uid(), job_id=job.id, period_id=period.id if period else None,
-            billing_term_id=term.id if term else None, pages=amount, reserved=amount, used=0, released=0,
+            billing_term_id=term.id if term else None, pages=amount, quota_multiplier=multiplier,
+            reserved=units, used=0, released=0,
             entitlement={'service_plan': service, 'revision_id': revision.id if revision else None,
                          'hourly_image_limit': revision.hourly_image_limit if revision else None,
                          'kind': period.kind if period else 'classic_unlimited'})
@@ -175,9 +181,9 @@ def reserve_document(db, job):
         offset += amount
         db.add(Ledger(owner_id=job.owner_id, job_id=job.id, period_id=allocation.period_id,
             quota_kind=allocation.entitlement['kind'], transaction_key=f'document:{job.id}:{allocation.id}:reserve',
-            kind='reserve', amount=amount))
+            kind='reserve', amount=units))
     document.reserved_at = at
-    job.quota_pages, job.quota_kind, job.settlement = count, 'document_pages', 'reserved'
+    job.quota_pages, job.quota_kind, job.settlement = count * multiplier, 'document_pages', 'reserved'
     job.entitlement = {**job.entitlement, 'accepted_at': at.isoformat() + 'Z',
                        'priority': 0, 'pages': count}
     job.status, job.phase, job.error_code, job.error_message = 'queued', 'doc_ocr', None, None
@@ -186,9 +192,9 @@ def reserve_document(db, job):
     return True
 
 
-def _settle_pages(db, job, pages, allocation_id, period_id, kind, reserved, success):
+def _settle_pages(db, job, pages, allocation_id, period_id, kind, reserved, success, multiplier):
     used = sum(1 for page in pages if page.allocation_id == allocation_id and success and
-               page.billable and page.status == 'translated' and 'unrecognized_regions' not in page.quality_flags)
+               page.billable and page.status == 'translated' and 'unrecognized_regions' not in page.quality_flags) * multiplier
     released = reserved - used
     if period_id:
         finish_period(db, period_id, reserved, used)
@@ -211,16 +217,17 @@ def settle_document(db, job, *, success=True):
         DocumentQuotaAllocation.job_id == job.id).order_by(DocumentQuotaAllocation.id).with_for_update()))
     pages = list(db.scalars(select(DocumentPage).where(DocumentPage.job_id == job.id)))
     gift = (job.entitlement or {}).get('document_unlimited_gift', {})
-    if (sum(item.reserved for item in allocations) + gift.get('reserved', 0) != job.quota_pages or
+    gift_reserved = Decimal(str(gift.get('reserved', 0)))
+    if (sum(item.reserved for item in allocations) + gift_reserved != job.quota_pages or
             sum(page.allocation_id is None for page in pages) != gift.get('pages', 0)):
         problem('QUOTA_CONFLICT', '文件预占账本不完整', 409)
     for allocation in allocations:
         used, released = _settle_pages(db, job, pages, allocation.id, allocation.period_id,
-                                      allocation.entitlement['kind'], allocation.reserved, success)
+                                      allocation.entitlement['kind'], allocation.reserved, success, allocation.quota_multiplier)
         allocation.reserved, allocation.used, allocation.released = 0, used, released
     if gift:
-        used, released = _settle_pages(db, job, pages, None, None, 'classic_unlimited', gift['reserved'], success)
+        used, released = _settle_pages(db, job, pages, None, None, 'classic_unlimited', gift_reserved, success, job.quota_multiplier)
         job.entitlement = {**job.entitlement, 'document_unlimited_gift': {
-            **gift, 'reserved': 0, 'used': used, 'released': released}}
+            **gift, 'reserved': 0, 'used': float(used), 'released': float(released)}}
     job.settlement = 'settled' if success else 'released'
     touch_job(db, job)

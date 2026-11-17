@@ -8,7 +8,7 @@ from sqlalchemy import MetaData, inspect, select, text
 from app.documents.models import Document, DocumentPage
 from app.models import Job, User, now
 from app.queue_models import ComputeNode
-from test_job_results_migration import migrate
+from test_job_results_migration import before_quota_multiplier, migrate
 from test_request_limits_migration import isolated_migration_database
 from test_postgres_concurrency import pg_scope
 
@@ -19,7 +19,7 @@ def seed(engine, status):
     metadata.reflect(engine)
     with engine.begin() as connection:
         connection.execute(User.__table__.insert().values(id='workspace-owner', subject='workspace-owner', name='fixture', role='user'))
-        connection.execute(Job.__table__.insert().values(id='historical-document', owner_id='workspace-owner',
+        connection.execute(before_quota_multiplier(Job).insert().values(id='historical-document', owner_id='workspace-owner',
             workflow_kind='document', mode='classic', target_language='en', operation='document',
             idempotency_key='historical-upload', request_hash='a' * 64, cache_key='b' * 64,
             config={}, quota_pages=1, quota_kind='document_pages', status=status, settlement='settled'))

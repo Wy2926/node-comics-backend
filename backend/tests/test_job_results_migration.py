@@ -12,8 +12,14 @@ from test_request_limits_migration import isolated_migration_database
 
 def legacy_jobs():
     from app.models import Job
-    table = Job.__table__.to_metadata(MetaData())
+    table = before_quota_multiplier(Job)
     table.append_column(Column('priority_rank', Integer, default=1))
+    return table
+
+
+def before_quota_multiplier(model):
+    table = model.__table__.to_metadata(MetaData())
+    table._columns.remove(table.c.quota_multiplier)
     return table
 
 

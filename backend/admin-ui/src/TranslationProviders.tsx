@@ -105,6 +105,7 @@ export function TranslationProvidersPage({onUnauthorized}: {onUnauthorized: (mes
                   {routingFields.map(({key, label}) => <small key={key}>{provider.enabled && provider.credential_configured && provider[key] > 0 ?
                     `${label}权重 ${provider[key]}${key === 'title_weight' ? ` · 约 ${(provider[key] / totalWeight(key) * 100).toFixed(1)}%` : ' · 按套餐内权重分配'}` : `${label}不分流 · 权重 ${provider[key]}`}</small>)}
                   <small>正文套餐：{provider.text_plan_ids === null ? '全部套餐' : provider.text_plan_ids.map(id => data.plans.find(plan => plan.id === id)?.name ?? id).join('、')}</small>
+                  <small>额度消耗：{provider.quota_multiplier}× / 页</small>
                   <small>{data.channels.find(channel => channel.id === provider.channel)?.label ?? provider.channel}</small>
                   </td>
                 <td><b>{provider.config.model}</b><small>{protocolLabels[provider.config.protocol] ?? provider.config.protocol}</small>

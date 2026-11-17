@@ -13,10 +13,10 @@ class QuotaBucketResponse(BaseModel):
     kind: str
     source: str
     mode: str
-    granted: int
-    used: int
-    reserved: int
-    available: int
+    granted: float
+    used: float
+    reserved: float
+    available: float
     starts_at: str
     expires_at: str | None
     grants_access: bool
@@ -26,10 +26,10 @@ class QuotaBucketResponse(BaseModel):
 class PeriodResponse(BaseModel):
     id: str
     kind: str
-    granted: int
-    used: int
-    reserved: int
-    available: int
+    granted: float
+    used: float
+    reserved: float
+    available: float
     starts_at: str
     resets_at: str | None
     next_expiry_at: str | None
@@ -52,10 +52,10 @@ class GiftMembershipResponse(BaseModel):
 
 
 class PurchaseQuotaResponse(BaseModel):
-    granted: int
-    used: int
-    reserved: int
-    available: int
+    granted: float
+    used: float
+    reserved: float
+    available: float
     next_expiry_at: str | None
 
 
@@ -96,7 +96,7 @@ class EntitlementsResponse(BaseModel):
     hourly_image_rate_limit: dict | None = None
     modes: dict[str, ModeEntitlement]
     generated_at: str
-    pending_previous_period_pages: int
+    pending_previous_period_pages: float
 
 
 class UserResponse(BaseModel):
@@ -124,7 +124,8 @@ class JobResponse(BaseModel):
     target_language: str
     status: str
     phase: str
-    quota_pages: int
+    quota_pages: float
+    quota_multiplier: float
     quota_kind: str
     quota_period_id: str | None
     settlement: str
@@ -152,7 +153,7 @@ class UsageEntry(BaseModel):
     kind: str
     period_id: str | None
     quota_kind: str | None
-    pages: int
+    pages: float
     note: str
     created_at: str
 
@@ -182,6 +183,7 @@ class TranslationModelResponse(BaseModel):
 
 
 class TranslationModelCapability(TranslationModelResponse):
+    quota_multiplier: float
     requires_paid: bool
     available: bool
     unavailable_reason: Literal['not_allowed', 'quota_exhausted', 'unavailable'] | None = None
@@ -233,6 +235,10 @@ class TranslationResponse(BaseModel):
     requested_model_id: str | None = None
     font_id: str | None = None
     model: TranslationModelResponse | None = None
+    quota_multiplier: float | None = None
+    quota_pages: float | None = None
+    quota_kind: str | None = None
+    settlement: str | None = None
     image_sha256: str
     input_expires_at: str | None
     result: TranslationResultResponse | None

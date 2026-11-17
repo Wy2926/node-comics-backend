@@ -2,6 +2,7 @@
 from sqlalchemy import and_, case, func, literal, or_, select, union_all
 from .billing_models import BillingOrder, BillingPlanRevision, BillingPrice, BillingSubscription, BillingTerm
 from .models import now
+from .quota_amounts import MIN_QUOTA
 
 
 def ongoing_subscription(sub=BillingSubscription):
@@ -27,7 +28,7 @@ def active_benefits(db, owner_id, at=None):
         BillingTerm.revoked_at.is_(None), BillingTerm.starts_at <= at, BillingTerm.ends_at > at)))
 
 
-def first_purchase(db, owner_id, at, *, service_plans=None):
+def first_purchase(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
     """One available page bucket and its original immutable service quote.
 
     Depleted permanent purchases are deliberately outside the partial-index
@@ -41,13 +42,14 @@ def first_purchase(db, owner_id, at, *, service_plans=None):
             QuotaPeriod.owner_id == owner_id, BillingOrder.owner_id == owner_id,
             QuotaPeriod.mode == 'classic', QuotaPeriod.source == 'purchase',
             QuotaPeriod.revoked_at.is_(None), QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved,
+            func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= amount,
             QuotaPeriod.starts_at <= at, or_(QuotaPeriod.ends_at.is_(None), QuotaPeriod.ends_at > at))
     if service_plans is not None:
         query = query.where(BillingPlanRevision.service_plan_id.in_(service_plans))
     return db.execute(query.order_by(QuotaPeriod.ends_at.asc().nulls_last(), QuotaPeriod.starts_at, QuotaPeriod.id).limit(1)).first()
 
 
-def first_subscription(db, owner_id, at, *, service_plans=None):
+def first_subscription(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
     """Choose a spendable monthly bucket with the service that issued it."""
     from .entitlement_models import QuotaPeriod
     query = select(QuotaPeriod, BillingPlanRevision).join(BillingTerm,
@@ -59,7 +61,8 @@ def first_subscription(db, owner_id, at, *, service_plans=None):
             QuotaPeriod.revoked_at.is_(None),
             BillingTerm.revoked_at.is_(None), BillingTerm.starts_at <= at, BillingTerm.ends_at > at,
             QuotaPeriod.starts_at <= at, QuotaPeriod.ends_at > at,
-            QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved)
+            QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved,
+            func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= amount)
     if service_plans is not None:
         query = query.where(func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(service_plans))
     return db.execute(query.order_by(QuotaPeriod.ends_at, QuotaPeriod.starts_at, QuotaPeriod.id).limit(1)).first()

@@ -4,7 +4,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.models import Asset, Job, User
-from test_job_results_migration import migrate
+from test_job_results_migration import before_quota_multiplier, migrate
 from test_request_limits_migration import isolated_migration_database  # noqa: F401
 
 
@@ -12,6 +12,7 @@ from test_request_limits_migration import isolated_migration_database  # noqa: F
 def test_cleanup_upgrade_preserves_data(isolated_migration_database, prebuilt):
     engine = isolated_migration_database
     migrate(engine, 'auth_profiles_0025')
+    jobs = before_quota_multiplier(Job)
     with Session(engine) as db:
         db.add(User(id='cleanup-owner', subject='cleanup-owner', name='test'))
         db.flush()
@@ -19,12 +20,12 @@ def test_cleanup_upgrade_preserves_data(isolated_migration_database, prebuilt):
             kind=kind, mime='image/png', width=10, height=10, byte_size=100)
             for identity, kind in [('cleanup-input', 'original'), ('cleanup-output', 'classic')]])
         db.flush()
-        db.add(Job(id='cleanup-job', owner_id='cleanup-owner', input_asset_id='cleanup-input',
+        db.execute(jobs.insert().values(id='cleanup-job', owner_id='cleanup-owner', input_asset_id='cleanup-input',
             output_asset_id='cleanup-output', mode='classic', target_language='en', status='running', phase='text',
             idempotency_key='cleanup-request', operation='translation', request_hash='a' * 64,
             cache_key='b' * 64, config={'immutable': 'checkpoint'}, quota_pages=1, quota_kind='classic_free'))
         db.commit()
-        before = [db.execute(select(model.__table__)).all() for model in (Asset, Job)]
+        before = [db.execute(select(table)).all() for table in (Asset.__table__, jobs)]
     expected = {'ix_assets_unpurged', 'ix_assets_live_created', 'ix_jobs_output_asset_id'}
     if prebuilt:
         for model in (Asset, Job):
@@ -33,5 +34,5 @@ def test_cleanup_upgrade_preserves_data(isolated_migration_database, prebuilt):
                     index.create(engine)
     migrate(engine, 'head')
     with Session(engine) as db:
-        assert [db.execute(select(model.__table__)).all() for model in (Asset, Job)] == before
+        assert [db.execute(select(table)).all() for table in (Asset.__table__, jobs)] == before
     assert expected <= {index['name'] for table in ('assets', 'jobs') for index in inspect(engine).get_indexes(table)}

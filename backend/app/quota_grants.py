@@ -16,13 +16,14 @@ from .providers import digest
 from .request_models import RequestBody
 from .admin_audit import record_audit
 from .schemas import QuotaPurchasesResponse
+from .quota_amounts import QuotaAmount
 
 router = APIRouter(tags=["quota grants"])
 
 
 class GrantRequest(RequestBody):
     mode: Literal["classic"]
-    pages: int = Field(ge=1, le=1_000_000, strict=True)
+    pages: QuotaAmount = Field(gt=0, le=1_000_000)
     starts_at: AwareDatetime | None = None
     expires_at: AwareDatetime | None = None
     note: str = Field(min_length=1, max_length=200)

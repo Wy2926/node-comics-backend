@@ -8,6 +8,10 @@ export interface Snapshot {
   id: string;
   requested_model_id?:string|null;
   model?:TranslationModel|null;
+  quota_multiplier?: number | null;
+  quota_pages?: number | null;
+  quota_kind?: string | null;
+  settlement?: string | null;
   state:
     | 'needs_input'
     | 'queued'

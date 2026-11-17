@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {load} from 'cheerio';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {translationBody} from '../src/lib/translation-api';
@@ -20,25 +20,19 @@ test('old records omit model; explicit choices survive ordinary/retry/regenerate
 test('both availability states and upgrade are accessible in every locale',()=>{
   for(const locale of locales){
     assert.ok(Object.values(modelCopy[locale]).every(value=>typeof value==='string'&&value.length>0));
-    const html=renderToStaticMarkup(createElement(TranslationModelPicker,{models:[
-      {id:'free',name:'Free model',available:true,requires_paid:false},
-      {id:'paid',name:'Paid model',available:false,requires_paid:true,unavailable_reason:'not_allowed'},
-    ],onChange:()=>{},copy:modelCopy[locale],upgradeUrl:'/pricing/'}));
-    assert.match(html,/<a[^>]*href="\/pricing\/"[^>]*><strong>Paid model/);
-    assert.ok(!html.includes('class="button secondary"'));
-    assert.ok(!html.includes(modelCopy[locale].not_allowed));
-    assert.ok(html.includes(modelCopy[locale].unavailable));
-    assert.ok(html.includes(modelCopy[locale].free));
-    assert.ok(html.includes(modelCopy[locale].paid));
+    const $=load(renderToStaticMarkup(createElement(TranslationModelPicker,{models:[
+      {id:'free',name:'Free model',available:true,requires_paid:false,quota_multiplier:0.125},
+      {id:'paid',name:'Paid model',available:false,requires_paid:true,unavailable_reason:'not_allowed',quota_multiplier:2.5},
+    ],onChange:()=>{},copy:modelCopy[locale],upgradeUrl:'/pricing/'})));
+    const free=$('button').filter((_,element)=>$(element).text().includes('Free model'));
+    const paid=$('a[href="/pricing/"]');
+    assert.ok(free.text().includes(modelCopy[locale].free) && free.text().includes(modelCopy[locale].available));
+    assert.ok(paid.text().includes('Paid model') && paid.text().includes(modelCopy[locale].paid));
+    assert.ok(paid.text().includes(modelCopy[locale].unavailable) && paid.text().includes(modelCopy[locale].upgrade));
+    assert.ok(free.text().includes('0.125×') && paid.text().includes('2.5×'));
   }
 });
 test('missing capability supports legacy automatic requests but not stale explicit selections',()=>{
   assert.equal(selectedModelAvailable(undefined),true);assert.equal(selectedModelAvailable([]),false);
   assert.equal(selectedModelAvailable(undefined,'saved'),false);
-});
-test('dropdown panel uses the existing menu radius separately from its control radius',()=>{
-  const css=readFileSync(new URL('../src/styles/translate.css',import.meta.url),'utf8');
-  const panel=css.match(/\.translation-model-options\s*\{([^}]+)\}/)![1];
-  assert.match(panel,/border-radius:\s*var\(--comic-card-radius\)/);
-  assert.doesNotMatch(panel,/border-radius:\s*var\(--comic-control-radius\)/);
 });

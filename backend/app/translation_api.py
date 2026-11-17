@@ -170,6 +170,10 @@ def translation_json(db, row, *, context=None):
         'image_sha256': entry.source_sha256 if entry else descriptor['image']['sha256'],
         'input_expires_at': iso(upload.expires_at) if upload else None,
         'requested_model_id': descriptor.get('model_id'), 'model': descriptor.get('model'),
+        'quota_multiplier': float(entry.quota_multiplier) if entry else None,
+        'quota_pages': float(entry.quota_pages) if entry else None,
+        'quota_kind': entry.quota_kind if entry else None,
+        'settlement': entry.settlement if entry else None,
         'font_id': entry.config.get('font_id') if entry else descriptor.get('font_id'),
         'result': result, 'error': error, 'created_at': iso(row.created_at),
         'updated_at': iso(row.revoked_at or (entry.changed_at if entry else row.created_at))}

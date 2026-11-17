@@ -9,6 +9,21 @@ const {numericFields, providerDraft, providerInput, validateProvider} = await im
 const channels = [{id: 'openai', protocols: ['chat_completions', 'responses']}];
 const draft = () => ({...providerDraft(), name: 'Supplier', model: 'test-model', api_key: 'test-key'});
 
+test('quota multiplier is independent and validates four decimal places', () => {
+  assert.equal(providerInput(draft()).quota_multiplier, 1);
+  for (const value of ['0.0001', '0.1', '0.5', '2.5', '10000']) {
+    const edited = {...draft(), quota_multiplier: value};
+    assert.deepEqual(validateProvider(edited, channels, true), {});
+    const saved = providerInput(edited);
+    assert.equal(saved.quota_multiplier, Number(value));
+    assert.equal(providerDraft(saved).quota_multiplier, value);
+    assert.ok(!('quota_multiplier' in saved.config));
+  }
+  for (const value of ['', '0', '-1', '0.00001', '10001', 'NaN', 'Infinity']) {
+    assert.ok(validateProvider({...draft(), quota_multiplier: value}, channels, true).quota_multiplier);
+  }
+});
+
 test('new and legacy forms default to lowest reasoning and keep weights outside model config', () => {
   const input = providerInput(draft());
   assert.equal(input.config.reasoning_effort, 'none');

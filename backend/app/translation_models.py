@@ -1,9 +1,11 @@
 """Administrator-owned text suppliers and immutable, server-only credentials."""
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
+from .quota_amounts import QUOTA_TYPE
 
 
 class TranslationProvider(Base):
@@ -13,6 +15,7 @@ class TranslationProvider(Base):
     channel: Mapped[str] = mapped_column(String(40))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     text_weight: Mapped[int] = mapped_column(Integer, default=1, server_default='0')
+    quota_multiplier: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=1, server_default='1')
     text_plan_ids: Mapped[list[str] | None] = mapped_column(JSON(none_as_null=True))
     title_weight: Mapped[int] = mapped_column(Integer, default=1, server_default='0')
     revision_id: Mapped[str | None] = mapped_column(String(36))
@@ -20,6 +23,7 @@ class TranslationProvider(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     __table_args__ = (
+        CheckConstraint('quota_multiplier > 0 AND quota_multiplier <= 10000', name='ck_provider_quota_multiplier'),
         CheckConstraint('text_weight BETWEEN 0 AND 10000', name='ck_translation_text_weight'),
         CheckConstraint('title_weight BETWEEN 0 AND 10000', name='ck_translation_title_weight'),
         CheckConstraint('requests_per_minute BETWEEN 1 AND 10000'),)

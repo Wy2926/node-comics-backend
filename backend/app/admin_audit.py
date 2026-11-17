@@ -1,5 +1,6 @@
 """Append-only operator history, committed with the business mutation."""
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 from urllib.parse import urlsplit, urlunsplit
@@ -57,6 +58,8 @@ def sanitize(value, *, depth=0):
         return [sanitize(item, depth=depth + 1) for item in value[:100]]
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
     if isinstance(value, str):
         if value.startswith(('https://', 'http://')):
             parsed = urlsplit(value)

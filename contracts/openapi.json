@@ -8664,9 +8664,11 @@
             "title": "Kind"
           },
           "pages": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.0001,
             "maximum": 1000000.0,
-            "minimum": 1.0,
+            "minimum": 0.0,
+            "exclusiveMinimum": 0.0,
             "title": "Pages"
           },
           "note": {
@@ -8884,7 +8886,7 @@
             "title": "Generated At"
           },
           "pending_previous_period_pages": {
-            "type": "integer",
+            "type": "number",
             "title": "Pending Previous Period Pages"
           }
         },
@@ -9133,9 +9135,11 @@
             "title": "Mode"
           },
           "pages": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.0001,
             "maximum": 1000000.0,
-            "minimum": 1.0,
+            "minimum": 0.0,
+            "exclusiveMinimum": 0.0,
             "title": "Pages"
           },
           "starts_at": {
@@ -9697,19 +9701,19 @@
             "title": "Kind"
           },
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "starts_at": {
@@ -9764,19 +9768,19 @@
       "PeriodicQuotaResponse": {
         "properties": {
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "next_expiry_at": {
@@ -10114,6 +10118,15 @@
             "title": "Text Weight",
             "default": 1
           },
+          "quota_multiplier": {
+            "type": "number",
+            "multipleOf": 0.0001,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Quota Multiplier",
+            "default": 1
+          },
           "text_plan_ids": {
             "anyOf": [
               {
@@ -10176,19 +10189,19 @@
       "PurchaseQuotaResponse": {
         "properties": {
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "next_expiry_at": {
@@ -10232,19 +10245,19 @@
             "title": "Mode"
           },
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "starts_at": {
@@ -10307,19 +10320,19 @@
             "title": "Mode"
           },
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "starts_at": {
@@ -11021,19 +11034,19 @@
       "SubscriptionQuotaResponse": {
         "properties": {
           "granted": {
-            "type": "integer",
+            "type": "number",
             "title": "Granted"
           },
           "used": {
-            "type": "integer",
+            "type": "number",
             "title": "Used"
           },
           "reserved": {
-            "type": "integer",
+            "type": "number",
             "title": "Reserved"
           },
           "available": {
-            "type": "integer",
+            "type": "number",
             "title": "Available"
           },
           "next_expiry_at": {
@@ -11528,6 +11541,10 @@
             "type": "string",
             "title": "Name"
           },
+          "quota_multiplier": {
+            "type": "number",
+            "title": "Quota Multiplier"
+          },
           "requires_paid": {
             "type": "boolean",
             "title": "Requires Paid"
@@ -11557,6 +11574,7 @@
         "required": [
           "id",
           "name",
+          "quota_multiplier",
           "requires_paid",
           "available"
         ],
@@ -11643,6 +11661,50 @@
                 "type": "null"
               }
             ]
+          },
+          "quota_multiplier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Multiplier"
+          },
+          "quota_pages": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Pages"
+          },
+          "quota_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Kind"
+          },
+          "settlement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement"
           },
           "image_sha256": {
             "type": "string",
@@ -11984,7 +12046,7 @@
             "title": "Quota Kind"
           },
           "pages": {
-            "type": "integer",
+            "type": "number",
             "title": "Pages"
           },
           "note": {
@@ -12088,7 +12150,7 @@
           },
           "quota_used": {
             "additionalProperties": {
-              "type": "integer"
+              "type": "number"
             },
             "type": "object",
             "title": "Quota Used"

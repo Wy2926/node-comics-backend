@@ -124,6 +124,12 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
               {field('user_agent', 'User-Agent', '随文本请求发送的客户端标识。', {spellCheck: false})}
             </div>
           </section>
+          <section className="provider-section" aria-labelledby="provider-quota-title">
+            <h3 id="provider-quota-title">用户额度计费</h3>
+            {field('quota_multiplier', '额度消耗倍率',
+              '每个计费页消耗的额度，例如 0.5 或 2.5。独立于套餐权限、分流权重和供应商成本；只影响新任务，已有任务按创建时的倍率结算。',
+              {type: 'number', min: 0.0001, max: 10000, step: 0.0001})}
+          </section>
           <section className="config-section provider-section" aria-labelledby="provider-credential-title">
             <h3 id="provider-credential-title">访问密钥与状态</h3>
             {provider && <p className="muted">当前密钥：{provider.credential_configured ? '已配置' : '未配置，请补充密钥'}</p>}

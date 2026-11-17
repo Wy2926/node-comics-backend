@@ -1,9 +1,11 @@
 """Page allowance records, independent of supplier cost accounting."""
 from datetime import datetime
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint, text
+from decimal import Decimal
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, JSON, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
+from .quota_amounts import QUOTA_TYPE
 
 
 class QuotaPeriod(Base):
@@ -21,9 +23,9 @@ class QuotaPeriod(Base):
     grants_access: Mapped[bool] = mapped_column(Boolean, default=False)
     starts_at: Mapped[datetime] = mapped_column(DateTime)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime)
-    granted: Mapped[int] = mapped_column(Integer)
-    used: Mapped[int] = mapped_column(Integer, default=0)
-    reserved: Mapped[int] = mapped_column(Integer, default=0)
+    granted: Mapped[Decimal] = mapped_column(QUOTA_TYPE)
+    used: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=0)
+    reserved: Mapped[Decimal] = mapped_column(QUOTA_TYPE, default=0)
     __table_args__ = (UniqueConstraint("owner_id", "source_key"),
                      Index("ix_quota_periods_owner_mode_end", "owner_id", "mode", "ends_at"),
                      Index('ix_quota_purchase_available', 'owner_id', 'mode', 'ends_at', 'starts_at', 'id',
@@ -39,7 +41,7 @@ class QuotaPeriod(Base):
                      CheckConstraint("(source = 'purchase' AND billing_order_id IS NOT NULL AND mode = 'classic') OR "
                                      "(source != 'purchase' AND billing_order_id IS NULL AND revoked_at IS NULL)", name='ck_quota_purchase_order'),
                      CheckConstraint("used >= 0"), CheckConstraint("reserved >= 0"),
-                     CheckConstraint("granted >= used + reserved"), CheckConstraint("ends_at > starts_at"),
+                     CheckConstraint("granted >= round(used + reserved, 4)", name='ck_quota_balance'), CheckConstraint("ends_at > starts_at"),
                      CheckConstraint("source IN ('grant', 'purchase') OR ends_at IS NOT NULL", name="ck_quota_expiry_source"))
 
 
