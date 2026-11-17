@@ -1,6 +1,7 @@
 """Real TLS/TCP loss and recovery on the dedicated Docker network."""
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+import faulthandler
 import hashlib
 from io import BytesIO
 import json
@@ -75,6 +76,7 @@ class ObservedTransport(Transport):
     def __init__(self, config):
         super().__init__(config)
         self.connections, self.disconnections, self.requests, self.http = [], [], [], []
+        self.responses = []
         self.ranges = []
         def observed(request):
             path = request.url.path.rsplit('/', 1)[-1]
@@ -82,6 +84,9 @@ class ObservedTransport(Transport):
             if path == 'input' and request.headers.get('range'):
                 self.ranges.append(request.headers['range'])
         self.control.event_hooks['request'] = [observed]
+        self.control.event_hooks['response'] = [lambda response: self.responses.append(
+            (time.monotonic(), response.request.url.path, response.status_code,
+             response.headers.get('content-length')))]
 
     def listen(self, stop, updated):
         first = True
@@ -194,7 +199,18 @@ class NetworkRun:
             if predicate():
                 return time.monotonic() - start
             time.sleep(.02)
-        raise AssertionError(f'Network recovery timed out after {timeout}s')
+        with (REPORT / 'timeout-stacks.txt').open('w') as output:
+            faulthandler.dump_traceback(file=output)
+        with session_factory()() as db:
+            jobs = {job.id: job.status for job in db.scalars(select(Job).where(Job.id.in_(self.jobs)))}
+        pages = [{'job_id': page.lease['job_id'], 'step': page.step,
+                  'terminal': bool(page.terminal), 'stopped': page.stopped,
+                  'running': bool(page.future and not page.future.done()),
+                  'analysis_running': bool(page.analysis_future and not page.analysis_future.done())}
+                 for page in self.agent.active_pages()]
+        raise AssertionError(f'Network recovery timed out after {timeout}s: {jobs=}, {pages=}, '
+                             f'http={Counter(path for _, _, path in self.transport.http)}, '
+                             f'responses={self.transport.responses}')
 
     def hold(self, seconds):
         end = time.monotonic() + seconds
@@ -217,7 +233,7 @@ class NetworkRun:
     def completed(self, ids):
         with session_factory()() as db:
             states = list(db.scalars(select(Job.status).where(Job.id.in_(ids))))
-        assert not set(states) & {'failed', 'cancelled', 'outcome_unknown'}, states
+        assert not set(states) & {'failed', 'cancelled', 'outcome_unknown'}, (states, self.transport.responses)
         return len(states) == len(ids) and all(state == 'succeeded' for state in states)
 
     def finish(self, ids, timeout=120):
