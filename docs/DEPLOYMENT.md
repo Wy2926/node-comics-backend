@@ -23,11 +23,13 @@ docker build -f backend/Dockerfile.static --target admin --output type=local,des
 
 API 镜像不含页面。官网和后台由 Nginx 提供，参考 [代理模板](../deploy/openresty.comics.conf)。Drive 连接页作为插件仓库的独立静态产物部署。
 
+节点控制通道要求 WebSocket Upgrade；代理配置须同时包含 `openresty.comics.conf` 的连接头映射和 `openresty.api.inc` 的转发头。后端、节点与代理按[计算协议](COMPUTE_PROTOCOL.md)配套部署；HTTP 心跳成功不能证明通道已连通。
+
 ## 切换
 
 1. 配置候选槽位并启动，核对 `/health/ready` 和 release。
 2. `scripts/switch_release.py api` 原子更新代理 include，校验并 reload。
-3. 旧代理连接退出后，用 `scripts/retire_release.py api` 排空旧实例。
+3. 旧代理连接退出后，用 `scripts/retire_release.py api` 排空旧实例。节点通道每 300 秒主动结束并自动重连到新槽位，重放未决容量请求；保留节点状态目录。
 4. 静态产物用 `scripts/prepare_static_release.py` 准备，再用 `switch_release.py static` 激活。
 
 各命令参数见 `--help`。切换后探测失败不自动回退；确认实际代理状态再处理。保留仍被页面引用的哈希资源。

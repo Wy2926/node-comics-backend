@@ -95,11 +95,24 @@ class FixtureRuntime:
 
 
 def node_for(v3, tmp_path, pages, runtime, lose_replies=False, lose_upload=False, max_leases=4):
+    import socket
+    from threading import Thread
+    import uvicorn
+    from app.main import app
+    listener = socket.socket()
+    listener.bind(('127.0.0.1', 0))
+    listener.listen()
+    server = uvicorn.Server(uvicorn.Config(app, log_level='critical', lifespan='off', ws='websockets'))
+    server_thread = Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
+    server_thread.start()
     config = {'node_id': v3['node']['node_id'], 'node_token': v3['node']['token'],
-        'resource_id': 'test:cuda:0', 'control_url': 'https://control.example.test',
+        'resource_id': 'test:cuda:0', 'control_url': f'http://127.0.0.1:{listener.getsockname()[1]}',
         'engine': {'gpu': 0}, 'local_pages': pages, 'max_leases': max_leases}
     lost = set()
+    network = httpx.HTTPTransport()
     def control(request):
+        if request.url.path.endswith('/channel'):
+            return network.handle_request(request)
         response = v3['client'].request(request.method, request.url.path, headers=dict(request.headers), content=request.content)
         endpoint = request.url.path.rsplit('/', 1)[-1]
         if ((lose_replies and endpoint in {'claim', 'analysis', 'result'}) or (lose_upload and endpoint == 'result')) and endpoint not in lost:
@@ -108,7 +121,29 @@ def node_for(v3, tmp_path, pages, runtime, lose_replies=False, lose_upload=False
         return httpx.Response(response.status_code, content=response.content, headers=dict(response.headers))
     transport = Transport(config, control_transport=httpx.MockTransport(control))
     journal = Journal(tmp_path)
-    return Agent(config, runtime, transport, journal), transport, journal
+    agent = Agent(config, runtime, transport, journal)
+    register, close, assign = agent.register, transport.close, transport.request_assignment
+    def registered():
+        register()
+        if agent.channel_future is None:
+            agent.channel_future = agent.channel_pool.submit(agent.listen)
+        with transport.channel_condition:
+            assert transport.channel_condition.wait_for(lambda: transport.channel is not None, 5)
+    def assignment(body):
+        reply = assign(body)
+        if lose_replies and 'claim' not in lost:
+            lost.add('claim')
+            raise ControlFailure('CONTROL_UNAVAILABLE')
+        return reply
+    def closed():
+        close()
+        network.close()
+        server.should_exit = True
+        server_thread.join(5)
+        listener.close()
+        assert not server_thread.is_alive()
+    agent.register, transport.close, transport.request_assignment = registered, closed, assignment
+    return agent, transport, journal
 
 
 def drive(agent, jobs, timeout=15, *, schedule=False, expected='succeeded'):
@@ -323,6 +358,42 @@ def test_four_page_leases_work_with_serial_or_parallel_local_execution_and_lost_
         journal.close()
 
 
+@pytest.mark.parametrize('disconnect', ['client', 'lifetime'])
+def test_pending_offer_survives_real_channel_disconnect_and_reconnect(v3, tmp_path, monkeypatch, disconnect):
+    if disconnect == 'lifetime':
+        from app import compute_channel
+        monkeypatch.setattr(compute_channel, 'CHANNEL_SECONDS', 2)
+    agent, transport, journal = node_for(v3, tmp_path, 1, FixtureRuntime())
+    requests, assign = [], transport.request_assignment
+    def observed(body):
+        requests.append(dict(body))
+        return assign(body)
+    transport.request_assignment = observed
+    def until(predicate):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            agent.poll_control()
+            if predicate():
+                return
+            time.sleep(.01)
+        pytest.fail('channel did not reconnect and replay its pending offer')
+    try:
+        agent.register()
+        until(lambda: transport.assignment_id is not None)
+        pending, old = journal.get('claim'), transport.channel
+        if disconnect == 'client':
+            transport.close_channel()
+        until(lambda: transport.channel is not None and transport.channel is not old and len(requests) >= 2)
+        assert all(body == pending for body in requests)
+        jobs = v3['create']()
+        drive(agent, jobs, schedule=True)
+        assert agent.runtime.analyzed == agent.runtime.rendered == 1
+    finally:
+        agent.close()
+        transport.close()
+        journal.close()
+
+
 def test_restart_resubmits_frozen_result_without_recomputing(v3, tmp_path):
     from test_compute_v3 import analyze, claim, result_for, text
     from conftest import png_variant
@@ -499,13 +570,11 @@ def test_real_cuda_node_uploads_overlay(v3, tmp_path, monkeypatch, ocr_language,
         runtime.close()
 
 
-def test_notice_delivers_text_without_waiting_for_periodic_heartbeat(v3, tmp_path):
+def test_channel_delivers_text_without_waiting_for_periodic_heartbeat(v3, tmp_path):
     jobs = v3['create']()
     agent, transport, journal = node_for(v3, tmp_path, 1, FixtureRuntime())
     try:
         agent.register()
-        # Keep the renewal period at 10s; short long-poll only bounds test shutdown.
-        agent.config['request_seconds'] = 3
         agent.claim()
         deadline = time.monotonic() + 4
         while time.monotonic() < deadline:
@@ -658,14 +727,13 @@ def test_eight_slots_four_blocked_uploads_then_next_admission_window(v3, tmp_pat
     release, lock = Event(), Lock()
     active = peak = 0
     batches = []
-    post = transport.post
-    def observed_post(path, body):
-        reply = post(path, body)
-        if path.endswith('/claim'):
-            assert 1 <= body['count'] <= 4
-            batches.append(len(reply['leases']))
+    assign = transport.request_assignment
+    def observed_assignment(body):
+        reply = assign(body)
+        assert 1 <= body['count'] <= 4
+        batches.append(len(reply['leases']))
         return reply
-    transport.post = observed_post
+    transport.request_assignment = observed_assignment
     upload = transport.deliver
     def blocked(*args, **kwargs):
         nonlocal active, peak

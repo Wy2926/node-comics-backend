@@ -21,8 +21,8 @@ from ..node_config import NodeConfig
 from ..providers import digest
 from ..queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
 from ..request_models import RequestBody
-from ..scheduler import (current_lease, has_eligible_work, lock_scheduler, release_lease,
-                         start_lease, touch_job)
+from ..scheduler import (CANDIDATE_LIMIT, assigned_candidates, compute_loads, current_lease,
+                         has_eligible_work, lock_scheduler, release_lease, start_lease, touch_job)
 from ..translation_fonts import resolve_font, supports_font
 from .config import get_document_settings
 from .models import Document, DocumentPage
@@ -206,6 +206,63 @@ def sync(node_id: str, body: SyncRequest, identity=Depends(node_auth), db: Sessi
             'workspaces': workspaces}
 
 
+def claimable_rows(db, node):
+    """Shared admission for channel assignments and historical HTTP claims."""
+    cfg = NodeConfig.model_validate(node.desired_config)
+    if not node.enabled or not cfg.document_slots:
+        return []
+    # Unreconciled expired leases still occupy slots. Only ordinary pages on
+    # this GPU prohibit borrowing; the control-text pool occupies no GPU slot.
+    busy = db.execute(select(func.count().label('total'),
+        func.count().filter(JobStage.name.in_(NODE_STAGES)).label('documents'),
+        func.count().filter(JobStage.name == 'page').label('ordinary'))
+        .select_from(ExecutionLease).join(JobStage).where(
+            ExecutionLease.node_id == node.id, ExecutionLease.completed_at.is_(None))).one()
+    limit = cfg.document_slots if busy.ordinary else node.capacity
+    if busy.total >= node.capacity or busy.documents >= limit or has_eligible_work(db, node, ['page']):
+        return []
+    # Parsing/packing retain the conservative budget; only OCR/render borrow.
+    stages = NODE_STAGES if busy.documents < cfg.document_slots else ('doc_ocr', 'doc_render')
+    rows = db.execute(select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
+        .join(Document, Document.job_id == Job.id).where(
+            Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
+            or_(Document.owner_node_id == node.id,
+                and_(Document.owner_node_id.is_(None), JobStage.name == 'doc_prepare')),
+            or_(JobStage.name == 'doc_prepare', Document.reserved_at.is_not(None)),
+            Job.cancel_requested.is_(False), Job.discard_output.is_(False),
+            JobStage.name.in_(stages), JobStage.name.in_(node.capabilities), JobStage.status == 'ready',
+            JobStage.available_at <= now(), Job.target_language.in_(node.supported_languages),
+            supports_font(Job.config['font_id'].as_string(), Job.target_language,
+                          node.runtime_report.get('supported_font_ids', [])))
+        .order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
+    unowned = [(stage.id, job) for stage, job, document in rows if document.owner_node_id is None]
+    assigned = set()
+    if unowned:
+        loads = compute_loads(db, node, now())
+        loads = {key: load for key, load in loads.items()
+            if not has_eligible_work(db, load[0], ['page'])}
+        assigned = assigned_candidates(node, unowned, loads, document=True)
+    return [row for row in rows if row[2].owner_node_id == node.id or row[0].id in assigned]
+
+
+def start_document_lease(db, node, row):
+    stage, job, document = row
+    document.owner_node_id = node.id
+    at, limits = now(), get_document_settings()
+    cfg = NodeConfig.model_validate(node.desired_config)
+    seconds = (limits.prepare_timeout_seconds if stage.name == 'doc_prepare' else
+               limits.package_timeout_seconds if stage.name == 'doc_zip' else cfg.page_seconds)
+    lease = start_lease(db, node, stage, job, at)
+    lease.limits = {'document_protocol': 2, 'workspace_generation': document.workspace_generation,
+        'deadline_at': stamp(at + timedelta(seconds=seconds)), 'max_spool_bytes': limits.max_spool_bytes,
+        'max_output_bytes': min(MAX_ZIP_BYTES, limits.max_output_bytes),
+        'file_limits': {name: getattr(limits, name) for name in FILE_LIMITS}}
+    if stage.name == 'doc_zip':
+        lease.limits = {**lease.limits, 'output_key': get_document_store().key('output', job.id, lease.id, 'translated.zip')}
+    lease.expires_at = min(lease.expires_at, at + timedelta(seconds=seconds))
+    return lease
+
+
 @router.post('/nodes/{node_id}/claim')
 def claim(node_id: str, body: ClaimRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
     lock_scheduler(db)
@@ -220,55 +277,10 @@ def claim(node_id: str, body: ClaimRequest, identity=Depends(node_auth), db: Ses
     else:
         if node.config_version != body.config_version:
             problem('NODE_CONFIG_CONFLICT', '节点配置已更新', 409)
-        cfg = NodeConfig.model_validate(node.desired_config)
         leases = []
-        # Ownership is not a capacity lease. Every short operation competes
-        # through the existing node gate; no GPU slot is held while text runs.
-        if node.enabled and cfg.document_slots:
-            # One locked snapshot counts every unfinished lease, including ones
-            # awaiting expiry recovery. Only ordinary pages on this GPU prohibit
-            # borrowing; a separate control-text pool does not occupy this node.
-            busy = db.execute(select(func.count().label('total'),
-                func.count().filter(JobStage.name.in_(NODE_STAGES)).label('documents'),
-                func.count().filter(JobStage.name == 'page').label('ordinary'))
-                .select_from(ExecutionLease).join(JobStage).where(
-                    ExecutionLease.node_id == node_id, ExecutionLease.completed_at.is_(None))).one()
-            limit = cfg.document_slots if busy.ordinary else node.capacity
-        else:
-            busy, limit = None, 0
-        if (limit and busy.total < node.capacity and busy.documents < limit
-                and not has_eligible_work(db, node, ['page'])):
-            # Parsing/packing retain the conservative budget. Idle borrowed
-            # capacity is exclusively for OCR/render; FIFO among eligible stages
-            # and the existing one-stage claim receipt remain unchanged.
-            stages = NODE_STAGES if busy.documents < cfg.document_slots else ('doc_ocr', 'doc_render')
-            row = db.execute(select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
-                .join(Document, Document.job_id == Job.id).where(
-                    Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
-                    or_(Document.owner_node_id == node_id,
-                        and_(Document.owner_node_id.is_(None), JobStage.name == 'doc_prepare')),
-                    or_(JobStage.name == 'doc_prepare', Document.reserved_at.is_not(None)),
-                    Job.cancel_requested.is_(False), Job.discard_output.is_(False),
-                    JobStage.name.in_(stages), JobStage.name.in_(node.capabilities), JobStage.status == 'ready',
-                    JobStage.available_at <= now(), Job.target_language.in_(node.supported_languages),
-                    supports_font(Job.config['font_id'].as_string(), Job.target_language,
-                                  node.runtime_report.get('supported_font_ids', [])))
-                .order_by(JobStage.available_at, JobStage.id).limit(1)).first()
-            if row:
-                stage, job, document = row
-                document.owner_node_id = node.id
-                at, limits = now(), get_document_settings()
-                seconds = (limits.prepare_timeout_seconds if stage.name == 'doc_prepare' else
-                           limits.package_timeout_seconds if stage.name == 'doc_zip' else cfg.page_seconds)
-                lease = start_lease(db, node, stage, job, at)
-                lease.limits = {'document_protocol': 2, 'workspace_generation': document.workspace_generation,
-                    'deadline_at': stamp(at + timedelta(seconds=seconds)), 'max_spool_bytes': limits.max_spool_bytes,
-                    'max_output_bytes': min(MAX_ZIP_BYTES, limits.max_output_bytes),
-                    'file_limits': {name: getattr(limits, name) for name in FILE_LIMITS}}
-                if stage.name == 'doc_zip':
-                    lease.limits = {**lease.limits, 'output_key': get_document_store().key('output', job.id, lease.id, 'translated.zip')}
-                lease.expires_at = min(lease.expires_at, at + timedelta(seconds=seconds))
-                leases.append(lease)
+        rows = claimable_rows(db, node)
+        if rows:
+            leases.append(start_document_lease(db, node, rows[0]))
         db.add(ComputeClaim(node_id=node_id, request_id=body.request_id, request_hash=request_hash,
                             lease_ids=[lease.id for lease in leases]))
     db.commit()

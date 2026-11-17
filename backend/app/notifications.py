@@ -140,6 +140,12 @@ def policy_wakeups(db, flush_context, instances):
                 'capabilities', 'supported_languages', 'engine_version', 'config', 'requests_per_minute', 'revision_id')
             if row in db.new or any(state.attrs[name].history.has_changes() for name in fields if name in state.attrs):
                 topics.add('compute')
+            elif isinstance(row, ComputeNode) and state.attrs.runtime_report.history.has_changes():
+                previous = state.attrs.runtime_report.history.deleted
+                previous = previous[0] if previous else {}
+                if any((previous or {}).get(key) != (row.runtime_report or {}).get(key)
+                       for key in ('channel_id', 'dispatch_slots', 'dispatch_documents')):
+                    topics.add('compute')
     for topic in topics:
         publish(db, topic)
 

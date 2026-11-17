@@ -1,4 +1,4 @@
-"""Bounded oldest-first claims, frozen service preference and fenced leases."""
+"""Bounded oldest-first claims, weighted node placement and fenced leases."""
 from datetime import timedelta
 from dataclasses import dataclass
 import hmac
@@ -10,7 +10,7 @@ from .models import Asset, Attempt, ClassicState, Job, now, uid
 from .queue_models import ComputeNode, ExecutionLease, JobStage, SchedulerMutex
 from .translation_models import TranslationProvider
 from .translation_provider_limits import unavailable_providers
-from .translation_fonts import supports_font
+from .translation_fonts import DEFAULT_FONTS, supports_font
 
 ACTIVE = {"awaiting_upload", "validating_upload", "queued", "running", "outcome_unknown"}
 IMAGE_STAGES = {"page"}
@@ -142,6 +142,59 @@ def remaining_capacity(db, node):
     return max(0, node.capacity - busy)
 
 
+def compute_loads(db, node, at):
+    """One live-node/load snapshot; unreconciled expired leases still occupy slots."""
+    peers = db.execute(select(ComputeNode, func.count(ExecutionLease.id),
+        func.count(ExecutionLease.id).filter(ExecutionLease.resource_pool.in_(
+            ('doc_prepare', 'doc_ocr', 'doc_render', 'doc_zip'))))
+        .outerjoin(ExecutionLease, and_(ExecutionLease.node_id == ComputeNode.id,
+            ExecutionLease.completed_at.is_(None)))
+        .where(ComputeNode.enabled.is_(True), ComputeNode.engine_version != 'control',
+            ComputeNode.config_error.is_(None),
+            or_(ComputeNode.id == node.id, and_(
+                ComputeNode.heartbeat_at > at - timedelta(seconds=settings().cluster_node_timeout_seconds),
+                ComputeNode.applied_config_version == ComputeNode.config_version,
+                ComputeNode.runtime_report['protocol_version'].as_integer() == 3,
+                ComputeNode.runtime_report['ready'].as_boolean().is_(True),
+                or_(ComputeNode.runtime_report['channel_id'].as_string().is_(None),
+                    ComputeNode.runtime_report['dispatch_until'].as_string() > at.isoformat() + 'Z'))))
+        .group_by(ComputeNode.id).execution_options(populate_existing=True)).all()
+    return {peer.id: (peer, busy, documents) for peer, busy, documents in peers if busy < peer.capacity}
+
+
+def assigned_candidates(node, candidates, loads, *, document=False):
+    """Simulate bounded weighted least-load placement; only the claimant gets leases."""
+    from .node_config import NodeConfig
+    configs = {key: NodeConfig.model_validate(peer.desired_config) for key, (peer, _, _) in loads.items()}
+    planned = {key: 0 for key in loads}
+    assigned = set()
+    for key, job in candidates:
+        eligible = []
+        font = job.config.get('font_id') or DEFAULT_FONTS.get(job.target_language)
+        for peer_id, (peer, busy, documents) in loads.items():
+            config, extra = configs[peer_id], planned[peer_id]
+            runtime = peer.runtime_report or {}
+            if (busy + extra >= peer.capacity
+                    or (peer_id != node.id and extra >= runtime.get(
+                        'dispatch_documents' if document else 'dispatch_slots', peer.capacity))
+                    or ('doc_prepare' if document else 'page') not in peer.capabilities
+                    or job.target_language not in peer.supported_languages
+                    or font not in runtime.get('supported_font_ids', [])
+                    or (document and (runtime.get('document_protocol') != 2 or documents + extra >= config.document_slots))
+                    or (not document and job.config.get('result_format') == 'overlay-tiles-v1' and not runtime.get('overlay_tiles'))):
+                continue
+            eligible.append(peer_id)
+        if not eligible:
+            continue
+        chosen = min(eligible, key=lambda peer_id: (
+            (loads[peer_id][1] + planned[peer_id] + 1) / configs[peer_id].performance_weight,
+            loads[peer_id][1] + planned[peer_id], peer_id != node.id, peer_id))
+        planned[chosen] += 1
+        if chosen == node.id:
+            assigned.add(key)
+    return assigned
+
+
 def has_eligible_work(db, node, stages):
     """Queue existence only; callers that need capacity check it once themselves."""
     stages = set(node.capabilities) & set(stages)
@@ -153,7 +206,7 @@ def has_eligible_work(db, node, stages):
 
 
 def has_claimable_work(db, node_id, allowed_stages=None, *, config_version=None):
-    """An advisory read for long-poll wakeups; claim_batch remains authoritative."""
+    """An advisory readiness read; claim_batch remains authoritative."""
     with db.no_autoflush:
         node = db.get(ComputeNode, node_id)
         if not node or not node.enabled or (config_version is not None and config_version != node.config_version):
@@ -161,7 +214,23 @@ def has_claimable_work(db, node_id, allowed_stages=None, *, config_version=None)
         stages = set(node.capabilities) & set(allowed_stages or node.capabilities)
         if not stages or not remaining_capacity(db, node):
             return False
-        return has_eligible_work(db, node, stages)
+        if not has_eligible_work(db, node, stages):
+            return False
+        if stages != IMAGE_STAGES:
+            return True
+        at = now()
+        loads = compute_loads(db, node, at)
+        if not loads:
+            return False
+        if set(loads) == {node.id}:
+            return True
+        # Read only routing fields from the same bounded window as claim, never
+        # materialize jobs or touch local input files during readiness checks.
+        candidates = db.execute(_eligible_stages(node, stages, at).with_only_columns(
+            JobStage.id, Job.target_language, Job.config, Job.entitlement)
+            .order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
+        candidates.sort(key=lambda row: -job_priority(row))
+        return bool(assigned_candidates(node, [(row.id, row) for row in candidates], loads))
 
 
 def next_control_delay(db, maximum=5):
@@ -251,9 +320,14 @@ def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, ex
     if not limit or not candidates_before_lock:
         return []
     leases = []
-    for stage, job in _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked):
+    candidates = _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked)
+    pages = [(stage.id, job) for stage, job in candidates if stage.name == 'page']
+    assigned = assigned_candidates(node, pages, compute_loads(db, node, at)) if pages else set()
+    for stage, job in candidates:
         if len(leases) == limit:
             break
+        if stage.name == 'page' and stage.id not in assigned:
+            continue
         leases.append(start_lease(db, node, stage, job, at, executor_id))
     return leases
 

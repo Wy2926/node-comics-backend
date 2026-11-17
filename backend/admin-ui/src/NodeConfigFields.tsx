@@ -5,7 +5,8 @@ export type ConfigSchema = {
 };
 const labels: Record<string, string> = {
   execution_slots: '最大在途页数', document_slots: '文件保守并发（0 为关闭）',
-  poll_seconds: '领取兜底检查间隔（秒）', heartbeat_seconds: '心跳间隔（秒）',
+  performance_weight: '处理能力权重（越大越优先）',
+  heartbeat_seconds: '心跳间隔（秒）',
   request_seconds: '控制请求超时（秒）',
   page_seconds: '整页处理时限（秒）', text_wait_seconds: '等待译文时限（秒）',
   delivery_seconds: '结果交付时限（秒）',
@@ -38,7 +39,7 @@ export function NodeConfigFields({value, onChange, schema, pool}: {
   schema: ConfigSchema; pool?: string;
 }) {
   function fields(properties: Record<string, Property>, values: Record<string, unknown>, advanced=false) {
-    return Object.entries(properties).filter(([key]) => key in labels && (advanced ? key !== 'execution_slots' : key === 'execution_slots')).map(([key, property]) => {
+    return Object.entries(properties).filter(([key]) => key in labels && (advanced !== ['execution_slots', 'performance_weight'].includes(key))).map(([key, property]) => {
       const rule = numeric(property);
       return <label key={key}>{labels[key]}<input type="number" required
         min={rule.minimum} max={rule.maximum} step={rule.type === 'integer' ? 1 : 'any'}

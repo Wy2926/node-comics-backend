@@ -144,6 +144,7 @@ def lease_payload(db, lease):
 
 class Registration(RequestBody):
     protocol_version: Literal[3]
+    control_channel: Literal['websocket'] | None = None
     engine_version: str = Field(min_length=1, max_length=120)
     resource_id: str = Field(min_length=1, max_length=120)
     device: str = Field(min_length=1, max_length=80)
@@ -182,6 +183,9 @@ def register(body: Registration, identity=Depends(node_auth), db: Session = Depe
         'supported_font_ids': list(dict.fromkeys(body.supported_font_ids)) if body.ready else [],
         'overlay_tiles': body.ready and 'overlay-tiles-v1' in body.result_formats,
         'document_protocol': body.document_protocol if body.ready else None}
+    if body.control_channel == 'websocket':
+        # A registered GPU may still be unable to open its channel through the proxy.
+        node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0, 'dispatch_documents': 0}
     node.applied_config_version, node.config_error, node.heartbeat_at = node.config_version, None, now()
     result = {'protocol_version': 3, 'config': config_payload(node), 'server_time': stamp(now()),
               'leases': [lease_payload(db, lease) for lease in leases]}
@@ -252,14 +256,6 @@ class UpdateLease(LeaseRequest):
     translations_revision: str | None = Field(default=None, max_length=64)
 
 
-class UpdatesRequest(RequestBody):
-    revision: int = Field(default=0, ge=0, strict=True)
-    wait_seconds: float = Field(default=20, ge=0, le=20, allow_inf_nan=False)
-    config_version: int = Field(ge=1, strict=True)
-    can_claim: bool = Field(strict=True)
-    leases: list[UpdateLease] = Field(max_length=32)
-
-
 def lease_updates(db, identity, items):
     """Read fenced text/terminal changes without renewing or authorizing input."""
     replies = []
@@ -281,49 +277,6 @@ def lease_updates(db, identity, items):
         if translated and translated['revision'] != item.translations_revision:
             replies.append({'lease_id': lease.id, 'status': 'active', 'translations': translated})
     return replies
-
-
-@router.post('/nodes/{node_id}/updates')
-async def updates(node_id: str, body: UpdatesRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
-    scoped_node(db, identity, node_id)
-    await run_in_threadpool(db.close)
-    from .notifications import hub, changed
-    from .queue_models import SchedulerMutex
-    known_leases = {item.lease_id for item in body.leases}
-
-    def snapshot():
-        with session_factory()() as session:
-            node = scoped_node(session, identity, node_id)
-            config = config_payload(node) if node.config_version != body.config_version else None
-            claimable = bool(not config and has_claimable_work(
-                session, identity, ['page'], config_version=body.config_version))
-            result = {'revision': session.get(SchedulerMutex, 1).revision,
-                      'claim_ready': body.can_claim and claimable, 'leases': lease_updates(session, identity, body.leases)}
-            if config:
-                result['config'] = config
-            active_leases = set(session.scalars(select(ExecutionLease.id).join(
-                JobStage, JobStage.id == ExecutionLease.stage_id).where(
-                    ExecutionLease.node_id == identity, ExecutionLease.completed_at.is_(None), JobStage.name == 'page')))
-            return result, active_leases != known_leases, claimable
-
-    end = time.monotonic() + body.wait_seconds
-    initial_claimable = None
-    with hub().subscribe('compute') as wake:
-        while True:
-            wake.clear()
-            result, leases_changed, claimable = await run_in_threadpool(snapshot)
-            queue_changed = initial_claimable is not None and initial_claimable != claimable
-            if (leases_changed or queue_changed or result['claim_ready'] or result['leases']
-                    or 'config' in result or time.monotonic() >= end):
-                return result
-            initial_claimable = claimable
-            # A concurrent claim can add leases after this request's snapshot;
-            # finish that poll so the node can subscribe with their tokens.
-            # A real queue edge also refreshes a stale can_claim=False snapshot
-            # after local buffers free. A steady backlog never spins that poll.
-            # A global change is only a hint to reread; unrelated work must not
-            # create an immediate heartbeat/claim round trip on every node.
-            await changed(wake, end - time.monotonic())
 
 
 class HeartbeatItem(UpdateLease):

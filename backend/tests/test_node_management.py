@@ -45,7 +45,7 @@ def test_server_owns_capacity_enablement_and_versions(client):
     node, auth, admin = provision(client)
     assert register(client, auth).status_code == 200
     path = f"/v1/admin/compute-nodes/{node['node_id']}/config"
-    config = NodeConfig(execution_slots=3).model_dump(exclude_none=True)
+    config = NodeConfig(execution_slots=3, performance_weight=8).model_dump(exclude_none=True)
     update = {'name': 'new name', 'enabled': False, 'expected_version': 1, 'config': config}
     reply = client.put(path, headers=admin, json=update)
     assert reply.status_code == 200 and reply.json()['version'] == 2
@@ -54,6 +54,8 @@ def test_server_owns_capacity_enablement_and_versions(client):
     current = client.get(path, headers=admin).json()
     assert current['name'] == 'new name' and not current['enabled']
     assert current['config']['execution_slots'] == 3 and current['applied_version'] == 2
+    assert current['config']['performance_weight'] == 8
+    assert register(client, auth, performance_weight=1000).status_code == 422
     response = client.post(f"/internal/compute/v3/nodes/{node['node_id']}/claim", headers=auth,
                            json={'request_id': 'disabled', 'count': 1, 'config_version': 2})
     assert response.status_code == 200 and response.json()['leases'] == []
@@ -80,6 +82,8 @@ def test_unready_node_and_key_rotation_fence_new_admission(client):
 
 @pytest.mark.parametrize('config', [
     {'execution_slots': 0}, {'execution_slots': True}, {'execution_slots': 33},
+    {'performance_weight': 0}, {'performance_weight': True}, {'performance_weight': 1001},
+    {'performance_weight': 1.5},
     {'engine': {'languages': ['unknown']}}, {'engine': {'torch_threads': 0}},
     {'engine': {'provider_token': 'forbidden'}}, {'heartbeat_seconds': 100}, {'schema_version': 2}])
 def test_bad_configuration_rejected_before_provisioning(client, config):

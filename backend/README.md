@@ -19,4 +19,4 @@ python -m pytest -q tests
 
 节点跨仓库联调显式设置 `COMICS_COMPUTE_ROOT` 后运行 `tests/test_compute_node_v3.py`；默认跳过该项。模拟测试不调用真实身份、支付或模型。
 
-[API 契约](../contracts/README.md) · [部署](../docs/DEPLOYMENT.md) · [任务规则](../docs/TASKS.md)
+[任务执行架构](../docs/ARCHITECTURE.md) · [API 契约](../contracts/README.md) · [部署](../docs/DEPLOYMENT.md) · [任务规则](../docs/TASKS.md)

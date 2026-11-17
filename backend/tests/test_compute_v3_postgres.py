@@ -38,7 +38,7 @@ from test_compute_claims import (
     test_prepared_claim_rechecks_intervening_changes,
 )
 from test_compute_multinode import (
-    test_nodes_claim_first_come_with_independent_capacity_and_receipts,
+    test_nodes_claim_with_independent_capacity_and_receipts,
     test_three_simultaneous_nodes_fill_slots_despite_shared_candidates,
     test_idle_queue_has_one_election_and_repeated_invalidations_are_bounded,
     test_retry_preserves_missing_source_cleanup_and_releases_quota_once,
@@ -53,6 +53,16 @@ from test_compute_fastpaths import (
     test_capacity_shrink_after_preparation_does_not_trigger_reselection,
     test_exhausted_queue_does_not_run_a_second_election,
 )
+from test_compute_channel import (
+    test_parallel_replayed_offer_allocates_once,
+    test_idle_offer_pushes_new_work_without_polling_and_requires_ack,
+    test_disconnect_before_ack_replays_only_original_leases,
+    test_new_connection_fences_old_connection_without_clearing_new_offer,
+    test_expired_offer_does_not_block_even_with_live_http_heartbeat,
+    test_pending_offer_renews_capacity_without_creating_receipts,
+    test_same_offer_before_ack_replays_but_changed_content_conflicts,
+)
+from test_node_scheduling import test_weight_two_distributes_six_pages_four_to_two
 
 pytestmark = pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1',
     reason='Requires the dedicated nodecomics_concurrency_test database')

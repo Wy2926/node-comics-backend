@@ -1,4 +1,4 @@
-"""First-come multi-node claims, bounded contention recovery and identity fencing."""
+"""Multi-node claims, bounded contention recovery and identity fencing."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier, Lock
@@ -22,7 +22,7 @@ def peer(v3, resource='peer:gpu:0', *, language='en'):
     return {**v3, 'node': node, 'auth': auth, 'admin': admin, 'registration': registration}
 
 
-def test_nodes_claim_first_come_with_independent_capacity_and_receipts(v3):
+def test_nodes_claim_with_independent_capacity_and_receipts(v3):
     other = peer(v3)
     jobs = set(v3['create'](6))
     # Both nodes may use the same local request ID; each owns its own receipt.

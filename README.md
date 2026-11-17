@@ -1,6 +1,6 @@
 # Node Comics Backend
 
-FastAPI 控制服务，包含账户、额度、支付、持久翻译任务、Astro 官网和管理后台。依赖 PostgreSQL、Redis 8；图像计算通过 HTTPS 交给独立 `node-comics-compute` 节点。
+FastAPI 控制服务，包含账户、额度、支付、持久翻译任务、Astro 官网和管理后台。依赖 PostgreSQL、Redis 8；通过 WebSocket 调度独立 `node-comics-compute` 节点，输入、结果与租约心跳走 HTTPS。
 
 ## 本地运行
 
@@ -17,7 +17,7 @@ API：`http://127.0.0.1:18088`。生产部署见[部署说明](docs/DEPLOYMENT.m
 ## 开发入口
 
 - [API 与测试](backend/README.md) · [官网](backend/website/README.md) · [脚本](scripts/README.md)
-- [API 契约](contracts/README.md) · [计算协议](docs/COMPUTE_PROTOCOL.md)
+- [任务执行架构](docs/ARCHITECTURE.md) · [计算协议](docs/COMPUTE_PROTOCOL.md) · [API 契约](contracts/README.md)
 - [任务与额度](docs/TASKS.md) · [运维](docs/OPERATIONS.md) · [协作约定](AGENTS.md)
 
 可独立构建；官网站点清单来自 `contracts/extension/` 发布快照，普通构建不读取插件或计算节点源码。

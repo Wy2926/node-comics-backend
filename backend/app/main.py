@@ -16,6 +16,7 @@ from .guests import router as guest_router
 from .comic_titles import TitleExecutor, router as comic_titles_router
 from .analytics import router as analytics_router
 from .compute_v3 import router as compute_v3_router
+from .compute_channel import router as compute_channel_router
 from .documents.api import router as documents_router
 from .documents.compute import router as document_compute_router
 from .documents.admin import router as document_admin_router
@@ -74,6 +75,7 @@ app.include_router(guest_router)
 app.include_router(comic_titles_router)
 app.include_router(analytics_router)
 app.include_router(compute_v3_router)
+app.include_router(compute_channel_router)
 app.include_router(documents_router)
 app.include_router(document_compute_router)
 app.include_router(document_admin_router)

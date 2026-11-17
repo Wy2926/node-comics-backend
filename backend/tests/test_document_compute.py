@@ -288,7 +288,7 @@ def test_local_ocr_completion_replay_has_no_transfer_and_releases_before_text(do
 
 @pytest.mark.parametrize('change', [
     lambda value: value['analysis_ref'].update(key='documents/work/forbidden'),
-    lambda value: value['analysis_ref'].update(byte_size=4 * 1024 * 1024 + 1),
+    lambda value: value['analysis_ref'].update(byte_size=5 * 1024 * 1024 + 1),
     lambda value: value['text'].update(page_index=2),
     lambda value: value['text']['segments'].append(value['text']['segments'][0]),
     lambda value: value.update(no_text=True),

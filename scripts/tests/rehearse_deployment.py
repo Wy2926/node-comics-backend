@@ -162,6 +162,7 @@ def main():
 error_log /dev/stderr notice;
 events { worker_connections 1024; }
 http {
+    map $http_upgrade $comics_connection_upgrade { default upgrade; '' ''; }
     include /usr/local/openresty/nginx/conf/mime.types;
     access_log off;
     upstream comics_api { include /www/node-comics/active/api.inc; keepalive 32; }

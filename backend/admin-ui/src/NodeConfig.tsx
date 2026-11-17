@@ -27,7 +27,7 @@ export function NodeConfigDialog({node, onClose, onSaved}: {node: Node | 'new'; 
       node === 'new' ? Promise.resolve(null) : request<Configuration>(`/v1/admin/compute-nodes/${node.id}/config`, {signal: controller.signal})]).then(([metadata, value]) => {
       setSchema(metadata);
       if (value) {setName(value.name); setEnabled(value.enabled); setVersion(value.version);}
-      setConfig(JSON.stringify(value?.config || metadata.defaults, null, 2)); setEditor('form'); setSaved(false);
+      setConfig(JSON.stringify(pool ? value?.config : {...metadata.defaults, ...value?.config}, null, 2)); setEditor('form'); setSaved(false);
     }).catch(e => {if (e.name !== 'AbortError') setError(errorText(e));})
       .finally(() => {if (!controller.signal.aborted) setBusy(false);});
     return () => controller.abort();
@@ -73,7 +73,7 @@ export function NodeConfigDialog({node, onClose, onSaved}: {node: Node | 'new'; 
           {editor === 'text' ? <label>服务端运行配置<textarea required rows={16} spellCheck={false} value={config} onChange={e => {setConfig(e.target.value); setSaved(false);}}/></label> :
             schema && <NodeConfigFields value={JSON.parse(config)} schema={schema} pool={pool}
               onChange={value => {setConfig(JSON.stringify(value, null, 2)); setSaved(false);}}/>}
-          <p className="muted">{pool ? '保存后影响下一次任务领取；缩容或停用会等待已有阶段完成。所有控制工作进程共享此容量，重启保留设置。' : '执行位由单图与文件阶段共享，单图等待译文与交付也占位。文件保守并发开启时，闲时 OCR／译图可借空位；缩容或关闭只限制新领取，已领阶段自然完成。线程、设备和缓存由节点本地配置。'}</p>
+          <p className="muted">{pool ? '保存后影响下一次任务领取；缩容或停用会等待已有阶段完成。所有控制工作进程共享此容量，重启保留设置。' : '处理能力权重由服务端预设，按在途负载加权分发单图与新文件，默认 1；执行位仍是并发上限。执行位由单图与文件阶段共享，单图等待译文与交付也占位。文件保守并发开启时，闲时 OCR／译图可借空位；缩容或关闭只限制新领取，已领阶段自然完成。线程、设备和缓存由节点本地配置。'}</p>
           {saved && <p className="success" role="status">已保存版本 {version}，后续领取按新配置执行。</p>}
           <div className="node-actions"><Button className="primary" disabled={busy || !schema || (node !== 'new' && !version)}>{busy ? '正在处理…' : node === 'new' ? '创建节点并生成密钥' : '保存配置'}</Button>
             {node !== 'new' && !pool && <Button type="button" className="secondary" disabled={busy} onClick={rotate}>轮换密钥（旧密钥立即失效）</Button>}</div>
