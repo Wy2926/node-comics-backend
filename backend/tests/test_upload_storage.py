@@ -65,7 +65,7 @@ def test_upload_identity_has_private_path(storage_db, png):
 
 
 def test_completed_upload_receipt_survives_file_cleanup(storage_db, png):
-    from app.assets import asset_storage_key, inspect_image
+    from app.assets import asset_storage_key, cleanup_inputs, inspect_image
     from app.storage import get_store
     from app.db import session_factory
     from app.uploads import accept_verified_upload, complete_upload
@@ -78,6 +78,10 @@ def test_completed_upload_receipt_survives_file_cleanup(storage_db, png):
         source = accept_verified_upload(db, receipt, b'', inspect_image(png))
         db.commit()
         finish_job(db, job, 'no_text')
+        job.completed_at -= timedelta(hours=25)
         db.commit()
+        cleanup_inputs([source.id])
+        db.refresh(source)
+        assert source.purged_at and not source.deleted_at
         assert not get_store().exists(source.storage_key)
         assert complete_upload(db, receipt, user).sha256 == hashlib.sha256(png).hexdigest()
