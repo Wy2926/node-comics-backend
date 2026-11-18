@@ -211,6 +211,22 @@ def test_document_membership_does_not_unlock_higher_tier_models(document_case):
     assert not case.store.created
 
 
+def test_model_catalogs_order_by_quota_multiplier(document_case):
+    from app.translation_models import TranslationProvider
+    case = document_case
+    with session_factory()() as db:
+        cheaper = configure_text_provider(db, document={'enabled': True})
+        same_rate = configure_text_provider(db, document={'enabled': True})
+        cheaper.quota_multiplier = same_rate.quota_multiplier = 0.25
+        db.get(TranslationProvider, case.provider).quota_multiplier = 2.5
+        db.commit()
+    expected = [(cheaper.id, 0.25), (same_rate.id, 0.25), (case.provider, 2.5)]
+    for path, field in [('/v1/capabilities', 'translation_models'), ('/v1/documents/capabilities', 'models')]:
+        response = case.client.get(path, headers=case.auth)
+        assert response.status_code == 200, response.text
+        assert [(model['id'], model['quota_multiplier']) for model in response.json()[field]] == expected
+
+
 @pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
 def test_document_catalog_and_explicit_intent_read_pack_right_once_without_pricing_pages(document_case):
     from sqlalchemy import event

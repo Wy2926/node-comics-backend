@@ -96,7 +96,7 @@ def model_catalog(db, user):
     # Public reads neither load upstream configurations/credentials nor probe models.
     rows = db.execute(_provider_query().with_only_columns(
         TranslationProvider.id, TranslationProvider.name, TranslationProvider.text_plan_ids, TranslationProvider.quota_multiplier)
-        .order_by(TranslationProvider.created_at, TranslationProvider.id)).all()
+        .order_by(TranslationProvider.quota_multiplier, TranslationProvider.created_at, TranslationProvider.id)).all()
     access = ModelAccess(db, user) if rows and settings().classic_enabled else None
     models = [{'id': row.id, 'name': row.name,
              'quota_multiplier': float(row.quota_multiplier),

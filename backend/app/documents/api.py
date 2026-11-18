@@ -143,7 +143,7 @@ def document_json(db, job, document, *, context=None):
 
 
 def _document_models(db, access, model_id=None):
-    query = _provider_query()
+    query = _provider_query().order_by(TranslationProvider.quota_multiplier, TranslationProvider.created_at, TranslationProvider.id)
     if model_id:
         query = query.where(TranslationProvider.id == model_id)
     rows = list(db.execute(query))

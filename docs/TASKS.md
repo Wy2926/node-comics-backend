@@ -27,7 +27,7 @@
 - 模型 `quota_multiplier` 独立于套餐权限、分流权重、供应商 token 单价，默认 1，范围 0.0001–10000，最多 4 位小数。计费额度 = 计费页数 × 任务创建时冻结的倍率；调价不改变在途任务或缓存身份。免费模型优先免费额度，再使用匹配的付费额度；付费模型不能扣免费额度。游客仍按体验次数限流，不扣账户额度；无限权益仍不扣有限额度。
 - 余额、预占、结算与账本使用四位定点小数，API 返回 JSON number；赠送及周期补偿可发放小数额度。每页从一个可支付完整该页费用的桶扣取，跳过不足一页的余额；整本文档按页跨桶分配，全额预占成功后开始处理，仅结算成功且可计费页，其余按冻结倍率释放。
 - 单图与整本都按原权益版本的服务档位匹配模型，也可指定仅售页数包的产品 ID；与会员档位重名时只认服务档位。显式选模不替换；自动选模沿用可用的原加权结果，否则从可支付的模型中选择。整本模型有权限但余额不足时，仍可预检后等待补额。
-- `/v1/capabilities` 的 `translation_models`、`/v1/documents/capabilities` 的 `models` 返回 `quota_multiplier`、`requires_paid`。单图回执返回冻结的 `quota_multiplier`、`quota_pages`、`quota_kind`、`settlement`；文件回执返回冻结倍率及额度单位的 `quota`，`page_count` 始终是物理页数。旧 `*_pages` 额度字段允许小数，前端不要取整。
+- `/v1/capabilities` 的 `translation_models`、`/v1/documents/capabilities` 的 `models` 返回 `quota_multiplier`、`requires_paid`，按倍率升序，同倍率按创建时间、ID 升序。单图回执返回冻结的 `quota_multiplier`、`quota_pages`、`quota_kind`、`settlement`；文件回执返回冻结倍率及额度单位的 `quota`，`page_count` 始终是物理页数。旧 `*_pages` 额度字段允许小数，前端不要取整。
 - 套餐、期限会员、赠送与额度包使用持久账本；月度发放保持原账期锚点。
 - 结账请求键和 webhook 事件幂等，校验签名与支付环境；返回页不发权益。
 - 回执丢失恢复原订单，不能自动创建第二笔付款；身份、任务、访问与权益按用户隔离。
