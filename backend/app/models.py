@@ -194,8 +194,12 @@ class TextCall(Base):
     accounted_micros: Mapped[int] = mapped_column(BigInteger)
     cost_state: Mapped[str] = mapped_column(String(24), default="unknown")
     error_code: Mapped[str | None] = mapped_column(String(60))
+    # A JSON string also preserves NUL and unpaired surrogates in malformed output.
+    failed_output: Mapped[str | None] = mapped_column(JSON(none_as_null=True), deferred=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     __table_args__ = (UniqueConstraint("job_id", "group_index", "sequence"), CheckConstraint("accounted_micros >= 0"),
                      Index("ix_text_calls_started_at", "started_at"),
-                     Index("ix_text_calls_provider_started", "provider_id", "started_at"))
+                     Index("ix_text_calls_provider_started", "provider_id", "started_at"),
+                     Index("ix_text_calls_failed_output", "completed_at", "id",
+                           postgresql_where=text("failed_output IS NOT NULL"), sqlite_where=text("failed_output IS NOT NULL")))

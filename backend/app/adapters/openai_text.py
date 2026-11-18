@@ -103,24 +103,34 @@ def call_messages(messages: list[Message], profile: dict, api_key: str, *,
         data = json.loads(raw)
         usage = safe_usage(data.get("usage"))
         request_id = request_id or (data.get("id", "")[:200] if isinstance(data.get("id"), str) else None)
+        content = None
         try:
             if chat:
                 choice = data["choices"][0]
-                if choice['message'].get('refusal') or choice.get('finish_reason') == 'content_filter':
-                    raise TextError('TEXT_REFUSED', '文本服务拒绝生成内容', usage=usage, request_id=request_id)
-                content = choice["message"]["content"]
+                message = choice['message']
+                content = message.get('content')
+                refusal = message.get('refusal')
+                if refusal or choice.get('finish_reason') == 'content_filter':
+                    raise TextError('TEXT_REFUSED', '文本服务拒绝生成内容', usage=usage, request_id=request_id,
+                                    failed_output=content or refusal)
                 complete = choice.get("finish_reason") == "stop"
             else:
                 parts = [part for item in data.get('output', []) if item.get('type') == 'message'
                          for part in item.get('content', [])]
+                texts = [part.get('text') for part in parts if part.get('type') == 'output_text']
+                strings = [value for value in texts if isinstance(value, str)]
+                content = ''.join(strings) if strings else None
                 if any(part.get('type') == 'refusal' for part in parts):
-                    raise TextError('TEXT_REFUSED', '文本服务拒绝生成内容', usage=usage, request_id=request_id)
-                content = ''.join(part['text'] for part in parts if part.get('type') == 'output_text')
-                complete = data.get("status") == "completed"
+                    refusal = ''.join(part['refusal'] for part in parts
+                                      if part.get('type') == 'refusal' and isinstance(part.get('refusal'), str))
+                    raise TextError('TEXT_REFUSED', '文本服务拒绝生成内容', usage=usage, request_id=request_id,
+                                    failed_output=content or refusal or None)
+                complete = data.get("status") == "completed" and len(strings) == len(texts)
             if not complete or not isinstance(content, str):
                 raise ValueError()
         except (ValueError, KeyError, IndexError, TypeError):
-            raise TextError("TEXT_INCOMPLETE", "文本响应被截断或没有完整内容", retryable=True, usage=usage, request_id=request_id) from None
+            raise TextError("TEXT_INCOMPLETE", "文本响应被截断或没有完整内容", retryable=True,
+                            usage=usage, request_id=request_id, failed_output=content) from None
         return TextResponse(content, usage, request_id)
     except TextError:
         raise

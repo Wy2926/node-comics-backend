@@ -90,6 +90,32 @@ def test_expired_image_details_follow_registered_and_guest_policy(client):
         assert db.get(ClassicState, young).translations
 
 
+def test_failed_outputs_expire_by_job_without_loading_or_deleting_receipts(client):
+    from sqlalchemy import inspect
+    with session_factory()() as db:
+        day = now()
+        recent, *_ = seed(db, days=6)
+        expired, *_ = seed(db, days=8)
+        guest, *_ = seed(db, days=2, guest=True)
+        active, *_ = seed(db, days=10, status='running')
+        unknown, *_ = seed(db, days=10, unknown_call=True)
+        for call in db.scalars(select(TextCall)):
+            call.error_code, call.failed_output = 'TEXT_INVALID_RESPONSE', 'private invalid result'
+        db.add(TextCall(job_id=expired, attempt_id=db.get(Job, expired).attempt_id, group_index=0,
+            sequence=1, provider_id='fixture', model='fixture', reserved_micros=100, accounted_micros=80,
+            error_code='TEXT_INCOMPLETE', failed_output='half a reply', cost_state='estimated', completed_at=day))
+        db.commit()
+        assert cleanup_execution_data(db, at=day, batch=2)['failed_outputs'] == 2
+        assert cleanup_execution_data(db, at=day, batch=2)['failed_outputs'] == 1
+        assert cleanup_execution_data(db, at=day)['failed_outputs'] == 0
+        db.expire_all()
+        calls = db.scalars(select(TextCall)).all()
+        assert len(calls) == 6 and all('failed_output' in inspect(call).unloaded for call in calls)
+        for call in calls:
+            assert call.failed_output == ('private invalid result' if call.job_id in (recent, active, unknown) else None)
+            assert call.job_id in (recent, expired, guest, active, unknown) and call.accounted_micros == 80
+
+
 def test_running_unsettled_and_unknown_calls_keep_their_checkpoints(client):
     with session_factory()() as db:
         jobs = [seed(db, days=150, status=status)[0] for status in ('running', 'outcome_unknown', 'unknown_released')]
@@ -175,7 +201,8 @@ def test_document_text_expires_without_changing_page_accounting_or_result(client
         db.get(Job, job).config = {'text': {'provider_id': 'fixture', 'prompt': 'private'},
             'document': {'model_name': 'fixture model'}}
         db.get(Job, job).entitlement = {'document_unlimited_gift': {'used': 1, 'reserved': 0, 'released': 0}}
-        db.scalar(select(TextCall).where(TextCall.job_id == job)).cost_state = 'confirmed'
+        call = db.scalar(select(TextCall).where(TextCall.job_id == job))
+        call.cost_state, call.failed_output = 'confirmed', 'private partial reply'
         db.get(ExecutionLease, lease).limits = {'document_protocol': 2, 'workspace_generation': 1}
         db.add(Document(job_id=job, filename='fixture.zip', source_type='zip', source_key=job,
             source_size=100, source_sha256='a' * 64, expires_at=now() - timedelta(days=1),
@@ -185,8 +212,10 @@ def test_document_text_expires_without_changing_page_accounting_or_result(client
         db.add(DocumentPage(job_id=job, page_index=1, source_name='page.png',
             text_ref={'segments': [{'source': 'private'}]}, translations_ref={'0': 'translated'},
             status='succeeded', billable=True))
-        assert cleanup_execution_data(db)['document_text'] == 1
+        counts = cleanup_execution_data(db)
+        assert counts['document_text'] == counts['failed_outputs'] == 1
         db.commit()
+        assert db.scalar(select(TextCall.failed_output).where(TextCall.id == call.id)) is None
         document, page = db.get(Document, job), db.get(DocumentPage, (job, 1))
         assert document.text_input_payload is None and document.text_output_payload is None
         assert page.text_ref is None and page.translations_ref is None

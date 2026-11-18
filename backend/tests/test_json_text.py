@@ -5,6 +5,8 @@ import pytest
 from app.adapters.llm import TextError
 from app.adapters.text import input_bound, messages, output_token_limit, parse_translations, response_schema
 
+TWO_SEGMENTS = [{'id': 'a', 'source': 'One'}, {'id': 'b', 'source': 'Two'}]
+
 
 @pytest.mark.parametrize('value', [
     '你好！', 'Hello, world!', '彼は「はい」と言った', 'line one\nline two',
@@ -52,21 +54,21 @@ def test_json_strings_round_trip_without_injecting_segments(value):
 ])
 def test_invalid_json_enters_bounded_retry_without_format_fallback(raw):
     with pytest.raises(TextError) as exc:
-        parse_translations(raw, [{'id': 'a'}, {'id': 'b'}])
+        parse_translations(raw, TWO_SEGMENTS)
     assert exc.value.code == 'TEXT_INVALID_RESPONSE' and exc.value.retryable
     assert 'JSON' in exc.value.message
 
 
 def test_reordered_keys_and_json_whitespace_preserve_ids():
     raw = ' \r\n{\r\n  "b": "second", "a": "first"\r\n}\t'
-    assert parse_translations(raw, [{'id': 'a'}, {'id': 'b'}]) == {'a': 'first', 'b': 'second'}
+    assert parse_translations(raw, TWO_SEGMENTS) == {'a': 'first', 'b': 'second'}
 
 
 @pytest.mark.parametrize('empty', ['', ' \n\t ', '\u3000\u00a0'])
 def test_empty_translation_preserves_its_id_and_other_translations(empty):
     raw = json.dumps({'a': empty, 'b': '  translated  '})
-    assert parse_translations(raw, [{'id': 'a'}, {'id': 'b'}]) == {'a': '', 'b': 'translated'}
-    assert parse_translations(json.dumps({'a': empty}), [{'id': 'a'}]) == {'a': ''}
+    assert parse_translations(raw, TWO_SEGMENTS) == {'a': '', 'b': 'translated'}
+    assert parse_translations(json.dumps({'a': empty}), TWO_SEGMENTS[:1]) == {'a': ''}
 
 
 @pytest.mark.parametrize('empty', ['', ' \n\t ', '\u3000\u00a0'])
@@ -81,7 +83,7 @@ def test_all_empty_multi_segment_response_enters_bounded_retry(empty, count):
 
 def test_standard_json_escapes_are_accepted():
     raw = r'{"0":"slash \/ quote \" backslash \\ newline \n tab \t return \r backspace \b formfeed \f unicode \u4f60\u597d emoji \ud83d\ude00"}'
-    assert parse_translations(raw, [{'id': '0'}]) == {
+    assert parse_translations(raw, [{'id': '0', 'source': 'Escaped dialogue'}]) == {
         '0': 'slash / quote " backslash \\ newline \n tab \t return \r backspace \b formfeed \f unicode 你好 emoji 😀'}
 
 
@@ -96,16 +98,16 @@ def test_empty_group_and_text_length_boundary():
     for size in (2000, 2001):
         raw = json.dumps({'a': '好' * size}, ensure_ascii=False)
         if size == 2000:
-            assert parse_translations(raw, [{'id': 'a'}]) == {'a': '好' * size}
+            assert parse_translations(raw, TWO_SEGMENTS[:1]) == {'a': '好' * size}
         else:
             with pytest.raises(TextError):
-                parse_translations(raw, [{'id': 'a'}])
+                parse_translations(raw, TWO_SEGMENTS[:1])
 
 
 def test_source_payload_omits_image_geometry_and_bounds_actual_json():
     segments = [{'id': 'a', 'source': 'Hello, "friend"!\n你好', 'bbox': [1, 2, 3, 4]}]
     result = messages(segments, 'en')
-    assert result[0]['content'].startswith('Translate every input text into English.\n')
+    assert result[0]['content'].startswith('Translate the comic text into English.\n')
     assert json.loads(result[1]['content']) == {'a': segments[0]['source']}
     bound = input_bound(segments, 'en')
     assert bound >= len(json.dumps({'messages': result, 'response_format': {

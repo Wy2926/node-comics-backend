@@ -34,6 +34,8 @@ API 镜像不含页面。官网和后台由 Nginx 提供，参考 [代理模板]
 3. 旧代理连接退出后，用 `scripts/retire_release.py api` 排空旧实例。节点通道每 300 秒重连到新槽位；保留节点状态目录以重放未决领取请求。
 4. 静态产物用 `scripts/prepare_static_release.py` 准备，再用 `switch_release.py static` 激活。
 
+翻译提示词版本升级时，先排空旧 control-worker、document-worker 并切换至新版，再由 API 受理新版本任务。整本已付费响应按原请求消息的摘要恢复。
+
 各命令参数见 `--help`。切换后探测失败不自动回退；确认实际代理状态再处理。保留仍被页面引用的哈希资源。
 
 文件翻译还需私有 R2、上传 CORS、document-worker 和具备文件能力的持久节点；按[任务规则](TASKS.md)完成配置后启用。匿名体验需真实 Turnstile、稳定 HMAC 密钥和正确的可信代理/IP 配置。

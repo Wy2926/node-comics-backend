@@ -237,8 +237,11 @@ def test_upgrade_drops_transient_tables_without_rewriting_durable_calls(isolated
                 job_id='migration-job', attempt_id='migration-attempt', provider_id='isolated-provider',
                 model='isolated', group_index=0, sequence=index + 1, cost_state='unknown',
                 reserved_micros=0, accounted_micros=0, error_code=error, started_at=started))
-        before = connection.execute(text('SELECT * FROM text_calls ORDER BY id')).all()
+        receipts = old.tables['text_calls']
+        query = receipts.select().order_by(receipts.c.id)
+        before = connection.execute(query).all()
         command.upgrade(config, 'head')
-        assert connection.execute(text('SELECT * FROM text_calls ORDER BY id')).all() == before
+        assert connection.execute(query).all() == before
+        assert connection.scalar(text('SELECT count(*) FROM text_calls WHERE failed_output IS NOT NULL')) == 0
         assert 'translation_provider_requests' not in inspect(connection).get_table_names()
         assert window_count('provider') == 0

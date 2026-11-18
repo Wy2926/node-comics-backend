@@ -181,7 +181,7 @@ def run_smoke(profile, key, *, case='small', limit_overrides=None, diagnose_reje
         raise ValueError('Invalid independent document limits') from None
     source, language, sentinels, long_id = sample(case)
     prompt = messages(source, language)
-    expected = {row['id'] for page in source for row in page['segments']}
+    expected = {row['id']: row['source'] for page in source for row in page['segments']}
     bound, requests, started = input_bound(prompt), [], time.monotonic()
     report = {'ok': False, 'case': case, 'prompt_version': document_text.PROMPT_VERSION,
         'model': connection['model'], 'protocol': connection['protocol'],

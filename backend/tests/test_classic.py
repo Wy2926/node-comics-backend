@@ -117,8 +117,8 @@ def test_partial_checkpoint_retranslates_whole_page_with_original_ids(text_case,
         state.translations = {'0': ''}
         db.commit()
     called = []
-    def model(batch, language, profile, prompt, language_names):
-        assert language_names is False
+    def model(batch, language, profile, prompt, version):
+        assert version == 'comic-json-v8'
         ids = [segment['id'] for segment in batch]
         called.append(ids)
         assert list(json.loads(messages(batch, language)[1]['content'])) == ids

@@ -22,9 +22,10 @@ class LLMConfig(BaseModel):
 
 
 class TextError(ProcessingError):
-    def __init__(self, code, message, *, retryable=False, retry_after=0, **kwargs):
+    def __init__(self, code, message, *, retryable=False, retry_after=0, failed_output=None, **kwargs):
         super().__init__(code, message, **kwargs)
         self.retryable, self.retry_after = retryable, retry_after
+        self.failed_output = failed_output if isinstance(failed_output, str) else None
 
 
 @dataclass

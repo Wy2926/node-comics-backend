@@ -29,6 +29,17 @@ def image_details_due(at, days):
         and_(Job.quota_kind != 'guest_trial', Job.completed_at <= at - timedelta(days=days)))
 
 
+def purge_failed_outputs(db, at, limits, batch):
+    from .documents.models import Document
+    due = or_(and_(Job.workflow_kind == 'image', image_details_due(at, limits.image_result_retention_days)),
+              select(Document.job_id).where(Document.job_id == Job.id, Document.expires_at <= at).exists())
+    calls = (select(TextCall.id).join(Job, Job.id == TextCall.job_id)
+             .where(TextCall.failed_output.is_not(None), due, resolved_job())
+             .order_by(TextCall.completed_at, TextCall.id).limit(batch))
+    return db.execute(update(TextCall).where(TextCall.id.in_(calls)).values(failed_output=null())
+                      .execution_options(synchronize_session=False)).rowcount
+
+
 def compact_checkpoints(db, at, limits, batch):
     base = select(ClassicState).join(Job, Job.id == ClassicState.job_id).where(
         Job.workflow_kind == 'image', resolved_job())
@@ -126,6 +137,7 @@ def cleanup_execution_data(db, *, at=None, batch=20, claim_batch=1000):
     at = at or now()
     limits = get_request_limits(db)
     counts = compact_checkpoints(db, at, limits, batch)
+    counts['failed_outputs'] = purge_failed_outputs(db, at, limits, batch)
     counts['claims'] = delete_claims(db, at, limits, claim_batch)
     counts['document_text'] = purge_document_text(db, at, batch)
     counts['history'] = compact_history(db, at, limits, batch)

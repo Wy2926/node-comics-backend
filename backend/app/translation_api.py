@@ -20,7 +20,7 @@ from .languages import Language
 from .models import Asset, Attempt, ClassicState, Job, TextCall, User, now
 from .queue_models import ExecutionLease
 from .providers import digest
-from .request_models import RequestBody
+from .request_models import RequestBody, TranslationBody
 from .scheduler import lock_scheduler, touch_job
 from .schemas import TranslationHistoryResponse, TranslationResponse, TranslationsResponse
 from .translation_limits import acquire_control, release_control
@@ -41,7 +41,7 @@ class ImageDescriptor(RequestBody):
     normalization_version: Literal[1] = 1
 
 
-class TranslationInput(RequestBody):
+class TranslationInput(TranslationBody):
     image: ImageDescriptor | None = None
     mode: Literal['classic'] | None = None
     target_language: Language | None = None

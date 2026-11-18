@@ -55,13 +55,14 @@ def test_call_tokens_keep_retries_zero_and_missing_usage_distinct(monitor):
     client, auth, _ = monitor
     with session_factory()() as db:
         original = db.scalar(select(TextCall).where(TextCall.job_id == DONE_ID))
-        # Only normalized counts may leave the API, not arbitrary upstream fields.
+        # Only normalized counts may leave the API, not private upstream output.
         original.usage = {**original.usage, 'private': 'SHOULD_NOT_LEAK'}
         for sequence, usage in [(2, {'input_tokens': 100, 'output_tokens': 0}), (3, None)]:
             db.add(TextCall(job_id=DONE_ID, attempt_id=original.attempt_id, group_index=0, sequence=sequence,
                 provider_id=original.provider_id, model=original.model, usage=usage,
                 reserved_micros=6000, accounted_micros=6000, cost_state='unknown' if usage is None else 'estimated',
                 error_code='TEXT_TIMEOUT' if usage is None else 'TEXT_REFUSED',
+                failed_output=None if usage is None else 'PRIVATE_FAILED_OUTPUT',
                 started_at=original.started_at + timedelta(seconds=sequence)))
         db.commit()
     response = client.get('/v1/admin/monitor/tasks/' + DONE_ID, headers=auth)
@@ -70,7 +71,8 @@ def test_call_tokens_keep_retries_zero_and_missing_usage_distinct(monitor):
     assert [(c['sequence'], c['input_tokens'], c['output_tokens']) for c in data['text_calls']] == [
         (1, 512, 128), (2, 100, 0), (3, None, None)]
     assert data['text_cost_micros'] == 14000
-    assert 'SHOULD_NOT_LEAK' not in response.text
+    assert 'SHOULD_NOT_LEAK' not in response.text and 'PRIVATE_FAILED_OUTPUT' not in response.text
+    assert 'PRIVATE_FAILED_OUTPUT' not in client.get('/v1/admin/jobs', headers=auth).text
 
 
 def test_attempts_timeline_is_admin_only_paginated_and_metadata_only(monitor):

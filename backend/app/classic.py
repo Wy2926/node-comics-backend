@@ -6,12 +6,13 @@ import json
 import math
 from sqlalchemy import func, or_, select
 from .adapters.llm import TextError
-from .adapters.text import LANGUAGE_CODE_VERSIONS, LEGACY_SYSTEM, call_text, input_bound, output_token_limit, parse_translations
+from .adapters.text import LEGACY_SYSTEM, RETRY_HINTS, call_text, input_bound, output_token_limit, parse_translations
 from .assets import available
 from .db import session_factory
 from .errors import ProcessingError, node_error
 from .image_metadata import image_metadata
 from .models import Asset, ClassicState, Job, TextCall, now, uid
+from .translation_prompts import LEGACY_VERSIONS
 from .translation_provider_limits import reserve_request, release_unstarted_request
 
 MAX_CHECKPOINT_BYTES = 5 * 1024 * 1024
@@ -117,14 +118,17 @@ def reserve_call(job_id, lease_id, segments, language):
             if pending.execution_lease_id == lease_id and not pending.completed_at:
                 raise TextError('TEXT_CALL_IN_FLIGHT', '当前页面已经在执行文本调用')
             raise TextError('TEXT_OUTCOME_UNKNOWN', '已有文本调用结果待核实，不会重复发送', unknown=True)
-        count, sequence = db.execute(select(
-            func.count().filter(or_(TextCall.error_code.is_(None), TextCall.error_code != 'TEXT_PROVIDER_DISABLED')),
-            func.coalesce(func.max(TextCall.sequence), 0)).where(TextCall.job_id == job_id, TextCall.group_index == PAGE_CALL_INDEX)).one()
+        count, sequence, previous_error = db.execute(select(
+            func.count().filter(or_(TextCall.error_code.is_(None), TextCall.error_code != 'TEXT_PROVIDER_DISABLED')).over(),
+            TextCall.sequence, TextCall.error_code).where(TextCall.job_id == job_id, TextCall.group_index == PAGE_CALL_INDEX)
+            .order_by(TextCall.sequence.desc()).limit(1)).one_or_none() or (0, 0, None)
         if count >= profile['max_attempts']:
             raise TextError('TEXT_RETRY_EXHAUSTED', '此页已达到自动调用次数上限')
         prompt = job.config.get('text_prompt', LEGACY_SYSTEM)
-        language_names = job.config.get('prompt_version', 'comic-json-v9') not in LANGUAGE_CODE_VERSIONS
-        reserved = _cost_micros(profile, input_bound(segments, language, prompt, language_names),
+        version = job.config.get('prompt_version', 'comic-json-v9')
+        if version not in LEGACY_VERSIONS and (hint := RETRY_HINTS.get(previous_error)):
+            prompt += '\n' + hint.format(count=len(segments))
+        reserved = _cost_micros(profile, input_bound(segments, language, prompt, version),
                                output_token_limit(segments, profile['max_output_tokens']))
         call = TextCall(id=uid(), job_id=job_id, attempt_id=job.attempt_id, execution_lease_id=lease_id,
                         group_index=PAGE_CALL_INDEX, sequence=sequence + 1,
@@ -132,7 +136,7 @@ def reserve_call(job_id, lease_id, segments, language):
         reserve_request(provider, call.id, priority=job.service_priority)
         db.add(call)
         db.commit()  # Intent and full unknown-cost reservation must exist before any request.
-        return call.id, profile, count + 1, prompt, language_names
+        return call.id, profile, count + 1, prompt, version
 
 
 def complete_call(call_id, lease_id, response=None, error=None, translations=None):
@@ -145,6 +149,8 @@ def complete_call(call_id, lease_id, response=None, error=None, translations=Non
         usage = response.usage if response else getattr(error, 'usage', None)
         call.request_id = response.request_id if response else getattr(error, 'request_id', None)
         call.error_code = 'TEXT_OUTCOME_UNKNOWN' if getattr(error, 'unknown', False) else getattr(error, 'code', None)
+        if error is not None:
+            call.failed_output = response.content if response is not None else error.failed_output
         release_unstarted_request(call.provider_id, call_id, error)
         call.completed_at = now()
         job = db.scalar(select(Job).where(Job.id == call.job_id).with_for_update(key_share=True))
@@ -168,7 +174,7 @@ def complete_call(call_id, lease_id, response=None, error=None, translations=Non
 
 def translate_page(job_id, lease_id, segments, language):
     try:
-        call_id, profile, sequence, prompt, language_names = reserve_call(job_id, lease_id, segments, language)
+        call_id, profile, sequence, prompt, version = reserve_call(job_id, lease_id, segments, language)
     except TextError as error:
         if error.code == 'TEXT_RATE_LIMITED':
             with session_factory()() as db:
@@ -178,8 +184,8 @@ def translate_page(job_id, lease_id, segments, language):
         raise
     response = None
     try:
-        response = call_text(segments, language, profile, prompt, language_names)
-        translations = parse_translations(response.content, segments)
+        response = call_text(segments, language, profile, prompt, version)
+        translations = parse_translations(response.content, segments, version)
         complete_call(call_id, lease_id, response=response, translations=translations)
     except TextError as error:
         complete_call(call_id, lease_id, response=response, error=error)
@@ -202,7 +208,7 @@ def translate_page(job_id, lease_id, segments, language):
         # The scheduler persists the retry deadline and releases this slot.
         raise
     except Exception:
-        complete_call(call_id, lease_id, error=TextError('TEXT_CALL_INTERRUPTED', '文本调用中断，保守保留成本预占'))
+        complete_call(call_id, lease_id, response=response, error=TextError('TEXT_CALL_INTERRUPTED', '文本调用中断，保守保留成本预占'))
         raise
 
 

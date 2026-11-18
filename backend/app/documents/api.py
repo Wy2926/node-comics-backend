@@ -20,7 +20,7 @@ from ..languages import LANGUAGES, Language
 from ..models import Job, User, now, uid
 from ..providers import digest
 from ..queue_models import JobStage
-from ..request_models import RequestBody
+from ..request_models import RequestBody, TranslationBody
 from ..scheduler import lock_scheduler, touch_job
 from ..translation_limits import acquire_control, release_control
 from ..translation_models import TranslationProvider
@@ -37,7 +37,7 @@ OPERATION = 'document:translate'
 TERMINAL = {'succeeded', 'failed', 'cancelled'}
 
 
-class DocumentInput(RequestBody):
+class DocumentInput(TranslationBody):
     filename: str = Field(min_length=1, max_length=240, strict=True)
     source_type: Literal['zip', 'pdf']
     byte_size: int = Field(ge=1, le=MAX_SOURCE_BYTES, strict=True)
