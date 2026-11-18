@@ -141,6 +141,32 @@ def test_admission_skips_small_bucket_and_preserves_scope(admin_case):
     assert not choice['available'] and choice['unavailable_reason'] == 'quota_exhausted'
 
 
+def test_automatic_fallback_uses_a_payable_pack_but_never_rebills_an_owned_image(admin_case):
+    client, _ = admin_case
+    auth = login(client)
+    owner = client.get('/v1/me', headers=auth).json()['user']['id']
+    with session_factory()() as db:
+        first = seed_purchase(db, owner, pages=3, service='lite', end=now() + timedelta(days=1))
+        second = seed_purchase(db, owner, pages=1, service='plus')
+        db.commit()
+    costly = priced(admin_case, 2, ['lite'])
+    cheap = priced(admin_case, .5, ['plus'])
+    page = descriptor(b'owned')
+    original = job(client, auth, submit(client, auth, page))
+    assert original.config['text']['provider_id'] == costly['id']
+    models = client.get('/v1/capabilities', headers=auth).json()['translation_models']
+    assert {item['id']: item['unavailable_reason'] for item in models} == {costly['id']: 'quota_exhausted', cheap['id']: None}
+    assert job(client, auth, submit(client, auth, page, key='reuse')).id == original.id
+    new_page = descriptor(b'new')
+    denied = submit(client, auth, new_page, key='explicit', model_id=costly['id'])
+    assert denied.status_code == 403 and denied.json()['error']['code'] == 'DAILY_QUOTA_EXHAUSTED'
+    fallback = job(client, auth, submit(client, auth, new_page, key='automatic'))
+    assert fallback.config['text']['provider_id'] == cheap['id'] and fallback.quota_period_id == second.id
+    with session_factory()() as db:
+        assert db.get(QuotaPeriod, first.id).reserved == 2
+        assert db.get(QuotaPeriod, second.id).reserved == Decimal('.5')
+
+
 def test_fractional_last_balance_is_atomic(admin_case):
     client, _ = admin_case
     provider = priced(admin_case, .75)

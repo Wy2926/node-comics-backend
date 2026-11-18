@@ -4,10 +4,12 @@ from .assets import available, descriptor_available
 from .translation_requests import TranslationRequest
 from .errors import problem
 from .models import Asset, Job, now, uid
-from .entitlements import admission_policy, locked_user, require_entitlement, reserve, settle
-from .providers import configuration, digest
+from .entitlements import locked_user, require_entitlement, reserve, settle
+from .notifications import publish
+from .providers import digest
 from .scheduler import ACTIVE, ensure_stages, lock_scheduler, touch_job
 from .translation_fonts import resolve_font
+from .translation_selection import image_models
 from .result_retention import result_expired
 from .system_settings import get_request_limits
 
@@ -84,14 +86,15 @@ def content_key(asset, mode, language, config):
     return digest({"hash": sha, "mode": mode, "language": language, "config_version": config["version"], "normalization_version": 1, "result_protocol": "overlay-v1"})
 
 
-def find_reusable(db, user, asset, mode, language, config):
-    sha = asset.sha256 if hasattr(asset, 'sha256') else asset
-    days = get_request_limits(db).image_result_retention_days if user.kind != 'guest' else None
+def find_reusable(db, user, cache_key):
+    days = None
     candidates = db.scalars(select(Job).where(Job.owner_id == user.id,
-        Job.cache_key == content_key(sha, mode, language, config),
+        Job.cache_key == cache_key,
         Job.status.in_(ACTIVE | {'succeeded', 'no_text'}), Job.cancel_requested.is_(False),
         Job.discard_output.is_(False)).order_by(Job.created_at.desc(), Job.id))
     for candidate in candidates:
+        if days is None and candidate.completed_at and user.kind != 'guest':
+            days = get_request_limits(db).image_result_retention_days
         if result_expired(db, candidate, days=days):
             continue
         if candidate.input_asset_id and not descriptor_available(db.get(Asset, candidate.input_asset_id)):
@@ -108,9 +111,11 @@ def find_reusable(db, user, asset, mode, language, config):
     return None
 
 
-def create_job(db, user, asset, mode, language, key, *, operation=None, force=False, config=None,
+def create_job(db, user, asset, mode, language, key, *, operation=None, force=False,
                source_sha256=None, request_hash_override=None, result_format='overlay-v1', model_id=None, font_id=None, submitted_ip=None):
-    lock_scheduler(db)
+    # Upload intents have no runnable stage. Guests also consume a shared site-wide budget.
+    if asset is not None or user.kind == 'guest':
+        lock_scheduler(db)
     user = locked_user(db, user.id)
     operation = operation or f"translate:{mode}"
     sha = asset.sha256 if asset else source_sha256
@@ -123,36 +128,26 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
     existing = job_for_request(db, user.id, key, request_hash)
     if existing:
         return existing
+    if mode != 'classic':
+        problem('MODE_UNSUPPORTED', '不支持此翻译方式', 422)
     font_id = resolve_font(font_id, language)
     at = now()
-    model_reason = None
-    if model_id:
-        from .translation_selection import select_model
-        config, policy, model_reason = select_model(db, user, model_id, at)
-    else:
-        policy = admission_policy(db, user, mode, at)
-        config = config or configuration(db, mode, language, source_sha256=sha,
-            plan_id=policy.service_plan)
-    if result_format == 'overlay-tiles-v1':
-        config = {**config, 'result_format': result_format, 'version': digest([config['version'], result_format])}
-    config = {**config, 'font_id': font_id, 'version': digest([config['version'], {'font_id': font_id}])}
-    cached = None if force else find_reusable(db, user, sha, mode, language, config)
-    if cached:
-        return remember_request(db, user.id, key, request_hash, cached)
-    ck = content_key(sha, mode, language, config)
-    if not force:
-        last = db.scalar(select(Job).where(Job.owner_id == user.id, Job.source_sha256 == sha,
-            Job.mode == mode, Job.target_language == language, Job.cache_key == ck)
-            .order_by(Job.created_at.desc(), Job.id.desc()).limit(1))
-        if last and (last.status in {'failed', 'cancelled', 'unknown_released'} or
-                (last.status in ACTIVE and (last.cancel_requested or last.discard_output))):
-            return remember_request(db, user.id, key, request_hash, last)
+    for config, provider, policy, model_reason in image_models(db, user, model_id, at, digest([sha, language])):
+        if result_format == 'overlay-tiles-v1':
+            config = {**config, 'result_format': result_format, 'version': digest([config['version'], result_format])}
+        config = {**config, 'font_id': font_id, 'version': digest([config['version'], {'font_id': font_id}])}
+        ck = content_key(sha, mode, language, config)
+        if not force:
+            cached = find_reusable(db, user, ck)
+            if cached:
+                return remember_request(db, user.id, key, request_hash, cached)
+            last = db.scalar(select(Job).where(Job.owner_id == user.id, Job.source_sha256 == sha,
+                Job.mode == mode, Job.target_language == language, Job.cache_key == ck)
+                .order_by(Job.created_at.desc(), Job.id.desc()).limit(1))
+            if last and (last.status in {'failed', 'cancelled', 'unknown_released'} or
+                    (last.status in ACTIVE and (last.cancel_requested or last.discard_output))):
+                return remember_request(db, user.id, key, request_hash, last)
     # Pricing is frozen outside the model config so price edits preserve cache identity.
-    from .translation_models import TranslationProvider
-    provider = db.get(TranslationProvider, config['text']['provider_id'])
-    if not model_id and provider:
-        from .translation_selection import policy_resolver
-        policy, model_reason = policy_resolver(db, user, at)(provider.text_plan_ids, provider.quota_multiplier)
     if model_reason == 'not_allowed':
         problem('TRANSLATION_MODEL_NOT_ALLOWED', '当前权益不支持所选模型，请升级或选择其他模型', 403)
     if model_reason == 'quota_exhausted':
@@ -162,7 +157,7 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
     job = Job(id=uid(), owner_id=user.id, input_asset_id=asset.id if asset else None, source_sha256=sha,
         mode=mode, target_language=language, submitted_ip=submitted_ip,
         operation=operation, idempotency_key=key, request_hash=request_hash, cache_key=ck, config=config,
-        quota_pages=0, quota_multiplier=provider.quota_multiplier if provider else 1,
+        quota_pages=0, quota_multiplier=provider.quota_multiplier,
         quota_kind=kind, settlement="free", version=version,
         status="queued" if asset else "awaiting_upload", phase="queued" if asset else "awaiting_upload", created_at=at)
     db.add(job)
@@ -174,9 +169,10 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
         db.execute(update(Asset).where(Asset.id == asset.id).values(active_references=Asset.active_references + 1))
         job.input_pinned = True
         ensure_stages(db, job)
-    touch_job(db, job)
+    else:
+        publish(db, 'user:' + user.id)
     return remember_request(db, user.id, key, request_hash, job,
-                            model={'id': provider.id, 'name': provider.name} if provider else None)
+                             model={'id': provider.id, 'name': provider.name})
 
 
 def cancel_job(db, job):

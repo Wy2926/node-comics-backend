@@ -37,6 +37,7 @@ class NodeUpdate(RequestBody):
 
 class PoolConfig(RequestBody):
     execution_slots: int = Field(ge=1, le=100, strict=True)
+    paid_reserved_slots: int | None = Field(default=None, ge=0, le=100, strict=True)
 
 
 def token_hash(token):

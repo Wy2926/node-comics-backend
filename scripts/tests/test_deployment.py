@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 import sys
@@ -302,6 +303,40 @@ class ReleaseTests(unittest.TestCase):
         (source / '_astro/b.hash.js').write_text('collision', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, 'collision'):
             prepare('website', source, destination, 'v3', '/www/node-comics')
+
+    def test_local_extension_links_require_exact_package_bytes_and_keep_external_redirects(self):
+        source = self.root / 'build'
+        source.mkdir()
+        (source / 'index.html').write_text('home', encoding='utf-8')
+        destination = self.root / 'static'
+        data = b'fixture CRX'
+        filename = 'extension.crx'
+        digest = hashlib.sha256(data).hexdigest()
+        path = '/downloads/' + filename
+        uri = f'/downloads/{digest}/{filename}'
+        url = 'https://comics.nodelane.net' + uri
+        manifest = self.root / 'manifest.json'
+        manifest.write_text(json.dumps({'releases': [
+            {'path': path, 'download_url': url, 'bytes': len(data), 'sha256': digest, 'filename': filename,
+             'content_type': 'application/x-chrome-extension'},
+            {'path': '/downloads/old.crx', 'download_url': 'https://example.org/old.crx'},
+        ]}), encoding='utf-8')
+        package = destination / ('assets/website' + uri)
+        package.parent.mkdir(parents=True)
+        for payload, error in [(None, 'Missing or damaged'), (b'tampered!!!', 'hash mismatch')]:
+            with self.subTest(payload=payload):
+                if payload is not None:
+                    package.write_bytes(payload)
+                with self.assertRaisesRegex(ValueError, error):
+                    prepare('website', source, destination, 'v1', '/www/node-comics', manifest=manifest)
+                self.assertFalse((destination / 'releases/website/v1').exists())
+        package.write_bytes(data)
+        config = prepare('website', source, destination, 'v1', '/www/node-comics', manifest=manifest).read_text()
+        self.assertIn(f'location = {uri} {{', config)
+        self.assertIn(f'alias /www/node-comics/assets/website{uri};', config)
+        self.assertIn('default_type application/x-chrome-extension;', config)
+        self.assertIn(f'return 308 {url};', config)
+        self.assertIn('return 308 https://example.org/old.crx;', config)
 
 
 if __name__ == '__main__':

@@ -58,6 +58,39 @@ def block(uri, body):
     return f'location = {uri} {{\n    if ($request_method !~ "^(GET|HEAD)$") {{ return 405; }}\n{body}\n}}\n'
 
 
+def download_locations(manifest, destination, nginx_root, release):
+    configs = []
+    download_headers = headers(release, private=True)
+    for row in json.loads(manifest.read_text(encoding='utf-8'))['releases']:
+        path, url = row['path'], row.get('download_url', '')
+        if not re.fullmatch(r'/downloads/[A-Za-z0-9_.-]+', path):
+            raise ValueError('Invalid download path')
+        parsed = urlsplit(url)
+        valid = (parsed.scheme == 'https' and parsed.hostname and not parsed.username and
+                 not parsed.password and not parsed.query and not parsed.fragment and
+                 re.fullmatch(r'https://[A-Za-z0-9._~:/%+-]+', url))
+        if parsed.hostname == 'comics.nodelane.net':
+            digest, filename = row['sha256'], path.rsplit('/', 1)[-1]
+            media = {'.crx': 'application/x-chrome-extension', '.xpi': 'application/x-xpinstall'}.get(Path(filename).suffix)
+            uri = f'/downloads/{digest}/{filename}'
+            if not (re.fullmatch('[0-9a-f]{64}', digest) and url == f'https://comics.nodelane.net{uri}' and
+                    filename == row['filename'] and media and media == row.get('content_type')):
+                raise ValueError('Invalid local extension package')
+            relative = 'assets/website' + uri
+            package = destination / relative
+            if not package.is_file() or package.is_symlink() or package.stat().st_size != row['bytes']:
+                raise ValueError(f'Missing or damaged extension package: {filename}')
+            with package.open('rb') as handle:
+                if hashlib.file_digest(handle, 'sha256').hexdigest() != digest:
+                    raise ValueError(f'Extension package hash mismatch: {filename}')
+            configs.append(block(uri, f'    alias {nginx_root}/{relative};\n    types {{}}\n    default_type {media};\n'
+                                      f'    add_header Content-Disposition "attachment; filename={filename}" always;\n'
+                                      + download_headers))
+        response = f'    return 308 {url};' if valid else '    add_header Retry-After 60 always;\n    return 503;'
+        configs.append(block(path, response + '\n' + download_headers))
+    return configs
+
+
 def prepare(kind, source, destination, release, nginx_root, *, admin_path='', oidc_origin='',
             document_r2_origin='', manifest=None):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', release):
@@ -101,6 +134,7 @@ def prepare(kind, source, destination, release, nginx_root, *, admin_path='', oi
     with release_lock(destination):
         if target.exists():
             raise ValueError('Concurrent release preparation')
+        downloads = download_locations(manifest, destination, nginx_root, release) if kind == 'website' and manifest else []
         target.mkdir(parents=True)
         public = f'{nginx_root}/releases/{kind}/{release}/site'
         configs = [f'# {kind} release {release}\n']
@@ -171,17 +205,7 @@ def prepare(kind, source, destination, release, nginx_root, *, admin_path='', oi
                 if (source / error).is_file():
                     configs.append(f'location /{locale}/ {{ error_page 404 /__static_errors/{error}; return 404; }}\n')
             configs.append('location / { error_page 404 /__static_errors/404.html; return 404; }\n')
-            if manifest:
-                for row in json.loads(manifest.read_text(encoding='utf-8'))['releases']:
-                    path, url = row['path'], row.get('download_url', '')
-                    if not re.fullmatch(r'/downloads/[A-Za-z0-9_.-]+', path):
-                        raise ValueError('Invalid download path')
-                    parsed = urlsplit(url)
-                    valid = (parsed.scheme == 'https' and parsed.hostname and not parsed.username and
-                             not parsed.password and not parsed.query and not parsed.fragment and
-                             re.fullmatch(r'https://[A-Za-z0-9._~:/%+-]+', url))
-                    response = f'    return 308 {url};' if valid else '    add_header Retry-After 60 always;\n    return 503;'
-                    configs.append(block(path, response + '\n' + headers(release, private=True)))
+            configs.extend(downloads)
         atomic_write(target / 'release.inc', ''.join(configs).encode())
     return target / 'release.inc'
 

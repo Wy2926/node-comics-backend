@@ -22,6 +22,7 @@ def wait_for_idle_subscriptions(count):
 
 
 def test_commit_and_rollback_wakeups(client):
+    assert hub().ready.wait(3)
     async def run():
         with hub().subscribe('test') as wake:
             with session_factory()() as db:
@@ -71,8 +72,7 @@ def test_snapshot_handles_lost_notification_and_auth_scoped_etag(client, png, mo
 
 
 def test_nested_page_savepoints_notify_only_after_outer_commit(client):
-    if engine().dialect.name == 'postgresql':
-        assert hub().ready.wait(3), 'Wait for initial LISTEN reconnect wakeup before testing transactions'
+    assert hub().ready.wait(3), 'Wait for initial LISTEN reconnect wakeup before testing transactions'
     async def run():
         with hub().subscribe('savepoints') as wake:
             with session_factory()() as db:

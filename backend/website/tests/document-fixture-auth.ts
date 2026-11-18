@@ -69,8 +69,10 @@ export async function authenticatedFetch(path: string, options: RequestInit, ide
     }
     return json(task);
   }
-  if (path === '/v1/documents/capabilities') return json({ enabled: params.get('scenario') !== 'disabled',
-    limits: { max_bytes: 200_000_000, max_pages: 200, part_bytes: 16 * 1024 * 1024, waiting_hours: 24 }, languages: [{ id: 'zh-Hans', label: '简体中文' }, { id: 'en', label: 'English' }, { id: 'zh-Hant', label: '繁體中文' }], models: params.get('scenario') === 'no-models' ? [] : [base.model] });
+  const scenario = params.get('scenario') ?? '';
+  if (path === '/v1/documents/capabilities') return json({ enabled: !['disabled', 'free'].includes(scenario),
+    unavailable_reason: scenario === 'free' ? 'membership_required' : null,
+    limits: { max_bytes: 200_000_000, max_pages: 200, part_bytes: 16 * 1024 * 1024, waiting_hours: 24 }, languages: [{ id: 'zh-Hans', label: '简体中文' }, { id: 'en', label: 'English' }, { id: 'zh-Hant', label: '繁體中文' }], models: ['no-models', 'disabled', 'free'].includes(scenario) ? [] : [base.model] });
   if (path.startsWith('/v1/documents?')) return json({ items: rows(), next_cursor: null });
   const match = path.match(/^\/v1\/documents\/([a-f0-9-]+)(?:\/(.+))?$/);
   if (!match) throw Error('No external API is allowed in this fixture');
@@ -78,6 +80,7 @@ export async function authenticatedFetch(path: string, options: RequestInit, ide
   let row = items.find(item => item.id === id);
   if (options.method === 'PUT') {
     if (!row) {
+      if (scenario === 'free') return json({ error: { code: 'DOCUMENT_MEMBERSHIP_REQUIRED' } }, 403);
       const body = JSON.parse(String(options.body));
       row = { ...base, ...body, id, status: 'uploading', phase: 'uploading', page_count: null, resumable: false,
         created_at: new Date().toISOString(), quota: { ...base.quota, needed: null, available: null, difference: null }, error_code: null, upload: { part_bytes: 16 * 1024 * 1024, part_count: Math.ceil(body.byte_size / (16 * 1024 * 1024)) } };

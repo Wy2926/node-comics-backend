@@ -15,7 +15,9 @@ python -m app.dispatcher
 python -m pytest -q tests
 ```
 
-默认测试使用 SQLite 与 fakeredis。`TEST_REDIS_URL` 启用专用真实 Redis；PostgreSQL 并发测试需显式设置 `RUN_POSTGRES_CONCURRENCY=1` 和 `TEST_PG_*`，只使用测试库。也可从根目录运行 `docker compose -f deploy/compose.tests.yaml up --build --abort-on-container-exit --exit-code-from tests`。
+数据库回归只用 PostgreSQL。推荐从仓库根运行 `docker compose -f deploy/compose.tests.yaml up --build --abort-on-container-exit --exit-code-from tests`。直接运行 pytest 需提供 `TEST_PG_PASSWORD` 和专用库 `nodecomics_concurrency_test`（默认 `127.0.0.1:5432`、用户 `nodecomics`；可设置 `TEST_PG_HOST`、`TEST_PG_PORT`、`TEST_PG_USER`）。每例独占临时 schema。
+
+`RUN_POSTGRES_CONCURRENCY=1` 启用额外竞争测试，`RUN_QUOTA_SCALE=1` 启用额度规模测试。进程间共享限流需指定专用 `TEST_REDIS_URL`，单进程可用默认的 fakeredis。
 
 安装节点传输依赖后，设置 `COMICS_COMPUTE_ROOT` 指向节点仓库，再运行 `tests/test_compute_node_v3.py`。双节点 TLS、弱网与断线接管见 [Docker 网络验收](../scripts/README.md)。这些用例使用合成图像与模型响应。
 

@@ -14,7 +14,7 @@ from app.db import session_factory
 from app.models import Asset, Job, User, now
 from app.queue_models import ComputeNode, ExecutionLease, JobStage
 from app.storage import get_store
-from test_classic_parallel_postgres import text_database
+from test_classic import text_database
 from test_cluster_scheduler import scheduler_case
 
 pytestmark = pytest.mark.skipif(os.environ.get('RUN_SCHEDULER_SCALE') != '1',

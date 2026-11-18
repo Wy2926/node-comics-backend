@@ -62,9 +62,12 @@ def test_batch_elects_backlog_once_and_honors_capacity(scheduler_case, monkeypat
         assert all(len(ids) <= scheduler.CANDIDATE_LIMIT for ids in calls if ids is not None)
         second = scheduler.claim_batch(db, 'node-0')
         db.commit()
-        assert len(second) == 3
+        assert len(second) == 2
         assert not scheduler.claim_batch(db, 'node-0')
-        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 7
+        assert db.scalar(select(func.count()).select_from(ExecutionLease)) == 6
+    member = add_job(scheduler_case, 'plus-user')
+    with session_factory()() as db:
+        assert scheduler.claim_stage(db, 'node-0').job_id == member
 
 
 def test_concurrent_batches_never_overbook_or_duplicate(scheduler_case):
@@ -78,14 +81,40 @@ def test_concurrent_batches_never_overbook_or_duplicate(scheduler_case):
             return [lease.stage_id for lease in leases]
     with ThreadPoolExecutor(max_workers=3) as pool:
         stages = [stage for batch in pool.map(claim, range(3)) for stage in batch]
-    assert 4 <= len(stages) <= 5
+    assert len(stages) == 4  # Concurrent ordinary batches cannot take the reserved slot.
     assert len(stages) == len(set(stages))
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(ExecutionLease)) == len(stages)
 
 
+def test_stale_free_election_yields_to_new_member_and_counts_only_ordinary_leases(scheduler_case):
+    jobs = [add_job(scheduler_case) for _ in range(3)]
+    set_capacity(2)
+    with session_factory()() as db:
+        prepared = scheduler.prepare_claim_candidates(db, 'node-0')
+        member = add_job(scheduler_case, 'plus-user')
+        assert not scheduler.claim_batch(db, 'node-0', prepared=prepared)
+        assert scheduler.claim_stage(db, 'node-0').job_id == member
+        assert scheduler.claim_stage(db, 'node-0').job_id == jobs[0]
+        assert not scheduler.claim_stage(db, 'node-0')
+
+
+def test_single_slot_can_be_dedicated_to_paid_work(scheduler_case):
+    add_job(scheduler_case)
+    with session_factory()() as db:
+        db.get(ComputeNode, 'node-0').desired_config = {'execution_slots': 1, 'paid_reserved_slots': 1}
+        db.commit()
+        assert not scheduler.has_claimable_work(db, 'node-0')
+        assert not scheduler.claim_batch(db, 'node-0')
+        db.commit()
+    member = add_job(scheduler_case, 'plus-user')
+    with session_factory()() as db:
+        assert scheduler.has_claimable_work(db, 'node-0')
+        assert scheduler.claim_stage(db, 'node-0').job_id == member
+
+
 def test_prepared_batch_revalidates_and_does_not_repeat_full_election(scheduler_case, monkeypatch):
-    jobs = [add_job(scheduler_case) for _ in range(5)]
+    jobs = [add_job(scheduler_case, 'plus-user') for _ in range(5)]
     set_capacity(4)
     with session_factory()() as db:
         prepared = scheduler.prepare_claim_candidates(db, 'node-0')

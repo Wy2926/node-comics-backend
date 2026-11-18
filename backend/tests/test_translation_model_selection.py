@@ -199,6 +199,25 @@ def test_matching_purchase_skips_incompatible_earlier_bucket_and_last_page_race(
         assert db.get(QuotaPeriod, wrong_id).reserved == 0
 
 
+def test_pack_sharing_a_membership_product_id_cannot_impersonate_its_service_tier(admin_case):
+    from app.billing_models import BillingOrder, BillingPlanRevision, BillingPrice
+    client, _ = admin_case
+    auth = login(client)
+    owner = client.get('/v1/me', headers=auth).json()['user']['id']
+    with session_factory()() as db:
+        bucket = seed_purchase(db, owner, service='plus')
+        order = db.get(BillingOrder, bucket.billing_order_id)
+        product = db.get(BillingPrice, order.price_id).plan_id
+        db.add(BillingPlanRevision(plan_id=product, version=2, name='Membership', monthly_classic_pages=10,
+                                   trial_days=0, trial_classic_pages=0))
+        db.commit()
+    higher = model(admin_case, [product])
+    plus = model(admin_case, ['plus'])
+    choices = client.get('/v1/capabilities', headers=auth).json()['translation_models']
+    assert {item['id'] for item in choices if item['available']} == {plus['id']}
+    assert submit(client, auth, descriptor(b'locked'), model_id=higher['id']).json()['error']['code'] == 'TRANSLATION_MODEL_NOT_ALLOWED'
+
+
 def test_guest_uses_only_guest_models(visitor):
     client, _, _, _ = visitor
     admin = client, login(client, 'admin')

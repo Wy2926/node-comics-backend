@@ -1,34 +1,10 @@
 """The same ingress invariants under actual PostgreSQL locks and independent sessions."""
 import os
 import pytest
-from app import upload_models  # noqa: F401; register tables before the PG fixture creates its schema.
-from test_classic_parallel_postgres import text_database
-from test_upload_ingress import (
-    ingress_case,
-    test_shared_owner_global_and_same_upload_limits,
-    test_parallel_replicas_cannot_overbook_global_or_owner_limit,
-    test_expired_token_cannot_release_or_fail_replacement,
-    test_token_replaced_while_waiting_for_lock_cannot_fail_upload,
-    test_redis_outage_does_not_block_upload_expiry,
-    test_waiting_body_releases_identity_connection_and_disconnect_releases_slot,
-    test_cancelled_waiting_body_releases_slot_and_preserves_retry,
-    test_cancel_during_file_publish_keeps_slot_and_heartbeat_until_thread_finishes,
-    test_body_timeout_is_bounded_and_reservation_remains_retryable,
-    test_lost_ingress_stops_waiting_for_client_body,
-    test_verified_receipt_replay_is_bounded_and_checks_immutable_bytes,
-    test_cancelled_acquisition_releases_committed_slot,
-    test_settings_changes_only_affect_new_upload_timeout_and_renewal,
-)
+from test_upload_ingress import ingress_case, storage_db
 
 pytestmark = pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1',
     reason='Requires the dedicated nodecomics_concurrency_test database')
-
-
-@pytest.fixture
-def storage_db(text_database):
-    # The shared fixture creates and destroys a unique schema in the dedicated
-    # test database; it refuses any production database name.
-    yield
 
 
 def test_two_http_replicas_share_limits_and_leave_single_connection_pool_free(ingress_case, tmp_path):

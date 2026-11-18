@@ -4,7 +4,7 @@ const en = {
   lang: 'en',
   limits: 'Up to 200 MB (200,000,000 bytes) and 200 pages. No password-protected files. Page count is checked on the server.',
   quotaRule: 'Pages are reserved together before translation. You can cancel only before this reservation; once reserved, the task cannot be cancelled. If quota is insufficient, add quota then choose Continue yourself.',
-  privacy: 'The file uploads directly to object storage. Keep this page open until upload confirmation; after that, you can leave and return to the server-side history.', access: 'Sign in to translate files using your existing quota, including trial and gifted quota. Model permissions and quota expiry still apply.',
+  privacy: 'The file uploads directly to object storage. Keep this page open until upload confirmation; after that, you can leave and return to the server-side history.', access: 'Translate whole files with an active membership (including trials and gifts) or a page pack with available credits. Free daily or gifted pages alone do not unlock this feature.',
   pricing: 'Plans & quota', disabled: 'File translation is not available yet.', noModels: 'No document-capable model is currently available for this account.', retryUpload: 'Retry upload',
   hashing: 'Checking file', uploading: 'Uploading to storage', sealing: 'Confirming upload', confirmed: 'Upload confirmed. You can leave this page; translation continues in the background.',
   notConfirmed: 'Upload was not confirmed. Check this task in history before retrying; interrupted uploads expire automatically.',
@@ -33,7 +33,7 @@ const zhCN: DocumentCopy = {
   lang: 'zh-CN',
   limits: '每份最多 200 MB（200,000,000 字节）、200 页，不支持加密文件。页数由服务器校验。',
   quotaRule: '翻译前一次预占整份页数。仅预占前可取消，预占后不可取消；额度不足时先补充额度，再手动点击继续。',
-  privacy: '文件直传对象存储。请等待上传确认后再离开，后台会继续处理，任务历史保存在当前账户。', access: '登录后即可使用文件翻译，沿用账户现有额度，试用和赠送额度同样可用；模型适用范围与额度有效期不变。',
+  privacy: '文件直传对象存储。请等待上传确认后再离开，后台会继续处理，任务历史保存在当前账户。', access: '有效会员（含试用、赠送）或有可用余额的页数包都能整本翻译。只有每日免费额度或赠送页数不能开通此功能。',
   pricing: '套餐与额度', disabled: '文件翻译暂未开放。', noModels: '当前账户暂无可用的整份文件翻译模型。', retryUpload: '重试上传',
   hashing: '校验文件', uploading: '直传文件', sealing: '确认上传', confirmed: '上传已确认，可以离开此页面。后台会继续翻译，可稍后从历史下载。',
   notConfirmed: '尚未确认上传成功。请先查看任务历史再重试，中断的上传会自动过期。',
@@ -57,7 +57,7 @@ const zhTW: DocumentCopy = {
   lang: 'zh-TW',
   limits: '每份最多 200 MB（200,000,000 位元組）、200 頁，不支援加密檔案。頁數由伺服器驗證。',
   quotaRule: '翻譯前一次預留整份頁數。僅預留前可取消，預留後不可取消；額度不足時先補充額度，再手動點選繼續。',
-  privacy: '檔案直接上傳物件儲存。請等待上傳確認後再離開，背景會繼續處理，任務記錄保存在目前帳戶。', access: '登入後即可使用檔案翻譯，沿用帳戶現有額度，試用和贈送額度同樣可用；模型適用範圍與額度有效期不變。',
+  privacy: '檔案直接上傳物件儲存。請等待上傳確認後再離開，背景會繼續處理，任務記錄保存在目前帳戶。', access: '有效會員（含試用、獲贈）或仍有可用餘額的頁數包都能翻譯整本檔案。只有每日免費額度或獲贈頁數無法開通此功能。',
   pricing: '方案與額度', disabled: '檔案翻譯尚未開放。', noModels: '目前帳戶暫無可用的整份檔案翻譯模型。', retryUpload: '重試上傳',
   hashing: '驗證檔案', uploading: '直接上傳檔案', sealing: '確認上傳', confirmed: '上傳已確認，可以離開此頁面。背景會繼續翻譯，可稍後從記錄下載。',
   notConfirmed: '尚未確認上傳成功。請先查看任務記錄再重試，中斷的上傳會自動到期。',
@@ -84,6 +84,7 @@ export function documentFormat(template: string, values: Record<string, string |
   return template.replace(/\{(\w+)\}/g, (token, key) => String(values[key] ?? token));
 }
 export function documentError(code: string, t: DocumentCopy): string {
+  if (code === 'DOCUMENT_MEMBERSHIP_REQUIRED') return t.access;
   if (code === 'AUTH_REQUIRED') return t.errors.auth;
   if (code === 'DOCUMENT_DISABLED') return t.disabled;
   if (code === 'DOCUMENT_NOT_CANCELLABLE') return t.errors.cancelled;

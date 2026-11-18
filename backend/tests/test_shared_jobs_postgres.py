@@ -1,11 +1,11 @@
 """Cross-device submission and completion races on isolated real PostgreSQL."""
 from concurrent.futures import ThreadPoolExecutor
 import threading
-from sqlalchemy import event, func, select
+from sqlalchemy import func, select
 from test_postgres_concurrency import pg, pg_scope, pytestmark, new_job, assert_single_charge
 from admission_test_utils import window_count
 from conftest import run_job
-from app.db import engine, session_factory
+from app.db import session_factory
 from app.entitlement_models import QuotaPeriod
 from app.models import Asset, Job, Ledger, User
 from app.translation_requests import TranslationRequest
@@ -72,37 +72,22 @@ def test_two_devices_submit_identical_page_share_one_paid_job(pg, monkeypatch):
     assert_single_charge(pg, job_id)
 
 
-def test_completion_and_new_receipt_serialize_without_fk_deadlock(pg, monkeypatch):
-
-    from app import workers
+def test_new_receipt_reuses_inflight_work_without_waiting_for_completion(pg, monkeypatch):
     job_id = new_job(pg)
-    finalizing, resume, request_waiting = threading.Event(), threading.Event(), threading.Event()
-    actual_create = workers.create_asset
-    def held_finalize(*args, **kwargs):
+    finalizing, resume = threading.Event(), threading.Event()
+    def held_output(original):
         finalizing.set()
         assert resume.wait(10)
-        return actual_create(*args, **kwargs)
-    def observe(connection, cursor, statement, parameters, context, executemany):
-        if threading.current_thread().name.startswith("new-submission") and "pg_advisory_xact_lock" in statement:
-            request_waiting.set()
-    monkeypatch.setattr(workers, "create_asset", held_finalize)
-    monkeypatch.setattr("conftest.fixture_output", lambda *args: pg["png"])
-    event.listen(engine(), "before_cursor_execute", observe)
-    try:
-        with ThreadPoolExecutor(max_workers=1) as execution, ThreadPoolExecutor(max_workers=1, thread_name_prefix="new-submission") as admission:
-            worker = execution.submit(run_job, job_id)
-            try:
-                assert finalizing.wait(10)
-                receipt = admission.submit(submit_existing, pg, "during-finalize")
-                assert request_waiting.wait(10)
-                assert not receipt.done()
-            finally:
-                resume.set()
-            worker.result(timeout=15)
-            result = receipt.result(timeout=15)
-    finally:
-        event.remove(engine(), "before_cursor_execute", observe)
-    assert result[0].job_id == job_id
+        return original
+    monkeypatch.setattr("conftest.fixture_output", held_output)
+    with ThreadPoolExecutor(1) as execution:
+        worker = execution.submit(run_job, job_id)
+        try:
+            assert finalizing.wait(10)
+            assert submit_existing(pg, "during-finalize")[0].job_id == job_id
+        finally:
+            resume.set()
+        worker.result(timeout=15)
     assert_single_charge(pg, job_id)
 
 

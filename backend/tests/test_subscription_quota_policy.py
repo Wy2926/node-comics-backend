@@ -174,9 +174,8 @@ def test_subscription_selection_stays_indexed_with_ten_thousand_expired_buckets(
         finally:
             event.remove(connection, 'before_cursor_execute', capture)
         assert len(statements) == 1 and 'LIMIT' in statements[0][0]
-        if connection.dialect.name == 'sqlite':
-            plan = connection.exec_driver_sql('EXPLAIN QUERY PLAN ' + statements[0][0], statements[0][1]).all()
-            assert any('SEARCH quota_periods USING INDEX' in row[3] for row in plan)
+        plan = connection.exec_driver_sql('EXPLAIN (FORMAT JSON) ' + statements[0][0], statements[0][1]).scalar_one()
+        assert 'Index' in str(plan) and 'quota_periods' in str(plan)
         print(f'subscription selector median: empty history {before:.3f} ms; 10,000 expired buckets {after:.3f} ms')
 
 

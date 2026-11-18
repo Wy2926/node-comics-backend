@@ -267,8 +267,7 @@ def test_legacy_row_exposes_defaults_without_mutating_saved_settings(system_case
 def test_request_snapshots_refresh_without_extra_connections_or_implicit_commit(system_case):
     case = system_case
     case.client.get(PATH, headers=case.auth).raise_for_status()
-    options = {"connect_args": {"check_same_thread": False}} if engine().dialect.name == "sqlite" else {}
-    single = create_engine(engine().url, pool_size=1, max_overflow=0, pool_timeout=.5, **options)
+    single = create_engine(engine().url, pool_size=1, max_overflow=0, pool_timeout=.5)
     try:
         with Session(bind=single) as db:
             previous = get_request_limits(db)

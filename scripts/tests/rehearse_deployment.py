@@ -149,7 +149,19 @@ def main():
                              "import socket; print(socket.gethostbyname('host.docker.internal'))")
         compose('up', '-d', '--no-deps', 'control-worker', 'maintenance')
         website_source = args.build_dir / 'website/site'
-        manifest = args.build_dir / 'website/extension-release.json'
+        package = b'isolated static download fixture'
+        digest = hashlib.sha256(package).hexdigest()
+        download_path = '/downloads/rehearsal.crx'
+        package_uri = f'/downloads/{digest}/rehearsal.crx'
+        package_file = public / ('assets/website' + package_uri)
+        package_file.parent.mkdir(parents=True)
+        package_file.write_bytes(package)
+        manifest = run / 'extension-release.json'
+        download_url = 'https://comics.nodelane.net' + package_uri
+        manifest.write_text(json.dumps({'releases': [
+            {'path': download_path, 'download_url': download_url, 'sha256': digest, 'bytes': len(package),
+             'filename': 'rehearsal.crx', 'content_type': 'application/x-chrome-extension'},
+        ]}), encoding='utf-8')
         site_v1 = prepare('website', website_source, public, 'web-v1', '/www/node-comics', manifest=manifest,
                           oidc_origin='https://identity.example')
         admin_v1 = prepare('admin', args.build_dir / 'admin/site', public, 'admin-v1', '/www/node-comics',
@@ -212,10 +224,12 @@ http {
         for path in ('/.env', '/admin/', '/source.map', '/v1/missing', '/en/missing/', '/console-rehearsal/assets/.env'):
             response = httpx.get(origin + path)
             assert response.status_code == 404, (path, response.status_code)
-        download = json.loads(manifest.read_text(encoding='utf-8'))['releases'][0]
-        assert httpx.post(origin + download['path']).status_code == 405
-        download_response = httpx.get(origin + download['path'])
-        assert download_response.status_code == (308 if download.get('download_url') else 503)
+        assert httpx.post(origin + download_path).status_code == 405
+        download_response = httpx.get(origin + download_path)
+        assert download_response.status_code == 308 and download_response.headers['Location'] == download_url
+        package_response = httpx.get(origin + package_uri)
+        assert package_response.status_code == 200 and package_response.content == package
+        assert package_response.headers['Content-Type'] == 'application/x-chrome-extension'
         assert 'no-store' in httpx.get(origin + '/account/').headers['Cache-Control']
         missing_chunk = httpx.get(origin + '/_astro/not-present.js')
         assert missing_chunk.status_code == 404 and 'no-store' in missing_chunk.headers['Cache-Control']

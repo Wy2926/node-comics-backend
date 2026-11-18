@@ -137,6 +137,42 @@ def test_ordinary_arrival_stops_new_document_claims_without_preemption(documents
     assert leases(documents, 'ordinary-ready-empty')[0]['action'] == 'doc_ocr'
 
 
+def test_free_backlog_cannot_take_the_paid_slot_or_defer_a_member_book(documents):
+    configure(documents, capacity=3, baseline=1)
+    configure_system_limits(free_daily_pages=20)
+    free = documents.v3['create'](5, member=False)
+    pull = bound_pull(documents.v3)
+    first = pull(4)
+    assert [item['job_id'] for item in first] == free[:2]
+    assert not pull(4)
+    job_id = create(documents, 5)
+    assert not pull(4)  # Image-only pulls cannot preempt a ready member book.
+    book, = pull(4, document_count=1)
+    assert book['job_id'] == job_id
+    analyze(documents.v3, first[0], empty=True)
+    # A running free image cannot impose the one-page document borrowing ceiling.
+    assert pull(4, document_count=1)[0]['job_id'] == job_id
+    analyze(documents.v3, first[1], empty=True)
+    member, = documents.v3['create']()
+    assert not pull(0, document_count=1)  # At equal tier an interactive page still goes first.
+    assert pull(4, document_count=1)[0]['job_id'] == member
+
+
+def test_image_only_pull_yields_to_ready_member_document_even_with_idle_slots(documents):
+    configure_system_limits(free_daily_pages=5)
+    documents.v3['create'](member=False)
+    job_id = create(documents, prepared=False)
+    identity = documents.v3['node']['node_id']
+    connection = compute_channel.authenticated(identity, documents.v3['auth']['Authorization'])
+    request = compute_channel.Pull(request_id='image-only', config_version=1, count=1, document_count=0)
+    assert compute_channel.assign(identity, connection, request)['leases'] == []
+    assert not compute_channel.snapshot(identity, connection, set(), request)[-1]
+    mixed = request.model_copy(update={'document_count': 1})
+    assert compute_channel.snapshot(identity, connection, set(), mixed)[-1]
+    reply = compute_channel.assign(identity, connection, mixed)
+    assert [lease['job_id'] for lease in reply['leases']] == [job_id]
+
+
 @pytest.mark.parametrize('expired', [False, True])
 @pytest.mark.parametrize('baseline', [1, 2])
 def test_active_ordinary_keeps_baseline_even_with_spare_capacity(documents, expired, baseline):
@@ -282,7 +318,7 @@ def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, 
     assert image_claim(documents.v3)
 
 
-def test_claim_query_budget_is_one_aggregate_one_exists_independent_of_backlog(documents):
+def test_claim_query_budget_is_independent_of_backlog(documents):
     configure(documents, capacity=2)
     create(documents)
     pull = bound_pull(documents.v3)
@@ -290,12 +326,12 @@ def test_claim_query_budget_is_one_aggregate_one_exists_independent_of_backlog(d
         with statements() as sql:
             claimed = pull(0, document_count=1)[0]
         aggregates = [value for value in sql if 'from execution_leases' in value and 'count(' in value]
-        probes = [value for value in sql if 'select exists' in value and 'from job_stages' in value]
-        assert len(aggregates) == len(probes) == 1
+        assert len(aggregates) == 1
         assert 'filter (where job_stages.name in' in aggregates[0]
-        assert 'order by' not in probes[0] and 'count(' not in probes[0]
         candidates = [value for value in sql if 'join documents on' in value and 'order by' in value]
         assert len(candidates) == 1 and 'limit' in candidates[0]
+        probes = [value for value in sql if 'select exists' in value and 'from job_stages' in value]
+        assert len(probes) == 1 and 'job_stages.service_priority >=' in probes[0]
         with session_factory()() as db:
             lease = db.get(ExecutionLease, claimed['lease_id'])
             release_lease(db, lease, 'failed')
@@ -311,7 +347,7 @@ def test_claim_query_budget_is_one_aggregate_one_exists_independent_of_backlog(d
     with statements() as full_sql:
         assert pull(0, document_count=1) == []
     assert sum('from execution_leases' in sql and 'count(' in sql for sql in full_sql) == 1
-    assert not any('select exists' in sql for sql in full_sql)
+    assert not any('join documents on' in sql for sql in full_sql)
     with statements() as replay_sql:
         assert pull(0, 'granted', document_count=1) == last
-    assert not any('count(' in sql or 'select exists' in sql for sql in replay_sql)
+    assert not any('count(' in sql or 'join documents on' in sql for sql in replay_sql)

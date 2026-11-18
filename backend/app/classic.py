@@ -129,7 +129,7 @@ def reserve_call(job_id, lease_id, segments, language):
         call = TextCall(id=uid(), job_id=job_id, attempt_id=job.attempt_id, execution_lease_id=lease_id,
                         group_index=PAGE_CALL_INDEX, sequence=sequence + 1,
                         provider_id=profile['provider_id'], model=profile['model'], reserved_micros=reserved, accounted_micros=reserved)
-        reserve_request(provider, call.id)
+        reserve_request(provider, call.id, priority=job.service_priority)
         db.add(call)
         db.commit()  # Intent and full unknown-cost reservation must exist before any request.
         return call.id, profile, count + 1, prompt, language_names

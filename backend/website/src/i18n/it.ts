@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/it';
 import type { Dictionary } from './types';
 
-const membershipSummary = `La lettura locale è gratuita. Free offre 30 pagine al giorno con ${publishedModels.free.join(' · ')}. PLUS: 2.500 pagine al mese, US$6,66 a trimestre o US$23,99 all’anno. Pro: 4.000 pagine al mese, US$9,99 a trimestre o US$35,99 all’anno. Entrambi includono i modelli gratuiti e aggiungono ${publishedModels.paid_extra.join(' · ')}. Credito mensile senza riporto né prova. Pacchetti senza scadenza: 3.500 pagine a US$5,99 o 7.000 a US$9,99. Imposte e totale al pagamento.`;
+const membershipSummary = `La lettura locale è gratuita. Free permette di tradurre 30 pagine al giorno con i modelli di base. PLUS: 2.500 pagine al mese, US$6,66 a trimestre o US$23,99 all’anno. Pro: 4.000 pagine al mese, US$9,99 a trimestre o US$35,99 all’anno. Entrambi i piani includono i modelli di base e quelli aggiuntivi. Consulta la schermata di traduzione per vedere i modelli disponibili e i moltiplicatori di consumo della quota. Credito mensile senza riporto né prova. Pacchetti senza scadenza: 3.500 pagine a US$5,99 o 7.000 a US$9,99. Imposte e totale al pagamento.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · Importazione EPUB e lettura a doppia pagina",
+        "items": [
+          "Importa EPUB da KOOBONE — Scegli un EPUB in KOOBONE e salva il libro intero nella libreria per leggerlo offline.",
+          "Regola lo spazio tra le pagine — Leggi gli EPUB a pagine affiancate. La distanza scelta viene salvata per ogni libro.",
+          "Confronta i consumi dei modelli — Prima di scegliere un modello di traduzione puoi vedere il suo moltiplicatore di consumo della quota.",
+          "Novità dai siti di fumetti — Ora puoi usare BatCave, importare capitoli dai link mobili di WEBTOON e leggere GoodToon sul nuovo dominio."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Più siti e una migliore lettura offline",
+        "items": [
+          "Nuovi siti supportati — Importa i webtoon RIDI e traducili sulla pagina originale. Ora è disponibile anche la traduzione delle pagine KOOBONE.",
+          "Cache offline più flessibile — Imposta i download simultanei per sito. Il centro offline raggruppa i fumetti per sito e mostra meglio l’avanzamento.",
+          "Esportazione più fluida — Esportazioni più rapide e avanzamento più stabile, con meno spostamenti nell’interfaccia.",
+          "Stabilità migliorata — Correzioni di bug per una lettura e una traduzione più affidabili."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

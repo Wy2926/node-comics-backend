@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from PIL import Image
 from sqlalchemy import func, select
-from conftest import create as create_translation_job, login, png_variant, upload
+from conftest import create as create_translation_job, login, login_plus, png_variant, upload
 from app import classic
 from app.adapters.llm import TextResponse
 from app.config import settings
@@ -62,11 +62,12 @@ def v3(client, monkeypatch, png):
     state = {'client': client, 'node': node, 'auth': auth, 'admin': admin, 'registration': registration}
 
     indexes = itertools.count()
-    def create(count=1):
+    def create(count=1, *, member=True):
         jobs = []
         for _ in range(count):
             index = next(indexes)
-            user = login(client, 'reader' + str(index // 3))
+            user = (login_plus(client, 'reader' + str(index // 3), pages=100) if member
+                    else login(client, 'free-reader' + str(index // 3)))
             asset = upload(client, user, png_variant(png, index))
             response = create_translation_job(client, user, asset, key=uuid4().hex, language='en', mode='classic')
             assert response.status_code == 202, response.text

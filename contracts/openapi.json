@@ -1911,6 +1911,7 @@
           "documents"
         ],
         "summary": "Document Capabilities",
+        "description": "整本翻译对有效会员或有可用余额的页数包开放；无此权益时 unavailable_reason 为 membership_required。",
         "operationId": "document_capabilities_v1_documents_capabilities_get",
         "responses": {
           "200": {
@@ -1971,6 +1972,9 @@
                 "schema": {}
               }
             }
+          },
+          "403": {
+            "description": "新建整本翻译需要有效会员（含试用、赠送）或可用购买页数，且模型须在权益范围内"
           },
           "422": {
             "description": "Validation Error",
@@ -9281,6 +9285,19 @@
             "minimum": 1.0,
             "title": "Execution Slots",
             "default": 1
+          },
+          "paid_reserved_slots": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 32.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Reserved Slots"
           },
           "performance_weight": {
             "type": "integer",

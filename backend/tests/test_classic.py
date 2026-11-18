@@ -9,7 +9,6 @@ from sqlalchemy import func, select
 from app import classic
 from app.adapters.llm import TextError, TextResponse
 from app.adapters.text import parse_translations
-from app.config import settings
 from app.db import Base, engine, session_factory
 from app.models import Asset, Attempt, ClassicState, Job, TextCall, User, now, uid
 from app.queue_models import ComputeNode, ExecutionLease, JobStage, SchedulerMutex
@@ -34,26 +33,14 @@ def analysis(segments=None):
 
 
 @pytest.fixture
-def text_database(tmp_path, monkeypatch):
-    # This fixture can run without importing the HTTP app or other test modules.
-    from app import billing_models, translation_models, translation_requests, system_settings  # noqa: F401
-    monkeypatch.setenv('DATABASE_URL', 'sqlite:///' + (tmp_path / 'stages.db').as_posix())
-    monkeypatch.setenv('DEV_AUTH', 'true')
-    monkeypatch.setenv('CLASSIC_ENABLED', 'true')
-    monkeypatch.setenv('STORAGE_PATH', str(tmp_path / 'images'))
-    settings.cache_clear()
-    if engine.cache_info().currsize:
-        engine().dispose()
-    engine.cache_clear()
+def text_database(pg_scope):
+    from app.db import load_models
+    load_models()
     Base.metadata.create_all(engine())
     with session_factory()() as db:
         db.add(SchedulerMutex(id=1, revision=0))
         db.commit()
         configure_text_provider(db)
-    yield
-    engine().dispose()
-    engine.cache_clear()
-    settings.cache_clear()
 
 
 @pytest.fixture

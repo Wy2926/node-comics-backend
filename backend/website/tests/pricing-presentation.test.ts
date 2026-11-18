@@ -17,10 +17,9 @@ import FeatureInfo,{tooltipPosition} from '../src/components/FeatureInfo';
 import {pricingCopy,publishedPricingCopy} from '../src/lib/pricing';
 import {amount,amountParts,billingCopy,trialCopy,type Billing,type BillingOffer,type PendingCheckout} from '../src/lib/billing';
 import {comparisonCopy,comparisonRows,extraPagesCopy,paidComparisonValue} from '../src/lib/pricing-comparison';
-import {publishedSubscriptions,publishedModels} from '../src/data/published-plans';
+import {publishedSubscriptions} from '../src/data/published-plans';
 import {pricingHighlightsCopy} from '../src/i18n/pricing-highlights';
 import PlanComparison from '../src/components/PlanComparison';
-import PlanModels from '../src/components/PlanModels';
 import {locales,localPath} from '../src/i18n/locales';
 import {prepaidMembershipCopy} from '../src/i18n/prepaid-membership';
 
@@ -56,14 +55,14 @@ test('price hierarchy preserves localized currency order, spaces and minor units
 test('only common benefits are marked shared, while paid advantages retain their full copy',()=>{
   for(const locale of locales){
     const rows=comparisonRows(locale,2400);
-    assert.deepEqual(rows.map(row=>row.key),['classic','local','model','rate','priority','reading','feedback','requests','early'],locale);
+    assert.deepEqual(rows.map(row=>row.key),['classic','model','local','rate','priority','reading','feedback','requests','early'],locale);
     assert.deepEqual(rows.filter(row=>row.shared).map(row=>row.key),['local','reading'],locale);
     for(const row of rows)assert.equal(row.free===row.lite,row.shared,`${locale}: ${row.key}`);
     assert.ok(rows.find(row=>row.key==='rate')?.lite.includes((2400).toLocaleString(locale)),locale);
   }
 });
 
-test('cloud, self-hosted local translation and member support are localized without changing technical feature keys',()=>{
+test('cloud, built-in and self-hosted local translation and member support are localized',()=>{
   const english=comparisonCopy('en');
   for(const locale of locales){
     const copy=comparisonCopy(locale);
@@ -81,7 +80,8 @@ test('cloud, self-hosted local translation and member support are localized with
   }
   assert.equal(comparisonCopy('zh-CN').classic.label,'云端翻译');
   assert.equal(english.classic.label,'Cloud translation');
-  assert.match(english.local.detail??'',/connectivity depends on your models and providers/);
+  assert.match(english.local.detail??'',/built-in browser translation \(Beta\) and self-hosted MTU/);
+  assert.match(english.local.detail??'',/Internet requirements depend on the selected channel and configuration/);
   assert.match(english.feedback.detail??'',/does not guarantee a response time/);
   assert.match(english.requests.detail??'',/does not guarantee implementation or a release date/);
 });
@@ -171,7 +171,6 @@ test('pricing presentation rules stay scoped and do not duplicate the former glo
   assert.doesNotMatch(global,/\.pricing-comparison|\.plan-comparison|\.pricing-actions/);
   assert.match(css,/table-layout:\s*fixed/);
   assert.match(css,/\.pricing-comparison\s+\.feature-column\s*\{/);
-  assert.match(css,/\.pricing-comparison\s+\.model-access\s*\{[^}]*position:\s*relative/,'Offscreen absolute screen-reader labels stay inside the scrolling table, not the root viewport');
 });
 
 const pack:BillingOffer={id:'synthetic-pack',name:'Lite',plan_id:'pages',plan_revision_id:'pack-v1',currency:'usd',unit_amount:700,interval:'once',monthly_classic_pages:0,trial_days:0,trial_classic_pages:0,service_plan_id:'lite',quota_pages:100,quota_validity_days:null,hourly_image_limit:1200,channels:[{provider:'creem',binding_id:'synthetic',trial_days:0,trial_classic_pages:0}]};
@@ -406,19 +405,7 @@ test('finite and unlimited subscription cards use the catalog rather than produc
   assert.equal($('.subscription-card.paid [data-purchase-link]').length,2);
 });
 
-test('cards distinguish included free models from paid additions in every language',()=>{
-  for(const locale of locales)for(const paid of [false,true]){
-    const copy=pricingHighlightsCopy(locale);
-    const $=load(renderToStaticMarkup(createElement(PlanModels,{locale,paid})));
-    assert.deepEqual($('ul').first().find('bdi').toArray().map(el=>$(el).text()),publishedModels.free,locale);
-    assert.deepEqual($('ul').last().find('bdi').toArray().map(el=>$(el).text()),publishedModels.paid_extra,locale);
-    assert.equal($('ul').last().attr('data-included'),String(paid),locale);
-    assert.equal($('h3').last().text(),paid?copy.paidModels:copy.paidOnly,locale);
-    assert.equal($('.icon-check').length,publishedModels.free.length+(paid?publishedModels.paid_extra.length:0),locale);
-  }
-});
-
-test('one accessible comparison separates all models and both paid quotas without repeating tooltips',()=>{
+test('one accessible comparison groups advanced models and shares both local channels across every plan',()=>{
   const plans=publishedSubscriptions.filter(offer=>offer.interval==='quarter');
   for(const locale of locales){
     const $=load(renderToStaticMarkup(createElement(PlanComparison,{locale,plans,freeName:'Free'})));
@@ -427,10 +414,13 @@ test('one accessible comparison separates all models and both paid quotas withou
     assert.equal($('[role="region"][tabindex="0"]').length,1);
     assert.equal($('caption').text(),comparisonCopy(locale).feature);
     assert.equal($('.feature-info-trigger').length,5,'one tooltip per detailed feature, not per plan');
-    for(const model of [...publishedModels.free,...publishedModels.paid_extra]){
-      const cells=$(`tr[data-model="${model}"] td`);
-      assert.deepEqual(cells.toArray().map(el=>$(el).text()),[publishedModels.free.includes(model)?text.included:'−'+text.notIncluded,text.included,text.included]);
-    }
+    const {model,local}=comparisonCopy(locale);
+    const advanced=$('tr[data-feature="model"]');
+    assert.equal($('tr[data-model]').length,0,locale);
+    assert.equal(advanced.length,1,locale);
+    assert.equal(advanced.find('th').text(),model.label,locale);
+    assert.deepEqual(advanced.find('td').toArray().map(el=>$(el).text()),[text.notIncluded,text.included,text.included],locale);
+    assert.deepEqual($('tr[data-feature="local"] td').toArray().map(el=>$(el).text()),[local.free,local.free,local.free],locale);
     assert.ok($('[data-feature="classic"] td').eq(1).text().includes((2500).toLocaleString(locale)));
     assert.ok($('[data-feature="classic"] td').eq(2).text().includes((4000).toLocaleString(locale)));
   }
@@ -470,13 +460,8 @@ test('annual price tags only advertise verified comparable discounts and use dec
 test('visual advantages distinguish paid additions and quota differences, not shared benefits',()=>{
   const plans=publishedSubscriptions.filter(offer=>offer.interval==='quarter');
   const $=load(renderToStaticMarkup(createElement(PlanComparison,{locale:'zh-CN',plans,freeName:'免费'})));
-  for(const model of publishedModels.free)assert.equal($(`tr[data-model="${model}"] [data-advantage="true"]`).length,0);
-  for(const model of publishedModels.paid_extra){
-    assert.equal($(`tr[data-model="${model}"] [data-advantage="true"]`).length,2);
-    assert.equal($(`tr[data-model="${model}"] [data-unavailable="true"]`).length,1);
-  }
   for(const key of ['reading','local'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,0);
-  for(const key of ['classic','rate','priority','feedback','requests','early'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,2);
+  for(const key of ['classic','model','rate','priority','feedback','requests','early'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,2);
   assert.equal($('[data-more-pages="true"]').length,1);
   assert.match($('.comparison-delta').text(),/1,500/);
 });

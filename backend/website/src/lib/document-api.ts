@@ -2,6 +2,7 @@ import { ApiError, assertSession, authenticatedFetch, type AuthIdentity } from '
 
 export interface DocumentCapabilities {
   enabled: boolean;
+  unavailable_reason?: 'membership_required' | null;
   limits: { max_bytes: number; max_pages: number; part_bytes: number; waiting_hours: number };
   languages: { id: string; label: string }[];
   models: { id: string; name: string; quota_multiplier?: number; requires_paid?: boolean }[];
@@ -30,7 +31,7 @@ export interface DocumentTask {
 }
 export interface DocumentHistory { items: DocumentTask[]; next_cursor: string | null }
 export interface DocumentInput {
-  filename: string; source_type: 'pdf' | 'zip'; byte_size: number; sha256: string; target_language: string; model_id: string;
+  filename: string; source_type: 'pdf' | 'zip'; byte_size: number; sha256: string; target_language: string; model_id?: string;
 }
 interface SignedPart { part_number: number; url: string; headers: Record<string, string>; expires_in: number }
 export class DocumentError extends Error {

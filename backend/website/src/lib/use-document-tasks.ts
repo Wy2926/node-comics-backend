@@ -24,6 +24,12 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
   const draft = useRef<Draft | undefined>(undefined), working = useRef(false);
   const fail = (error: unknown) => setError(documentError(error instanceof Error ? error.message : 'NETWORK_ERROR', t));
 
+  async function readCapabilities(context: Scope) {
+    const { documentRequest } = await import('./document-api');
+    const result = await documentRequest<DocumentCapabilities>('/capabilities', context.identity, { signal: context.controller.signal });
+    if (!context.controller.signal.aborted) setCaps(result);
+  }
+
   useEffect(() => {
     scope.current?.controller.abort(); uploadController.current?.abort();
     working.current = false; draft.current = undefined; scope.current = undefined;
@@ -32,10 +38,12 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
     if (!identity) return;
     const context: Scope = { controller: new AbortController(), identity };
     scope.current = context;
-    void import('./document-api').then(api => api.documentRequest<DocumentCapabilities>('/capabilities', identity, { signal: context.controller.signal }))
-      .then(result => { if (!context.controller.signal.aborted) setCaps(result); })
-      .catch(error => { if (!context.controller.signal.aborted) fail(error); });
-    return () => { context.controller.abort(); uploadController.current?.abort(); };
+    const refreshAccess = () => {
+      if (!working.current) void readCapabilities(context).catch(error => { if (!context.controller.signal.aborted) fail(error); });
+    };
+    refreshAccess();
+    window.addEventListener('focus', refreshAccess);
+    return () => { window.removeEventListener('focus', refreshAccess); context.controller.abort(); uploadController.current?.abort(); };
   }, [identity]);
 
   useEffect(() => {
@@ -90,8 +98,8 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
     if (working.current || draft.current || identity?.id !== scope.current?.identity.id) return;
     setError(''); setNotice(''); setProgress(undefined); setFile(selected);
   }
-  async function upload(language: string, modelId: string) {
-    if (!identity || !file || !caps?.enabled || working.current) return;
+  async function upload(language: string, modelId?: string) {
+    if (!identity || !file || !caps || (!draft.current && !caps.enabled) || working.current) return;
     const context = scope.current!, controller = new AbortController();
     const signal = AbortSignal.any([context.controller.signal, controller.signal]);
     uploadController.current = controller; working.current = true;
@@ -101,7 +109,7 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
       signal.throwIfAborted();
       if (!draft.current) {
         if (!file.size || file.size > Math.min(caps.limits.max_bytes, 200_000_000)) throw new api.DocumentError('DOCUMENT_SOURCE_TOO_LARGE');
-        if (!caps.models.some(item => item.id === modelId) || !caps.languages.some(item => item.id === language)) throw new api.DocumentError('MODEL_DOCUMENT_UNSUPPORTED');
+        if (!caps.models.some(item => !modelId || item.id === modelId) || !caps.languages.some(item => item.id === language)) throw new api.DocumentError('MODEL_DOCUMENT_UNSUPPORTED');
         setProgress({ phase: 'hashing', percent: 0 });
         const sha256 = await api.hashDocument(file, signal, bytes => setProgress({ phase: 'hashing', percent: Math.round(bytes / file.size * 100) }));
         signal.throwIfAborted();
@@ -129,7 +137,16 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
       if (task.status === 'uploading') throw new api.DocumentError('DOCUMENT_UPLOAD_CLOSED');
       setNotice(t.confirmed); draft.current = undefined; setFile(undefined); setProgress(undefined);
     } catch (error) {
-      if (!signal.aborted) { fail(error); setNotice(t.notConfirmed); }
+      if (!signal.aborted) {
+        fail(error);
+        if (error instanceof Error && error.message === 'DOCUMENT_MEMBERSHIP_REQUIRED') {
+          draft.current = undefined; setFile(undefined); setProgress(undefined);
+          setCaps(old => old && { ...old, enabled: false, unavailable_reason: 'membership_required', models: [] });
+        } else if (error instanceof Error && ['MODEL_DOCUMENT_UNSUPPORTED', 'TRANSLATION_MODEL_UNAVAILABLE'].includes(error.message)) {
+          draft.current = undefined; setProgress(undefined);
+          void readCapabilities(context).catch(() => {});
+        } else setNotice(t.notConfirmed);
+      }
     } finally {
       if (scope.current === context) {
         working.current = false; setBusy(false); setBefore(null); setRefresh(value => value + 1);
@@ -166,11 +183,8 @@ export function useDocumentTasks(account: Account | undefined, locale: Locale) {
     setError(''); setRefresh(value => value + 1);
     const context = scope.current;
     if (!context) return;
-    try {
-      const api = await import('./document-api');
-      const result = await api.documentRequest<DocumentCapabilities>('/capabilities', context.identity, { signal: context.controller.signal });
-      if (!context.controller.signal.aborted) setCaps(result);
-    } catch (error) { if (!context.controller.signal.aborted) fail(error); }
+    try { await readCapabilities(context); }
+    catch (error) { if (!context.controller.signal.aborted) fail(error); }
   }
   return { caps, file, rows, before, nextCursor, loading, busy, actionId, progress, error, notice,
     draftId: draft.current?.id, frozen: draft.current?.body, selectFile, upload, action, refreshAll,

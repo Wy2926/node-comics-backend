@@ -6,19 +6,7 @@ import {quotaPurchase} from '../src/i18n/quota-purchase';
 import {membershipBillingType,membershipPricing,offerForInterval} from '../src/lib/billing-cycle';
 import {publishedSubscriptions} from '../src/data/published-plans';
 import {prepaidMembershipCopy} from '../src/i18n/prepaid-membership';
-import {comparisonCopy} from '../src/lib/pricing-comparison';
 import {locales} from '../src/i18n/locales';
-
-test('all pricing locales distinguish ordinary and subscription translation models',()=>{
-  for(const locale of locales){
-    const copy=comparisonCopy(locale);
-    assert.ok(copy.model.label.trim(),locale);
-    assert.match(copy.model.free,/GPT 6 Luna/,locale);
-    assert.match(copy.model.free,/Haiku 5\.5/,locale);
-    for(const model of ['GPT 6 Luna','Claude Haiku 5.5','DeepSeekv4 Pro','DeepSeek V4.1 Flash','Gemini 3.8 Flash'])assert.ok(copy.model.lite.includes(model),locale);
-    assert.doesNotMatch(copy.model.free,/Gemini|DeepSeek/,locale);
-  }
-});
 
 test('all purchase locales preserve placeholders and do not describe a page pack as a subscription',()=>{
   const pack={id:'pack',name:'Pages',plan_id:'pack',plan_revision_id:'pack-v1',currency:'usd',unit_amount:123,interval:'once',quota_pages:100,quota_validity_days:null,service_plan_id:'lite',monthly_classic_pages:0,trial_days:0,trial_classic_pages:0,channels:[]} as BillingOffer;

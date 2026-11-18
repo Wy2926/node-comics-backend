@@ -313,7 +313,7 @@ def recover_received_uploads(limit=100):
                 receipt.status = 'validating'
                 job.status, job.phase = 'validating_upload', 'validating_upload'
                 if not db.scalar(select(JobStage.id).where(JobStage.job_id == job.id, JobStage.name == 'validate_upload')):
-                    db.add(JobStage(job_id=job.id, name='validate_upload', status='ready'))
+                    db.add(JobStage.for_job(job, name='validate_upload', status='ready'))
                 touch_job(db, job)
                 restored += 1
             else:

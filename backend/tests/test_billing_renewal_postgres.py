@@ -3,23 +3,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier, Event, local
 
-from fastapi.testclient import TestClient
-import pytest
-
-from test_postgres_concurrency import pg_scope, pytestmark
+from test_postgres_concurrency import pytestmark
 from test_creem_billing import creem_billing
 from test_billing_renewal import renewal, paid, gift, stored_subscription, sync
 from test_stripe_billing import billing
 from test_stripe_renewal import stripe_renewal
-
-
-@pytest.fixture
-def client(pg_scope):
-    from app.main import app
-    from app.migrate import migrate
-    migrate()
-    with TestClient(app) as value:
-        yield value
 
 
 def ready_to_resume(state):

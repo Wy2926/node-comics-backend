@@ -2,28 +2,10 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
-import pytest
-from fastapi.testclient import TestClient
-from test_postgres_concurrency import pg_scope, pytestmark
+from test_postgres_concurrency import pytestmark
 from test_stripe_billing import billing
 from test_creem_billing import creem_billing
-from test_subscription_checkout_independence import (
-    buyer, checkout,
-    test_both_paid_orders_survive_and_duplicate_subscriptions_are_visible,
-    test_pending_lookup_is_price_and_account_scoped_and_reconciliation_rotates,
-    test_unknown_creem_checkout_only_blocks_its_own_price,
-    test_independent_subscription_cannot_take_another_accounts_customer,
-    test_secondary_customer_is_still_account_owned,
-)
-
-
-@pytest.fixture
-def client(pg_scope):
-    from app.main import app
-    from app.migrate import migrate
-    migrate()
-    with TestClient(app) as value:
-        yield value
+from test_subscription_checkout_independence import buyer, checkout
 
 
 def test_concurrent_choices_keep_one_intent_per_price(buyer):

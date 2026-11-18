@@ -1,12 +1,10 @@
 """Preserve sold subscriptions and packs while allowing order-backed paid terms."""
 from datetime import datetime
-import os
 from sqlalchemy import MetaData, inspect, text
 from sqlalchemy.exc import IntegrityError
 import pytest
 from test_job_results_migration import migrate
 from test_request_limits_migration import isolated_migration_database  # noqa: F401
-from test_postgres_concurrency import pg_scope  # noqa: F401
 
 
 def test_prepaid_upgrade_preserves_existing_prices_terms_and_quota(isolated_migration_database):
@@ -54,8 +52,6 @@ def test_prepaid_upgrade_preserves_existing_prices_terms_and_quota(isolated_migr
         assert str(term.starts_at).startswith('2026-01-31') and str(term.ends_at).startswith('2026-02-28')
         assert list(db.execute(text('SELECT granted,used,reserved FROM quota_periods ORDER BY id'))) == [(100, 9, 2), (300, 17, 2)]
         assert db.scalar(text('SELECT count(*) FROM billing_price_bindings')) == 2
-        if engine.dialect.name == 'sqlite':
-            assert db.exec_driver_sql('PRAGMA foreign_key_check').first() is None
     columns = {column['name']: column for column in inspect(engine).get_columns('billing_terms')}
     assert columns['subscription_id']['nullable'] and columns['billing_order_id']['nullable']
     with engine.begin() as db:
@@ -70,9 +66,3 @@ def test_prepaid_upgrade_preserves_existing_prices_terms_and_quota(isolated_migr
                     "VALUES ('invalid','buyer',:subscription,:order,'plus-price',:kind,'2027-03-01','2027-06-01')"),
                     {'subscription': subscription, 'order': order, 'kind': kind})
     migrate(engine, 'head')
-
-
-@pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1', reason='Requires dedicated PostgreSQL test database')
-def test_prepaid_upgrade_on_postgres(pg_scope):
-    from app.db import engine
-    test_prepaid_upgrade_preserves_existing_prices_terms_and_quota(engine())

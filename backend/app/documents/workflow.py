@@ -7,7 +7,7 @@ from ..errors import ProcessingError
 from ..models import Attempt, Job, now
 from ..providers import digest
 from ..queue_models import ComputeNode, ExecutionLease, JobStage
-from ..scheduler import current_lease, lock_scheduler, release_lease, remaining_capacity, touch_job
+from ..scheduler import current_lease, lock_scheduler, release_lease, slot_budget, touch_job
 from .models import Document, DocumentPage
 
 CONTROL_STAGES = ('doc_text',)
@@ -34,7 +34,7 @@ def ensure_prepare(db, job):
     if job.status in TERMINAL or job.cancel_requested:
         return
     if not stage_for(db, job.id, 'doc_prepare'):
-        db.add(JobStage(job_id=job.id, name='doc_prepare', page_index=0, status='ready'))
+        db.add(JobStage.for_job(job, name='doc_prepare', page_index=0, status='ready'))
     job.status, job.phase = 'preflight', 'doc_prepare'
     touch_job(db, job)
 
@@ -59,9 +59,9 @@ def install_pages(db, job, pages):
         db.add(DocumentPage(job_id=job.id, page_index=page['page_index'],
             source_name=page['source_name'], input_ref=page['input_ref']))
         for name in ('doc_ocr', 'doc_render'):
-            db.add(JobStage(job_id=job.id, name=name, page_index=page['page_index'], status='waiting'))
+            db.add(JobStage.for_job(job, name=name, page_index=page['page_index'], status='waiting'))
     for name in ('doc_text', 'doc_zip'):
-        db.add(JobStage(job_id=job.id, name=name, page_index=0, status='waiting'))
+        db.add(JobStage.for_job(job, name=name, page_index=0, status='waiting'))
     db.flush()
 
 
@@ -299,13 +299,14 @@ def claim_control(db, executor_id):
     from .config import get_document_settings
     cfg = get_document_settings()
     # Indexed bounded candidate election outside the global admission lock.
-    candidate_ids = list(db.scalars(select(JobStage.id).join(Job, Job.id == JobStage.job_id)
+    queue = (select(JobStage, Job).join(Job, Job.id == JobStage.job_id)
         .join(Document, Document.job_id == Job.id).where(
         Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
         Document.owner_node_id.is_not(None),
         Job.cancel_requested.is_(False), JobStage.name.in_(CONTROL_STAGES),
-        JobStage.status == 'ready', JobStage.available_at <= now())
-        .order_by(JobStage.available_at, JobStage.id).limit(32)))
+        JobStage.status == 'ready', JobStage.available_at <= now()))
+    ordered = queue.order_by(JobStage.service_priority.desc(), JobStage.available_at, JobStage.id)
+    candidate_ids = list(db.scalars(ordered.with_only_columns(JobStage.id).limit(32)))
     lock_scheduler(db)
     node = db.get(ComputeNode, NODE_ID, populate_existing=True)
     if node is None:
@@ -315,13 +316,14 @@ def claim_control(db, executor_id):
         db.add(node)
         db.flush()
     node.heartbeat_at = now()
-    if not candidate_ids or not remaining_capacity(db, node):
+    if not candidate_ids:
         return None
-    row = db.execute(select(JobStage, Job).join(Job, Job.id == JobStage.job_id).where(
-        JobStage.id.in_(candidate_ids), JobStage.status == 'ready', JobStage.available_at <= now(),
-        Job.cancel_requested.is_(False), Job.status.in_(['preflight', 'queued', 'running']))
-        .order_by(JobStage.available_at, JobStage.id).limit(1).execution_options(populate_existing=True)).first()
-    if not row:
+    free, ordinary = slot_budget(db, node)
+    if not free:
+        return None
+    row = db.execute(ordered.where(JobStage.id.in_(candidate_ids), JobStage.service_priority >= int(not ordinary)).limit(1)
+        .execution_options(populate_existing=True)).first()
+    if not row or (not row[0].service_priority and db.scalar(select(queue.where(JobStage.service_priority > 0).exists()))):
         return None
     lease = start_lease(db, node, row[0], row[1], now(), executor_id)
     lease.limits = {'workspace_generation': db.get(Document, row[1].id).workspace_generation}

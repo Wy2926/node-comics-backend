@@ -280,7 +280,7 @@ def test_provider(provider_id: str, body: ProviderTest, user: User = Depends(adm
     budget = window('admin-provider-test', provider.id, 1, member=uid(), seconds=30)
     if budget['retry_after_seconds']:
         problem('PROVIDER_TEST_RATE_LIMITED', '此供应商刚刚测试过，请 30 秒后再试', 429)
-    reserve_request(provider)
+    reserve_request(provider, priority=1)
     channel, config, credential, actor_id = revision.channel, dict(revision.config), revision.api_key, user.id
     revision_id = revision.id
     db.rollback()  # Never hold a DB connection/lock during the upstream call.

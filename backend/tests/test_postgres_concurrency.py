@@ -14,31 +14,22 @@ from datetime import timedelta
 from io import BytesIO
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import threading
 import time
-from uuid import uuid4
 
 import pytest
 from PIL import Image
-from sqlalchemy import URL, create_engine, event, func, select, text
-from conftest import run_job
+from sqlalchemy import event, func, select, text
+from conftest import TEST_DATABASE, pg_scope, run_job
 from translation_fixtures import configure_text_provider
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_POSTGRES_CONCURRENCY") != "1",
     reason="Opt in with RUN_POSTGRES_CONCURRENCY=1 and a separate PostgreSQL test database",
 )
-TEST_DATABASE = "nodecomics_concurrency_test"
 MIGRATION_LOCK_ID = 761349210
-
-
-def test_scheduler_upgrade_preserves_running_v3_work(pg_scope):
-    from app.db import engine
-    from test_request_limits_migration import test_fifo_upgrade_preserves_checkpoint_and_active_lease
-    test_fifo_upgrade_preserves_checkpoint_and_active_lease(engine())
 
 
 def wait_until(predicate, *, timeout=10):
@@ -51,62 +42,10 @@ def wait_until(predicate, *, timeout=10):
 
 
 @pytest.fixture
-def pg_scope(tmp_path, monkeypatch):
-    """Never use DATABASE_URL from the live application or touch its schema."""
-    monkeypatch.setenv("APP_ENV", "test")
-    database = os.environ.get("TEST_PG_DATABASE", TEST_DATABASE)
-    if database != TEST_DATABASE:
-        pytest.fail("Refusing to run outside the dedicated nodecomics_concurrency_test database")
-    password = os.environ.get("TEST_PG_PASSWORD") or os.environ.get("POSTGRES_PASSWORD")
-    if not password:
-        pytest.fail("Set TEST_PG_PASSWORD or inject deploy/.env.local with docker --env-file")
-    base_url = URL.create(
-        "postgresql+psycopg", username=os.environ.get("TEST_PG_USER", "nodecomics"),
-        password=password, host=os.environ.get("TEST_PG_HOST", "postgres"),
-        port=int(os.environ.get("TEST_PG_PORT", "5432")), database=database,
-    )
-    schema = "nc_concurrency_" + uuid4().hex
-    assert re.fullmatch(r"nc_concurrency_[a-f0-9]{32}", schema)
-    administration = create_engine(base_url, isolation_level="AUTOCOMMIT")
-    with administration.connect() as connection:
-        assert connection.scalar(text("SELECT current_database()")) == TEST_DATABASE
-        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    app_name = "nc-test-" + schema
-    url = base_url.update_query_dict({
-        "options": f"-csearch_path={schema} -clock_timeout=8000 -cstatement_timeout=15000",
-        "application_name": app_name,
-    })
-    monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
-    monkeypatch.setenv("STORAGE_PATH", str(tmp_path / "images"))
-    monkeypatch.setenv("DEV_AUTH", "true")
-    monkeypatch.setenv("DEV_AUTH_SECRET", "isolated-postgres-test-auth-key-not-used-for-product")
-    monkeypatch.setenv('CLASSIC_ENABLED', 'true')
-    from app.config import settings
-    from app.db import engine
-    if engine.cache_info().currsize:
-        engine().dispose()
-    engine.cache_clear()
-    settings.cache_clear()
-    from app import workers
-
+def pg(pg_scope, monkeypatch):
     def prohibited(*args, **kwargs):
-        raise AssertionError("Real provider calls are prohibited in PostgreSQL concurrency tests")
-
-    monkeypatch.setattr("conftest.fixture_output", prohibited)
-    from app import classic
-    monkeypatch.setattr(classic, 'call_text', prohibited)
-    yield {"schema": schema, "application_name": app_name, "administration": administration}
-    engine().dispose()
-    engine.cache_clear()
-    settings.cache_clear()
-    with administration.connect() as connection:
-        assert connection.scalar(text("SELECT current_database()")) == TEST_DATABASE
-        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-    administration.dispose()
-
-
-@pytest.fixture
-def pg(pg_scope):
+        raise AssertionError('Unexpected provider call in the concurrency fixture')
+    monkeypatch.setattr('conftest.fixture_output', prohibited)
     from app.db import session_factory
     from app.migrate import migrate
     from app.assets import create_asset
@@ -167,8 +106,9 @@ def test_postgres_concurrent_idempotent_creation_reserves_once(pg):
         results = list(pool.map(create_concurrently, range(8)))
     assert len(set(results)) == 1
     with session_factory()() as db:
-        for table in (Job, Ledger, JobStage):
+        for table in (Job, Ledger):
             assert db.scalar(select(func.count()).select_from(table)) == 1
+        assert sorted(db.scalars(select(JobStage.name))) == ['page', 'text']
         user = db.get(User, pg["owner_id"])
         from app.entitlement_models import QuotaPeriod
         period = db.scalar(select(QuotaPeriod).where(QuotaPeriod.owner_id == user.id))
@@ -260,8 +200,6 @@ def test_postgres_stale_worker_before_intent_cannot_call_after_recovery(pg, monk
 
 
 def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monkeypatch):
-    from app import workers
-
     from app.assets import object_path, owned_asset
     from app.db import engine, session_factory
     from app.jobs import job_json
@@ -272,12 +210,10 @@ def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monk
     from fastapi import HTTPException
     job_id = new_job(pg)
     finalizing, resume_finalize, deletion_waiting = [threading.Event() for _ in range(3)]
-    real_create_asset = workers.create_asset
-
-    def pause_finalization(*args, **kwargs):
+    def pause_finalization(original):
         finalizing.set()
         assert resume_finalize.wait(15)
-        return real_create_asset(*args, **kwargs)
+        return original
 
     def observe_delete_lock(connection, cursor, statement, parameters, context, executemany):
         if threading.current_thread().name.startswith("delete-original") and "pg_advisory_xact_lock" in statement:
@@ -288,8 +224,7 @@ def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monk
             receipt = db.scalar(select(TranslationRequest).where(TranslationRequest.job_id == job_id))
             return translation_delete(UUID(receipt.id), user=db.get(User, pg["owner_id"]), db=db)
 
-    monkeypatch.setattr(workers, "create_asset", pause_finalization)
-    monkeypatch.setattr("conftest.fixture_output", lambda *args: pg["png"])
+    monkeypatch.setattr("conftest.fixture_output", pause_finalization)
     event.listen(engine(), "before_cursor_execute", observe_delete_lock)
     try:
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="finalize-result") as worker_pool, ThreadPoolExecutor(max_workers=1, thread_name_prefix="delete-original") as delete_pool:

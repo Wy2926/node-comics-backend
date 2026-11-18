@@ -13,7 +13,6 @@ import { homeCopy } from '../src/i18n/home';
 import { sitesCopy } from '../src/i18n/sites';
 import { publishedAmount } from '../src/components/PublishedPlanPricing';
 import { comparisonRows } from '../src/lib/pricing-comparison';
-import { publishedModels } from '../src/data/published-plans';
 import { dictionaries, locales, localeFromPath, basePath, localPath, publicPaths } from '../src/i18n';
 const root = resolve('dist');
 async function files(dir: string): Promise<string[]> { return (await Promise.all((await readdir(dir, { withFileTypes: true })).map(entry => entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir,entry.name)]))).flat(); }
@@ -353,14 +352,14 @@ for (const file of htmlFiles) {
     for (const [index, tier] of ['free', 'lite', 'lite'].entries()) {
       const card = cards.eq(index);
       if (card.find('.subscription-allowance').length !== 1) errors.push(`${label}: missing prominent page allowance`);
-      for (const feature of expectedRows.filter(row => row.key === 'rate' || row.key === 'priority')) {
+      for (const feature of expectedRows.filter(row => row.key === 'model' || row.key === 'rate' || row.key === 'priority')) {
         const row = card.find(`[data-feature="${feature.key}"]`);
         if (row.length !== 1 || row.find('strong').text() !== feature[tier as 'free' | 'lite']) errors.push(`${label}: missing localized card benefit ${tier}/${feature.key}`);
       }
-      if (card.find('.plan-models .icon-check').length !== publishedModels.free.length + (index === 0 ? 0 : publishedModels.paid_extra.length)) errors.push(`${label}: incorrect free/paid model access`);
     }
     const table = comparison.find('.plan-comparison');
-    if (table.find('thead th').length !== 4 || table.find('tr[data-model]').length !== publishedModels.free.length + publishedModels.paid_extra.length) errors.push(`${label}: missing Free/PLUS/Pro model comparison`);
+    const keys = table.find('tbody tr').toArray().map(node => $(node).attr('data-feature'));
+    if (table.find('thead th').length !== 4 || JSON.stringify(keys) !== JSON.stringify(expectedRows.map(row => row.key))) errors.push(`${label}: incorrect Free/PLUS/Pro comparison rows`);
     if (!comparison.find('[data-plan="pro"] .plan-difference').text().includes((1500).toLocaleString(locale))) errors.push(`${label}: missing catalog-driven paid quota difference`);
     for (const feature of expectedRows.filter(row => row.detail)) {
       const row = table.find(`[data-feature="${feature.key}"]`), trigger = row.find('.feature-info-trigger'), tip = row.find('[role="tooltip"]');
@@ -382,7 +381,7 @@ for (const file of htmlFiles) {
     const resolved = new URL(target, canonical);
     if (resolved.origin !== site.url) continue;
     const path = resolved.pathname;
-    if (Object.values(site.extensionPackages).some(release => path === release.path)) continue; // Backend allowlisted R2 downloads.
+    if (Object.values(site.extensionPackages).some(release => path === release.path || resolved.href === release.download_url)) continue; // Proxy allowlisted downloads.
     const actual = target.startsWith('#') ? file : join(root, path.endsWith('/') ? `${path}index.html` : path);
     if (!await stat(actual).catch(() => false)) errors.push(`${label}: broken local link ${target}`);
     const targetPage = pages.get(actual);

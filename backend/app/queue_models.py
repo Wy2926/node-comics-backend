@@ -1,6 +1,6 @@
 """Database authority for compute capacity and fenced stage leases."""
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, SmallInteger, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
@@ -35,11 +35,18 @@ class JobStage(Base):
     status: Mapped[str] = mapped_column(String(20), default="waiting", index=True)
     generation: Mapped[int] = mapped_column(Integer, default=0)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    service_priority: Mapped[int] = mapped_column(SmallInteger, server_default='0')
     available_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     __table_args__ = (UniqueConstraint('job_id', 'name', 'page_index', name='uq_job_stage_page'),
-                     Index("ix_stage_ready", "status", "name", "available_at", "id"))
+                     Index("ix_stage_ready", "status", "name", "available_at", "id"),
+                     Index("ix_stage_service_ready", "name", service_priority.desc(), "available_at", "id",
+                           sqlite_where=text("status = 'ready'"), postgresql_where=text("status = 'ready'")))
+
+    @classmethod
+    def for_job(cls, job, **values):
+        return cls(job_id=job.id, service_priority=job.service_priority, **values)
 
 
 class ExecutionLease(Base):

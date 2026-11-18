@@ -2,20 +2,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from test_postgres_concurrency import pg_scope, pytestmark
+from test_postgres_concurrency import pytestmark
 from test_creem_billing import creem_billing, complete, transaction, periods
-from test_billing_admin import administrator, test_early_subscription_notification_is_visible_before_subscription_binding
-
-
-@pytest.fixture
-def client(pg_scope):
-    from app.main import app
-    from app.migrate import migrate
-    migrate()
-    with TestClient(app) as value:
-        yield value
 
 
 @pytest.mark.parametrize('trial,interval', [(True, 'month'), (False, 'month'), (False, 'year')])

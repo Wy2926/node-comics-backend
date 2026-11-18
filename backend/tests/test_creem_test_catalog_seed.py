@@ -147,8 +147,7 @@ def test_outer_transaction_rolls_back_handler_commits(catalog_fixture, monkeypat
 
     monkeypatch.setattr(billing_catalog, 'publish_price', fail_after_first_offer)
     with engine().connect() as connection:
-        # Python's SQLite legacy mode otherwise defers BEGIN until after SAVEPOINT.
-        connection.exec_driver_sql('BEGIN')
+        connection.begin()
         with Session(bind=connection, expire_on_commit=False, join_transaction_mode='create_savepoint') as db:
             with pytest.raises(seed.SeedError, match='SIMULATED_PUBLICATION_FAILURE'):
                 seed.seed_catalog(db, ids)

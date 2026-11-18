@@ -1,20 +1,9 @@
 """Simultaneous administrator updates in isolated PostgreSQL."""
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
-from fastapi.testclient import TestClient
-import pytest
-from test_postgres_concurrency import pg_scope, pytestmark
+from test_postgres_concurrency import pytestmark
 from test_creem_billing import creem_billing
 from test_billing_default_provider import enable_stripe
-
-
-@pytest.fixture
-def client(pg_scope):
-    from app.main import app
-    from app.migrate import migrate
-    migrate()
-    with TestClient(app) as value:
-        yield value
 
 
 def test_concurrent_admin_updates_leave_exactly_one_default(creem_billing, monkeypatch):

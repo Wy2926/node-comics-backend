@@ -1,5 +1,6 @@
 """Read paid/trial access from granted terms, independently of quota balances."""
-from sqlalchemy import and_, case, func, literal, or_, select, union_all
+from sqlalchemy import Numeric, and_, case, func, literal, or_, select, union_all
+from sqlalchemy.orm import aliased
 from .billing_models import BillingOrder, BillingPlanRevision, BillingPrice, BillingSubscription, BillingTerm
 from .models import now
 from .quota_amounts import MIN_QUOTA
@@ -28,8 +29,12 @@ def active_benefits(db, owner_id, at=None):
         BillingTerm.revoked_at.is_(None), BillingTerm.starts_at <= at, BillingTerm.ends_at > at)))
 
 
-def first_purchase(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
-    """One available page bucket and its original immutable service quote.
+def subscription_in_scope(plans):
+    return func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(plans)
+
+
+def purchase_periods(owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
+    """Spendable page buckets and their original immutable quotes.
 
     Depleted permanent purchases are deliberately outside the partial-index
     selector. No purchase history or account-wide balance is loaded at admission.
@@ -40,17 +45,27 @@ def first_purchase(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
         BillingPrice.id == BillingOrder.price_id).join(BillingPlanRevision,
         BillingPlanRevision.id == BillingPrice.plan_revision_id).where(
             QuotaPeriod.owner_id == owner_id, BillingOrder.owner_id == owner_id,
-            QuotaPeriod.mode == 'classic', QuotaPeriod.source == 'purchase',
-            QuotaPeriod.revoked_at.is_(None), QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved,
+            QuotaPeriod.mode == 'classic', QuotaPeriod.source == literal('purchase', literal_execute=True),
+            # Match the partial index PostgreSQL retained when 0028 converted balances to NUMERIC.
+            QuotaPeriod.revoked_at.is_(None), QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved.cast(Numeric),
             func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= amount,
             QuotaPeriod.starts_at <= at, or_(QuotaPeriod.ends_at.is_(None), QuotaPeriod.ends_at > at))
     if service_plans is not None:
-        query = query.where(BillingPlanRevision.service_plan_id.in_(service_plans))
-    return db.execute(query.order_by(QuotaPeriod.ends_at.asc().nulls_last(), QuotaPeriod.starts_at, QuotaPeriod.id).limit(1)).first()
+        # Existing membership IDs always mean their service tier, even if the SKU also sells packs.
+        membership = aliased(BillingPlanRevision)
+        is_tier = select(membership.id).where(membership.plan_id == BillingPlanRevision.plan_id,
+                                              membership.quota_pages == 0).exists()
+        query = query.where(or_(BillingPlanRevision.service_plan_id.in_(service_plans),
+                                and_(BillingPlanRevision.plan_id.in_(service_plans), ~is_tier)))
+    return query.order_by(QuotaPeriod.ends_at.asc().nulls_last(), QuotaPeriod.starts_at, QuotaPeriod.id)
 
 
-def first_subscription(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
-    """Choose a spendable monthly bucket with the service that issued it."""
+def first_purchase(db, owner_id, at, **scope):
+    return db.execute(purchase_periods(owner_id, at, **scope).limit(1)).first()
+
+
+def subscription_periods(owner_id, at, *, service_plans=None, amount=MIN_QUOTA):
+    """Spendable monthly buckets with the service that issued them."""
     from .entitlement_models import QuotaPeriod
     query = select(QuotaPeriod, BillingPlanRevision).join(BillingTerm,
         BillingTerm.id == QuotaPeriod.billing_term_id).join(BillingPrice,
@@ -64,8 +79,12 @@ def first_subscription(db, owner_id, at, *, service_plans=None, amount=MIN_QUOTA
             QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved,
             func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= amount)
     if service_plans is not None:
-        query = query.where(func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(service_plans))
-    return db.execute(query.order_by(QuotaPeriod.ends_at, QuotaPeriod.starts_at, QuotaPeriod.id).limit(1)).first()
+        query = query.where(subscription_in_scope(service_plans))
+    return query.order_by(QuotaPeriod.ends_at, QuotaPeriod.starts_at, QuotaPeriod.id)
+
+
+def first_subscription(db, owner_id, at, **scope):
+    return db.execute(subscription_periods(owner_id, at, **scope).limit(1)).first()
 
 
 def plan_expression(at):

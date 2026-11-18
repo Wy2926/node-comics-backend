@@ -73,6 +73,13 @@ class Asset(Base):
 
 class Job(Base):
     __tablename__ = "jobs"
+
+    @property
+    def service_priority(self):
+        # Older documents froze their plan but hardcoded priority to zero.
+        rights = self.entitlement or {}
+        return int(rights.get('plan') not in (None, 'free', 'guest') or bool(rights.get('priority')))
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     submitted_ip: Mapped[str | None] = mapped_column(String(45))

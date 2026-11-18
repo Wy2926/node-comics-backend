@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Modele tłumaczenia"
+      "label": "Zaawansowane modele tłumaczenia"
     },
     "feature": "Funkcje i korzyści",
     "highlights": "PRZETŁUMACZ Z PLUS / Pro",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Tłumaczenie lokalne",
-      "free": "Obsługa samodzielnie hostowanego MTU",
-      "lite": "Obsługa samodzielnie hostowanego MTU",
-      "detail": "Tłumaczenie lokalne wymaga samodzielnego uruchomienia MTU; konieczność połączenia z Internetem zależy od używanych modeli i dostawców."
+      "free": "Wbudowane tłumaczenie w przeglądarce i własny MTU",
+      "lite": "Wbudowane tłumaczenie w przeglądarce i własny MTU",
+      "detail": "Rozszerzenie obsługuje wbudowane tłumaczenie w przeglądarce (beta) oraz samodzielnie hostowane MTU. Wymóg połączenia z internetem zależy od wybranego kanału i jego konfiguracji."
     },
     "rate": {
       "label": "Limit nowych żądań tłumaczenia",

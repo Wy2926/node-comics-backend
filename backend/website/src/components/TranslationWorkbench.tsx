@@ -129,9 +129,11 @@ export default function TranslationWorkbench({ locale, copy: t, workbench: w }: 
   const [usedBytes, setUsedBytes] = useState(0);
   const isGuestScope = showGuest || !account;
   const documents = useDocumentTasks(isGuestScope ? undefined : account, locale);
+  const documentUnavailable = documents.caps?.unavailable_reason === 'membership_required' ? documentText.access : documentText.disabled;
   const hasNewImages = rows.some(row => !row.requestId && (row.state === 'draft' || row.state === 'preparing'));
   const availableModels = workbenchModels(caps?.translation_models, documents.caps, hasNewImages, !!documents.file);
-  const effectiveModelId = documents.frozen?.model_id ?? (documents.file ? modelId ?? availableModels?.find(model => model.available)?.id : modelId);
+  const effectiveModelId = documents.frozen ? documents.frozen.model_id : modelId ??
+    (documents.file && hasNewImages ? availableModels?.find(model => model.available)?.id : undefined);
   const workingNow = busy || documents.busy;
   const imageLanguages =
     caps?.languages.filter((item) =>
@@ -153,7 +155,7 @@ export default function TranslationWorkbench({ locale, copy: t, workbench: w }: 
       if (selected.documents.length > 1 || documents.file) documentIssue = w.oneDocument;
       else if (isGuestScope) documentIssue = documentText.access;
       else if (!documents.caps) documentIssue = documentText.loading;
-      else if (!documents.caps.enabled) documentIssue = documentText.disabled;
+      else if (!documents.caps.enabled) documentIssue = documentUnavailable;
       else if (!documents.caps.models.length) documentIssue = documentText.noModels;
       else if (!selected.documents[0].size || selected.documents[0].size > Math.min(documents.caps.limits.max_bytes, 200_000_000)) documentIssue = documentText.errors.file;
     }
@@ -745,11 +747,11 @@ export default function TranslationWorkbench({ locale, copy: t, workbench: w }: 
     (documents.frozen || selectedModelAvailable(availableModels, effectiveModelId)) &&
     (!pendingImages.length || selectedModelAvailable(caps?.translation_models, effectiveModelId)) &&
     (!pendingImages.length || !isGuestScope || guest?.enabled) &&
-    (!documents.file || documents.caps?.enabled);
+    (!documents.file || !!documents.frozen || documents.caps?.enabled);
   function start() {
     if (!canStart) return;
     // Separate executors, shared user intent. Neither lane waits for the other's backend processing.
-    if (documents.file) void documents.upload(language, effectiveModelId!);
+    if (documents.file) void documents.upload(language, effectiveModelId);
     if (pendingImages.length) void run(pendingImages);
   }
   async function clearCache() {
@@ -846,7 +848,7 @@ export default function TranslationWorkbench({ locale, copy: t, workbench: w }: 
         <div className="workbench-composer-notes"><p>{w.documentHint}</p><p>{modelsCopy.hint}</p></div>
         {documents.file && <p className="translation-note" lang={documentText.lang}>{documentText.quotaRule}</p>}
         {documents.file && !documents.frozen && !selectedModelAvailable(availableModels, effectiveModelId) && <p className="translation-error" role="status">{modelsCopy.not_allowed}</p>}
-        {account && documents.caps && !documents.caps.enabled && <p className="translation-note" lang={documentText.lang}>{documentText.disabled}</p>}
+        {account && documents.caps && !documents.caps.enabled && <p className="translation-note" lang={documentText.lang}>{documentUnavailable}</p>}
       </section>
       {check && (
         <div className="translation-verification-overlay">

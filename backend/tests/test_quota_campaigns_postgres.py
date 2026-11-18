@@ -1,46 +1,5 @@
 """Run campaign invariants against real PostgreSQL, including competing workers."""
-import pytest
-from fastapi.testclient import TestClient
-from test_postgres_concurrency import pg_scope, pytestmark
-from test_quota_campaign_duration import (
-    test_duration_preserves_used_reserved_receipts_and_late_settlement,
-    test_duration_future_only_and_explicit_existing_scope,
-    test_duration_permissions_validation_and_not_found,
-    test_duration_end_stops_registration_without_expiring_existing_gifts,
-    test_duration_audit_failure_rolls_back_every_changed_grant,
-    test_status_recovery_requires_the_same_actor_and_original_receipt,
-)
-from test_quota_campaigns import (
-    verify_quota_upgrade,
-    test_backfill_existing_and_registration_share_once_only_receipts,
-    test_configuration_is_private_immutable_and_explicitly_enabled,
-    test_audience_boundary_pause_resume_and_no_regrant,
-    test_delivery_windows_expiry_and_registration_recovery,
-    test_rollback_does_not_leave_receipt_or_partial_registration,
-    test_independent_campaigns_and_users_preserve_quota_settlement,
-    test_permanent_free_grant_has_nullable_expiry_contract,
-    test_concurrent_delivery_is_exactly_once,
-    test_oidc_concurrent_first_requests_get_one_user_and_award,
-)
-
-
-def test_upgrade_keeps_referenced_quota_and_ledger(pg_scope):
-    from app.db import engine
-    verify_quota_upgrade(engine())
-
-
-@pytest.fixture
-def client(pg_scope):
-    from app.main import app
-    from app.db import session_factory
-    from translation_fixtures import configure_text_provider
-    from app.migrate import migrate
-    migrate()
-    with TestClient(app) as value:
-        with session_factory()() as db:
-            configure_text_provider(db)
-            db.commit()
-        yield value
+from test_postgres_concurrency import pytestmark
 
 
 def test_pause_waits_for_delivery_and_stops_next_award(client):

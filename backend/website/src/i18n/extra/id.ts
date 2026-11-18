@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Model terjemahan"
+      "label": "Model terjemahan lanjutan"
     },
     "feature": "Fitur dan manfaat",
     "highlights": "TERJEMAHKAN DENGAN PLUS / Pro",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Terjemahan lokal",
-      "free": "Mendukung MTU yang dihosting sendiri",
-      "lite": "Mendukung MTU yang dihosting sendiri",
-      "detail": "Terjemahan lokal memerlukan MTU yang dihosting sendiri; kebutuhan koneksi Internet bergantung pada model dan penyedia yang digunakan."
+      "free": "Terjemahan bawaan browser dan MTU yang dihosting sendiri",
+      "lite": "Terjemahan bawaan browser dan MTU yang dihosting sendiri",
+      "detail": "Ekstensi mendukung terjemahan bawaan browser (beta) dan MTU yang dihosting sendiri. Kebutuhan koneksi internet bergantung pada kanal dan konfigurasi yang dipilih."
     },
     "rate": {
       "label": "Batas permintaan terjemahan baru",

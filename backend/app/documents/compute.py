@@ -22,7 +22,7 @@ from ..providers import digest
 from ..queue_models import ComputeNode, ExecutionLease, JobStage
 from ..request_models import RequestBody
 from ..scheduler import (CANDIDATE_LIMIT, assigned_candidates, compute_loads, current_lease,
-                         has_eligible_work, lock_scheduler, release_lease, start_lease, touch_job)
+                         has_eligible_work, lock_scheduler, paid_reserve, release_lease, start_lease, touch_job)
 from ..translation_fonts import resolve_font, supports_font
 from .config import get_document_settings
 from .models import Document, DocumentPage
@@ -195,23 +195,28 @@ def sync(node_id: str, body: SyncRequest, identity=Depends(node_auth), db: Sessi
             'workspaces': workspaces}
 
 
-def document_queue(db, node):
-    cfg = NodeConfig.model_validate(node.desired_config)
-    if not node.enabled or not cfg.document_slots or node.runtime_report.get('document_protocol') != 2:
+def document_queue(db, node, *, min_priority=0):
+    if not node.enabled or node.runtime_report.get('document_protocol') != 2:
         return None
-    # Unreconciled expired leases still occupy slots. Only ordinary pages on
-    # this GPU prohibit borrowing; the control-text pool occupies no GPU slot.
+    cfg = NodeConfig.model_validate(node.desired_config)
+    if not cfg.document_slots:
+        return None
+    # Only in-flight paid images limit borrowing by a member document.
     busy = db.execute(select(func.count().label('total'),
         func.count().filter(JobStage.name.in_(NODE_STAGES)).label('documents'),
-        func.count().filter(JobStage.name == 'page').label('ordinary'))
+        func.count().filter(and_(JobStage.name == 'page', JobStage.service_priority > 0)).label('paid_images'),
+        func.count().filter(JobStage.service_priority == 0).label('ordinary'))
         .select_from(ExecutionLease).join(JobStage).where(
             ExecutionLease.node_id == node.id, ExecutionLease.completed_at.is_(None))).one()
-    limit = cfg.document_slots if busy.ordinary else node.capacity
-    if busy.total >= node.capacity or busy.documents >= limit or has_eligible_work(db, node, ['page']):
+    limit = cfg.document_slots if busy.paid_images else node.capacity
+    if busy.total >= node.capacity or busy.documents >= limit:
+        return None
+    if not min_priority and has_eligible_work(db, node, ['page'], min_priority=1):
         return None
     # Parsing/packing retain the conservative budget; only OCR/render borrow.
     stages = NODE_STAGES if busy.documents < cfg.document_slots else ('doc_ocr', 'doc_render')
-    return (select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
+    at = now()
+    queue = (select(JobStage, Job, Document).join(Job, Job.id == JobStage.job_id)
         .join(Document, Document.job_id == Job.id).where(
             Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
             or_(Document.owner_node_id == node.id,
@@ -219,27 +224,44 @@ def document_queue(db, node):
             or_(JobStage.name == 'doc_prepare', Document.reserved_at.is_not(None)),
             Job.cancel_requested.is_(False), Job.discard_output.is_(False),
             JobStage.name.in_(stages), JobStage.name.in_(node.capabilities), JobStage.status == 'ready',
-            JobStage.available_at <= now(), Job.target_language.in_(node.supported_languages),
+            JobStage.available_at <= at, Job.target_language.in_(node.supported_languages),
             supports_font(Job.config['font_id'].as_string(), Job.target_language,
                           node.runtime_report.get('supported_font_ids', []))))
+    if busy.ordinary >= node.capacity - paid_reserve(node):
+        min_priority = max(1, min_priority)
+    if min_priority:
+        queue = queue.where(JobStage.service_priority >= min_priority)
+    return queue
 
 
-def has_document_work(db, node):
-    queue = document_queue(db, node)
-    return queue is not None and db.scalar(select(queue.exists()))
+def has_document_work(db, node, *, min_priority=0):
+    queue = document_queue(db, node, min_priority=min_priority)
+    if queue is None:
+        return False
+    if min_priority:  # Caller already elected the image head; only a higher document can defer it.
+        return db.scalar(select(queue.exists()))
+    rank = db.scalar(queue.with_only_columns(JobStage.service_priority).order_by(JobStage.service_priority.desc()).limit(1))
+    return rank is not None and (rank > 0 or not has_eligible_work(db, node, ['page']))
 
 
 def claim_document(db, node, *, steal_before):
     queue = document_queue(db, node)
     if queue is None:
         return None
-    rows = db.execute(queue.order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)).all()
+    rows = db.execute(queue.order_by(JobStage.service_priority.desc(), JobStage.available_at, JobStage.id)
+        .limit(CANDIDATE_LIMIT)).all()
+    if not rows:
+        return None
+    rank = rows[0][0].service_priority
+    if not rank and has_eligible_work(db, node, ['page']):
+        return None
+    rows = [row for row in rows if row[0].service_priority == rank]
     unowned = [(stage, job) for stage, job, document in rows if document.owner_node_id is None]
     assigned = set()
     if unowned:
         loads = compute_loads(db, node, now())
         loads = {key: load for key, load in loads.items()
-            if key == node.id or not has_eligible_work(db, load[0], ['page'])}
+            if key == node.id or not has_eligible_work(db, load[0], ['page'], min_priority=rank)}
         assigned = assigned_candidates(node, unowned, loads, document=True, steal_before=steal_before)
     for stage, job, document in rows:
         if document.owner_node_id == node.id or stage.id in assigned:

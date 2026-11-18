@@ -4,9 +4,7 @@ from datetime import datetime
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Column, Integer, MetaData, inspect, select, text
-import os
 import pytest
-from test_postgres_concurrency import pg_scope
 from test_request_limits_migration import isolated_migration_database
 
 
@@ -83,8 +81,6 @@ def verify_legacy_cutover(engine, *, status='succeeded', cost_state='reported'):
         assert connection.scalar(text('SELECT comment FROM translation_feedback')) == 'preserved feedback'
         assert connection.scalar(text('SELECT count(*) FROM assets WHERE deleted_at IS NOT NULL')) == 4
         assert not {'file_pages','result_accesses','translation_results'} & set(inspect(connection).get_table_names())
-        if engine.dialect.name == 'sqlite':
-            assert connection.exec_driver_sql('PRAGMA foreign_key_check').all() == []
     from sqlalchemy import event
     from sqlalchemy.orm import Session
     from app.translation_api import translation_json
@@ -110,12 +106,6 @@ def test_legacy_grants_become_tombstones_and_financial_records_survive(isolated_
 @pytest.mark.parametrize('values', [{'status': 'failed'}, {'cost_state': 'unknown'}])
 def test_shared_tombstone_requires_completed_and_verified_original_result(isolated_migration_database, values):
     verify_legacy_cutover(isolated_migration_database, **values)
-
-
-@pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1', reason='requires isolated PostgreSQL')
-def test_postgres_legacy_cutover_preserves_financial_evidence(pg_scope):
-    from app.db import engine
-    verify_legacy_cutover(engine())
 
 
 @pytest.mark.parametrize('status,settlement', [('awaiting_upload','reserved'), ('unknown_released','released')])

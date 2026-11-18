@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/tr';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Yerel okuma ücretsizdir. Free, ${publishedModels.free.join(' · ')} ile günde 30 sayfa sunar. PLUS: ayda 2.500 sayfa, üç ay için US$6,66 veya yıl için US$23,99. Pro: ayda 4.000 sayfa, üç ay için US$9,99 veya yıl için US$35,99. İkisi de ücretsiz modellere ek olarak ${publishedModels.paid_extra.join(' · ')} sunar. Sayfalar her ay verilir, devretmez; deneme yoktur. Süresiz paketler: 3.500 sayfa US$5,99, 7.000 sayfa US$9,99. Vergiler ve toplam ödeme sırasında gösterilir.`;
+const membershipSummary = `Yerel okuma ücretsizdir. Free planında temel modellerle günde 30 sayfa çevirebilirsiniz. PLUS: ayda 2.500 sayfa, üç ay için US$6,66 veya yıl için US$23,99. Pro: ayda 4.000 sayfa, üç ay için US$9,99 veya yıl için US$35,99. Her iki plan da temel modellerin yanı sıra ek modeller sunar. Kullanılabilir modeller ve kota tüketim çarpanları çeviri ekranında gösterilir. Sayfalar her ay verilir, devretmez; deneme yoktur. Süresiz paketler: 3.500 sayfa US$5,99, 7.000 sayfa US$9,99. Vergiler ve toplam ödeme sırasında gösterilir.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · EPUB içe aktarma ve çift sayfa okuma",
+        "items": [
+          "KOOBONE’dan EPUB içe aktarın — KOOBONE’da seçtiğiniz EPUB kitabın tamamını çevrimdışı okumak için kitaplığınıza kaydedin.",
+          "Sayfalar arasındaki boşluğu ayarlayın — EPUB kitapları çift sayfa görünümünde okuyun. Seçtiğiniz sayfa aralığı her kitap için ayrı kaydedilir.",
+          "Modellerin kota kullanımını karşılaştırın — Seçim yapmadan önce her çeviri modelinin kota tüketim çarpanını görebilirsiniz.",
+          "Çizgi roman sitelerinde yenilikler — BatCave desteği eklendi. WEBTOON mobil bağlantılarından bölümleri içe aktarabilir ve GoodToon’u yeni alan adında okuyabilirsiniz."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Daha fazla site ve daha iyi çevrimdışı okuma",
+        "items": [
+          "Yeni site desteği — RIDI webtoonlarını içe aktarın ve özgün sayfalarında çevirin. KOOBONE sayfa çevirisi de artık destekleniyor.",
+          "Daha esnek çevrimdışı önbellek — Site başına eşzamanlı indirmeleri ayarlayın. Çevrimdışı merkez çizgi romanları siteye göre gruplar ve ilerlemeyi daha net gösterir.",
+          "Daha akıcı dışa aktarma — Daha hızlı dışa aktarma, daha kararlı ilerleme göstergesi ve daha az arayüz kayması.",
+          "Kararlılık iyileştirmeleri — Daha güvenilir okuma ve çeviri için hatalar giderildi."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

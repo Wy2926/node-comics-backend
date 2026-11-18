@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Mô hình dịch"
+      "label": "Mô hình dịch nâng cao"
     },
     "feature": "Tính năng và lợi ích",
     "highlights": "DỊCH VỚI PLUS / Pro",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Dịch cục bộ",
-      "free": "Hỗ trợ MTU tự triển khai",
-      "lite": "Hỗ trợ MTU tự triển khai",
-      "detail": "Dịch cục bộ cần tự triển khai MTU; nhu cầu kết nối Internet phụ thuộc vào mô hình và nhà cung cấp được sử dụng."
+      "free": "Dịch tích hợp trong trình duyệt và MTU tự triển khai",
+      "lite": "Dịch tích hợp trong trình duyệt và MTU tự triển khai",
+      "detail": "Tiện ích hỗ trợ dịch tích hợp trong trình duyệt (beta) và MTU tự triển khai. Yêu cầu kết nối Internet phụ thuộc vào kênh và cấu hình đã chọn."
     },
     "rate": {
       "label": "Giới hạn yêu cầu dịch mới",

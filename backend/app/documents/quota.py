@@ -2,9 +2,10 @@
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import and_, func, or_, select
-from ..billing_models import BillingOrder, BillingPlanRevision, BillingPrice, BillingTerm
+from ..billing_access import purchase_periods, subscription_in_scope, subscription_periods
+from ..billing_models import BillingPlanRevision, BillingPrice, BillingTerm
 from ..entitlement_models import QuotaPeriod
-from ..entitlements import DAILY, MONTHLY, _automatic_period, finish_period, is_operator_plus, locked_user, reserve_period
+from ..entitlements import DAILY, MONTHLY, _automatic_period, finish_period, is_operator_plus, locked_user, requires_paid, reserve_period
 from ..errors import problem
 from ..models import Job, Ledger, now, uid
 from ..scheduler import lock_scheduler, touch_job
@@ -19,24 +20,6 @@ def _active_terms(owner_id, at):
             BillingTerm.starts_at <= at, BillingTerm.ends_at > at)
 
 
-def _purchases(owner_id, at):
-    return select(QuotaPeriod, BillingPlanRevision).join(BillingOrder,
-        BillingOrder.id == QuotaPeriod.billing_order_id).join(BillingPrice,
-        BillingPrice.id == BillingOrder.price_id).join(BillingPlanRevision,
-        BillingPlanRevision.id == BillingPrice.plan_revision_id).where(
-            QuotaPeriod.owner_id == owner_id, BillingOrder.owner_id == owner_id,
-            QuotaPeriod.mode == 'classic', QuotaPeriod.source == 'purchase',
-            QuotaPeriod.revoked_at.is_(None), QuotaPeriod.starts_at <= at,
-            or_(QuotaPeriod.ends_at.is_(None), QuotaPeriod.ends_at > at),
-            QuotaPeriod.granted > QuotaPeriod.used + QuotaPeriod.reserved)
-
-
-def _eligible(scope, plan):
-    # A free-tier model retains the existing free -> subscription -> purchase
-    # billing order. Advanced models require EVERY paying bucket's own scope.
-    return scope is None or 'free' in scope or plan in scope
-
-
 def _order(option):
     period = option[0]
     return period.ends_at or datetime.max, period.starts_at, period.id
@@ -44,8 +27,10 @@ def _order(option):
 
 def _options(db, user, scope, at, multiplier):
     """Each finite query is bounded by the maximum number of payable pages."""
+    paid_scope = scope if requires_paid(scope) else None
+    accepts_gift = paid_scope is None or 'plus' in paid_scope
     free = []
-    if _eligible(scope, 'free'):
+    if paid_scope is None:
         query = select(QuotaPeriod).where(QuotaPeriod.owner_id == user.id,
             QuotaPeriod.mode == 'classic', QuotaPeriod.source == 'grant',
             QuotaPeriod.revoked_at.is_(None),
@@ -65,43 +50,27 @@ def _options(db, user, scope, at, multiplier):
     query = _active_terms(user.id, at).where(or_(
         and_(BillingTerm.kind == 'paid', BillingPlanRevision.monthly_classic_pages.is_(None)),
         and_(BillingTerm.kind == 'trial', BillingPlanRevision.trial_classic_pages.is_(None))))
-    if scope is not None and 'free' not in scope:
-        query = query.where(func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(scope))
+    if paid_scope is not None:
+        query = query.where(subscription_in_scope(paid_scope))
     unlimited = db.execute(query.order_by(BillingTerm.ends_at, BillingTerm.id).limit(1)).first()
     if unlimited:
         term, revision = unlimited
         yield None, term, revision.service_plan_id or revision.plan_id, revision
         return
-    if _eligible(scope, 'plus') and is_operator_plus(user, at) and user.plus_monthly_pages is None:
+    if accepts_gift and is_operator_plus(user, at) and user.plus_monthly_pages is None:
         yield None, None, 'plus', None
         return
 
-    query = select(QuotaPeriod, BillingPlanRevision).join(BillingTerm,
-        BillingTerm.id == QuotaPeriod.billing_term_id).join(BillingPrice,
-        BillingPrice.id == BillingTerm.price_id).join(BillingPlanRevision,
-        BillingPlanRevision.id == BillingPrice.plan_revision_id).where(
-            QuotaPeriod.owner_id == user.id, BillingTerm.owner_id == user.id,
-            QuotaPeriod.mode == 'classic', QuotaPeriod.source == 'subscription',
-            QuotaPeriod.revoked_at.is_(None),
-            BillingTerm.revoked_at.is_(None), BillingTerm.starts_at <= at, BillingTerm.ends_at > at,
-            QuotaPeriod.starts_at <= at, QuotaPeriod.ends_at > at,
-            func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= multiplier)
-    if scope is not None and 'free' not in scope:
-        query = query.where(func.coalesce(BillingPlanRevision.service_plan_id, BillingPlanRevision.plan_id).in_(scope))
+    query = subscription_periods(user.id, at, service_plans=paid_scope, amount=multiplier)
     monthly = [(period, None, revision.service_plan_id or revision.plan_id, revision)
-               for period, revision in db.execute(query.order_by(QuotaPeriod.ends_at,
-                   QuotaPeriod.starts_at, QuotaPeriod.id).limit(MAX_PAGES))]
-    gift = _automatic_period(db, user, MONTHLY, at) if _eligible(scope, 'plus') else None
+               for period, revision in db.execute(query.limit(MAX_PAGES))]
+    gift = _automatic_period(db, user, MONTHLY, at) if accepts_gift else None
     if gift and gift.revoked_at is None and gift.granted - gift.used - gift.reserved >= multiplier:
         monthly.append((gift, None, 'plus', None))
     yield from sorted(monthly, key=_order)
 
-    query = _purchases(user.id, at).where(
-        func.round(QuotaPeriod.granted - QuotaPeriod.used - QuotaPeriod.reserved, 4) >= multiplier)
-    if scope is not None and 'free' not in scope:
-        query = query.where(BillingPlanRevision.service_plan_id.in_(scope))
-    for period, revision in db.execute(query.order_by(QuotaPeriod.ends_at.asc().nulls_last(),
-            QuotaPeriod.starts_at, QuotaPeriod.id).limit(MAX_PAGES)):
+    query = purchase_periods(user.id, at, service_plans=paid_scope, amount=multiplier)
+    for period, revision in db.execute(query.limit(MAX_PAGES)):
         yield period, None, revision.service_plan_id, revision
 
 
@@ -184,8 +153,7 @@ def reserve_document(db, job):
             kind='reserve', amount=units))
     document.reserved_at = at
     job.quota_pages, job.quota_kind, job.settlement = count * multiplier, 'document_pages', 'reserved'
-    job.entitlement = {**job.entitlement, 'accepted_at': at.isoformat() + 'Z',
-                       'priority': 0, 'pages': count}
+    job.entitlement = {**job.entitlement, 'accepted_at': at.isoformat() + 'Z', 'pages': count}
     job.status, job.phase, job.error_code, job.error_message = 'queued', 'doc_ocr', None, None
     touch_job(db, job)
     db.flush()

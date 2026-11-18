@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/zh-TW';
 import type { Dictionary } from './types';
 
-const membershipSummary = `本機閱讀免費。免費帳戶每日 30 頁，使用 ${publishedModels.free.join(' · ')}。PLUS 每月 2,500 頁，季付 US$6.66 或年付 US$23.99；Pro 每月 4,000 頁，季付 US$9.99 或年付 US$35.99。付費保留免費模型，額外支援 ${publishedModels.paid_extra.join(' · ')}。訂閱按月發放，未用額度不結轉，無試用。永久額度包：3,500 頁 US$5.99，7,000 頁 US$9.99。稅費及最終金額以結帳頁為準。`;
+const membershipSummary = `本機閱讀免費。免費帳戶每日可用基本模型翻譯 30 頁。PLUS 每月 2,500 頁，季付 US$6.66 或年付 US$23.99；Pro 每月 4,000 頁，季付 US$9.99 或年付 US$35.99。PLUS 和 Pro 保留基本模型，並提供額外模型。可用模型與額度消耗倍率以翻譯介面顯示為準。訂閱按月發放，未用額度不結轉，無試用。永久額度包：3,500 頁 US$5.99，7,000 頁 US$9.99。稅費及最終金額以結帳頁為準。`;
 
 export default {
   "ui": {
@@ -731,6 +730,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · EPUB 匯入與雙頁閱讀",
+        "items": [
+          "從 KOOBONE 匯入 EPUB — 在 KOOBONE 選好 EPUB 後，即可將整本書存到書架，離線也能閱讀。",
+          "調整雙頁間距 — EPUB 支援雙頁並排閱讀。每本書都會記住你設定的雙頁間距。",
+          "選模型時查看額度 — 翻譯模型旁會顯示額度消耗倍率，方便在翻譯前比較。",
+          "漫畫網站更新 — 新增 BatCave；支援從 WEBTOON 手機版連結匯入章節，並修正 GoodToon 更換網域後的閱讀問題。"
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · 更多網站與離線閱讀最佳化",
+        "items": [
+          "新增網站支援 — 支援 RIDI 網漫匯入與原頁翻譯，新增 KOOBONE 頁面翻譯。",
+          "離線快取更靈活 — 支援依網站設定快取並行數，離線中心依網站分組，進度更清楚。",
+          "漫畫匯出更流暢 — 提升匯出速度並改善進度顯示，減少介面跳動。",
+          "穩定性改善 — 修正已知問題，提升閱讀與翻譯穩定性。"
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

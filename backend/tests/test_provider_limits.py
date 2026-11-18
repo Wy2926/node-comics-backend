@@ -143,6 +143,24 @@ def test_supplier_cleanup_does_not_change_other_supplier_window(text_database):
         assert 'active-second' in window_members('provider', second.id)
 
 
+def test_ordinary_traffic_cannot_take_last_shared_rpm(text_case):
+    from app.translation_provider_limits import unavailable_providers
+    _, provider_id = setup_limit(text_case, 3)
+    with session_factory()() as db:
+        provider = db.get(TranslationProvider, provider_id)
+        reserve_request(provider)
+        reserve_request(provider)
+        assert unavailable_providers([provider]) == ((), (provider_id,))
+        with pytest.raises(TextError, match='TEXT_RATE_LIMITED'):
+            classic.reserve_call(*text_case, SEGMENTS, 'en')
+        job = db.get(Job, text_case[0])
+        job.entitlement = {'plan': 'plus', 'priority': 1}
+        db.commit()
+        paid = classic.reserve_call(*text_case, SEGMENTS, 'en')[0]
+        assert paid in window_members('provider', provider_id)
+        assert unavailable_providers([provider]) == ((provider_id,), ())
+
+
 def test_redis_outage_pauses_text_without_spending_attempt_or_cost(text_case, monkeypatch):
     from test_redis_admission import break_redis
     from app import workers

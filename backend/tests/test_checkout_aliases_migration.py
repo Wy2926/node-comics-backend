@@ -1,6 +1,5 @@
 """The additive alias migration preserves historical purchases and accepted keys."""
 from datetime import datetime
-import os
 from pathlib import Path
 
 from alembic import command
@@ -10,7 +9,6 @@ from sqlalchemy import MetaData, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from test_job_results_migration import migrate
-from test_postgres_concurrency import pg_scope  # noqa: F401
 from test_request_limits_migration import HEAD, isolated_migration_database  # noqa: F401
 
 
@@ -59,8 +57,6 @@ def test_checkout_alias_upgrade_preserves_original_orders_and_keys(isolated_migr
         assert db.scalar(text('SELECT count(*) FROM billing_checkout_aliases')) == 0
         for table in preserved:
             assert db.execute(metadata.tables[table].select().order_by(metadata.tables[table].c.id)).all() == before[table]
-        if engine.dialect.name == 'sqlite':
-            assert db.exec_driver_sql('PRAGMA foreign_key_check').first() is None
     inspector = inspect(engine)
     assert inspector.get_pk_constraint('billing_checkout_aliases')['constrained_columns'] == ['owner_id', 'idempotency_key']
     foreign_keys = {(tuple(value['constrained_columns']), value['referred_table'], tuple(value['referred_columns']))
@@ -91,9 +87,3 @@ def test_checkout_alias_upgrade_preserves_original_orders_and_keys(isolated_migr
         assert db.scalar(text('SELECT count(*) FROM billing_checkout_aliases')) == 2
         for table in preserved:
             assert db.execute(metadata.tables[table].select().order_by(metadata.tables[table].c.id)).all() == before[table]
-
-
-@pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1', reason='Requires dedicated PostgreSQL test database')
-def test_checkout_alias_upgrade_on_postgres(pg_scope):
-    from app.db import engine
-    test_checkout_alias_upgrade_preserves_original_orders_and_keys(engine())

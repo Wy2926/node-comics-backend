@@ -41,13 +41,8 @@ def test_database_outage_is_not_reported_ready(client, monkeypatch):
     assert client.get('/health/ready').status_code == 503
 
 
-def test_database_probe_does_not_initialize_empty_database(tmp_path, monkeypatch):
-    from sqlalchemy import create_engine, inspect
+def test_database_probe_does_not_initialize_empty_database(pg_scope):
+    from sqlalchemy import inspect
     from app import runtime
-    empty = create_engine('sqlite:///' + str(tmp_path / 'empty.db'))
-    monkeypatch.setattr(runtime, 'engine', lambda: empty)
-    try:
-        runtime.check_database()
-        assert inspect(empty).get_table_names() == []
-    finally:
-        empty.dispose()
+    runtime.check_database()
+    assert inspect(runtime.engine()).get_table_names() == []

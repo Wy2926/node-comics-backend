@@ -511,8 +511,8 @@ def test_first_provider_creation_is_atomic_across_replicas(text_database):
 
 
 def test_parallel_requests_obey_supplier_limit(scheduler_case):
-    for _ in range(2):
-        add_job(scheduler_case, stage='text')
+    for owner in ('free-user', 'plus-user'):
+        add_job(scheduler_case, owner, stage='text')
     with session_factory()() as db:
         provider = db.get(TranslationProvider, scheduler_case['text']['provider_id'])
         provider.requests_per_minute = 1

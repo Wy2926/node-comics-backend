@@ -59,7 +59,7 @@ def add_job(config, owner='free-user', *, stage='page', suffix=None):
                   idempotency_key=uid(), cache_key=hashlib.sha256(job_id.encode()).hexdigest())
         db.add(job)
         db.flush()
-        db.add(JobStage(job_id=job_id, name=stage, status='ready'))
+        db.add(JobStage.for_job(job, name=stage, status='ready'))
         db.add(ClassicState(job_id=job_id, analysis={'segments': [], 'quality_flags': []}))
         db.commit()
     return job_id
@@ -93,17 +93,18 @@ def test_plus_preferred_within_oldest_candidate_window(scheduler_case):
     assert claim('node-1').job_id == free
 
 
-def test_plus_preference_does_not_scan_past_candidate_window(scheduler_case):
+def test_plus_precedes_an_entire_window_of_older_free_work(scheduler_case):
     oldest = add_job(scheduler_case)
     for _ in range(scheduler.CANDIDATE_LIMIT - 1):
         add_job(scheduler_case)
-    add_job(scheduler_case, 'plus-user')
-    assert claim().job_id == oldest
+    plus = add_job(scheduler_case, 'plus-user')
+    assert claim().job_id == plus
+    assert claim('node-1').job_id == oldest
 
 
 def test_server_slot_reduction_and_pending_configuration_preserve_current_leases(scheduler_case):
     for _ in range(4):
-        add_job(scheduler_case)
+        add_job(scheduler_case, 'plus-user')
     with session_factory()() as db:
         db.get(ComputeNode, 'node-0').capacity = 2
         db.commit()
@@ -182,10 +183,10 @@ def test_default_pool_concurrent_claims_do_not_checkout_nested_connections(sched
     synchronized = Barrier(15)
     original = scheduler._preselect
 
-    def preselect(db, node, stages, blocked=()):
+    def preselect(db, node, stages, blocked, min_priority):
         # Every claimant already holds its initial node-query connection.
         synchronized.wait(timeout=10)
-        return original(db, node, stages, blocked)
+        return original(db, node, stages, blocked, min_priority)
 
     monkeypatch.setattr(scheduler, '_preselect', preselect)
     with ThreadPoolExecutor(max_workers=15) as executor:
@@ -198,12 +199,7 @@ def test_default_pool_concurrent_claims_do_not_checkout_nested_connections(sched
 def test_claim_uses_one_connection_and_preserves_caller_uncommitted_writes(scheduler_case, flush_first):
     # One connection cannot support a hidden snapshot Session. The pending
     # node/page must be visible to the election without committing its caller.
-    options = {'connect_args': {'check_same_thread': False, 'timeout': 30}} if engine().dialect.name == 'sqlite' else {}
-    single = create_engine(engine().url, pool_size=1, max_overflow=0, pool_timeout=.5, **options)
-    if single.dialect.name == 'sqlite':
-        @event.listens_for(single, 'connect')
-        def foreign_keys(connection, _):
-            connection.execute('PRAGMA foreign_keys=ON')
+    single = create_engine(engine().url, pool_size=1, max_overflow=0, pool_timeout=.5)
     node_id, job_id, stage_id = uid(), uid(), uid()
     try:
         with Session(bind=single) as db:
@@ -300,8 +296,8 @@ def test_ineligible_heads_do_not_hide_later_runnable_pages(scheduler_case):
 def test_snapshot_candidates_are_revalidated_after_queue_or_node_changes(scheduler_case, monkeypatch, mutation):
     job_id = add_job(scheduler_case)
     original = scheduler._preselect
-    def changed(db, node, stages, blocked=()):
-        result = original(db, node, stages, blocked)
+    def changed(db, node, stages, blocked, min_priority):
+        result = original(db, node, stages, blocked, min_priority)
         assert result
         with session_factory()() as writer:
             if mutation == 'delete_source':

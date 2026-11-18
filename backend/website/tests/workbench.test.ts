@@ -56,12 +56,12 @@ test('all site locales have complete unified copy and preserve file limits', () 
     assert.match(workbenchCopy[locale].downloadImages, /ZIP/);
   }
 });
-test('document access uses existing trial and gifted quota without a separate paid gate', () => {
-  assert.match(documentCopy('zh-CN').access, /试用和赠送额度同样可用/);
-  assert.match(documentCopy('en').access, /including trial and gifted quota/);
-  for (const path of ['../src/components/TranslationWorkbench.tsx', '../src/lib/use-document-tasks.ts', '../src/lib/workbench-files.ts'])
-    assert.doesNotMatch(readFileSync(new URL(path, import.meta.url), 'utf8'), /paid_allowed|documentText\.paid/);
-  assert.match(workbenchCopy['zh-CN'].documentHint, /登录使用/);
+test('document membership denial explains eligible trials and gifts, separately from model and quota errors', () => {
+  const copy = documentCopy('zh-CN');
+  assert.match(documentError('DOCUMENT_MEMBERSHIP_REQUIRED', copy), /有效会员.*试用、赠送.*页数包/);
+  assert.equal(documentError('DOCUMENT_QUOTA_INSUFFICIENT', copy), copy.errors.quota);
+  assert.equal(documentError('MODEL_DOCUMENT_UNSUPPORTED', copy), copy.errors.model);
+  assert.match(workbenchCopy['zh-CN'].documentHint, /会员或页数包/);
 });
 test('production mounts only one workbench and lazily loads the original document transport', () => {
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');

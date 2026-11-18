@@ -19,7 +19,7 @@
 
 节点一次只发一个领取请求，例如 `{"request_id":"a1","config_version":1,"count":2,"document_count":0}`。空响应不写服务端回执；非空分配与回执原子提交。没有收到回复时重放原编号与内容；已有回执优先于配置检查，返回原租约的当前状态。节点先落盘请求，再逐项落盘接管，最后清除请求编号，无单独 ACK 帧。
 
-配置包含 `version`、`enabled`、执行位和超时；`performance_weight` 仅供服务端调度。空闲节点由工作提示唤醒，漏收提示时按 `poll_seconds` 重新领取。空位只由节点的实际请求刷新，有效期为 `poll_seconds + 5` 秒；提示本身不产生租约。
+配置包含 `version`、`enabled`、执行位和超时；`performance_weight` 和 `paid_reserved_slots` 仅供服务端调度。空闲节点由工作提示唤醒，漏收提示时按 `poll_seconds` 重新领取。空位只由节点的实际请求刷新，有效期为 `poll_seconds + 5` 秒；提示本身不产生租约。
 
 重连从数据库重建快照，每 5 秒核对遗漏的通知。RFC 6455 Ping/Pong 检测链路；只有携带具体租约的 HTTP 心跳才续租。新租约交接期限取正常租约与 `max(request_seconds + 10, 2 × heartbeat_seconds + 2)` 秒的较短值，重放不延长。节点用本次请求发出时的单调时钟计算保守的本地截止时间。
 

@@ -1,4 +1,4 @@
-"""Assertions against isolated Redis state, shared by SQLite and PostgreSQL tests."""
+"""Assertions against isolated Redis admission counters."""
 from datetime import timezone
 from types import SimpleNamespace
 from app import redis_state

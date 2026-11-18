@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/vi';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Đọc cục bộ miễn phí. Free có 30 trang mỗi ngày với ${publishedModels.free.join(' · ')}. PLUS: 2.500 trang/tháng, US$6,66/quý hoặc US$23,99/năm. Pro: 4.000 trang/tháng, US$9,99/quý hoặc US$35,99/năm. Cả hai bao gồm mô hình miễn phí và bổ sung ${publishedModels.paid_extra.join(' · ')}. Cấp hàng tháng, không cộng dồn và không dùng thử. Gói không hết hạn: 3.500 trang US$5,99 hoặc 7.000 trang US$9,99. Thuế và tổng tiền hiển thị khi thanh toán.`;
+const membershipSummary = `Đọc cục bộ miễn phí. Gói Free cho phép dịch 30 trang mỗi ngày bằng các mô hình cơ bản. PLUS: 2.500 trang/tháng, US$6,66/quý hoặc US$23,99/năm. Pro: 4.000 trang/tháng, US$9,99/quý hoặc US$35,99/năm. Cả hai gói đều có mô hình cơ bản và mô hình bổ sung. Xem các mô hình khả dụng và hệ số tiêu hao hạn mức trên màn hình dịch. Cấp hàng tháng, không cộng dồn và không dùng thử. Gói không hết hạn: 3.500 trang US$5,99 hoặc 7.000 trang US$9,99. Thuế và tổng tiền hiển thị khi thanh toán.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · Nhập EPUB và đọc hai trang",
+        "items": [
+          "Nhập EPUB từ KOOBONE — Chọn EPUB trong KOOBONE và lưu cả cuốn sách vào kệ để đọc ngoại tuyến.",
+          "Chỉnh khoảng cách giữa hai trang — Đọc EPUB với hai trang cạnh nhau. Khoảng cách giữa các trang được lưu riêng cho từng cuốn sách.",
+          "So sánh mức dùng hạn mức — Xem hệ số tiêu hao hạn mức bên cạnh từng mô hình dịch trước khi chọn.",
+          "Cập nhật trang truyện — Đã hỗ trợ BatCave. Bạn có thể nhập chương từ liên kết WEBTOON dành cho di động và đọc GoodToon trên tên miền mới."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Thêm trang hỗ trợ và cải thiện đọc ngoại tuyến",
+        "items": [
+          "Hỗ trợ trang web mới — Nhập webtoon RIDI và dịch ngay trên trang gốc. Bổ sung dịch trang KOOBONE.",
+          "Lưu ngoại tuyến linh hoạt hơn — Chọn số lượt tải đồng thời cho từng trang. Trung tâm ngoại tuyến nhóm truyện theo trang và hiển thị tiến độ rõ hơn.",
+          "Xuất truyện mượt mà hơn — Xuất nhanh hơn, hiển thị tiến độ ổn định hơn và giảm giật giao diện.",
+          "Cải thiện độ ổn định — Sửa các lỗi đã biết để đọc và dịch ổn định hơn."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

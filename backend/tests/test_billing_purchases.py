@@ -824,9 +824,10 @@ def test_transaction_event_lookup_uses_exact_expression_index(purchase):
             event_type='checkout.completed', resource_id=f'ch_history{index}',
             payload={'transaction_id': f'tran_history{index}'}, occurred_at=purchase['at']) for index in range(2000)])
         db.flush()
+        db.connection().exec_driver_sql('ANALYZE billing_events')
         statement = creem_purchase_events(db, 'tran_history1999').where(BillingEvent.event_type == 'checkout.completed')
         compiled = statement.compile(dialect=db.bind.dialect, compile_kwargs={'literal_binds': True})
-        plan = db.connection().exec_driver_sql('EXPLAIN QUERY PLAN ' + str(compiled)).all()
+        plan = db.connection().exec_driver_sql('EXPLAIN ' + str(compiled)).all()
         assert any('ix_billing_events_transaction' in str(row) for row in plan), plan
         assert len(list(db.scalars(statement))) == 1
 

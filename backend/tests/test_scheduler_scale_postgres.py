@@ -12,7 +12,7 @@ from app import scheduler
 from app.db import engine, session_factory
 from app.models import Asset, Job, User, now
 from app.queue_models import JobStage
-from test_classic_parallel_postgres import text_database
+from test_classic import text_database
 from test_cluster_scheduler import scheduler_case, claim, finish_quantum
 
 pytestmark = pytest.mark.skipif(os.environ.get("RUN_SCHEDULER_SCALE") != "1",
@@ -32,9 +32,11 @@ def test_large_queue_lock_duration(scheduler_case, monkeypatch):
             db.execute(insert(Job), [{"id": f"scale-job-{i}", "owner_id": f"scale-user-{i // 500}",
                 "input_asset_id": f"scale-source-{i // 500}", "source_sha256": "a" * 64, "mode": "classic",
                 "target_language": "zh-Hans", "status": "queued", "quota_pages": 0, "quota_kind": "unlimited",
-                "settlement": "free", "config": scheduler_case, "operation": "submission", "request_hash": "a" * 64,
+                 "settlement": "free", "config": scheduler_case, "entitlement": {"plan": "plus" if i == count - 1 else "free"},
+                 "operation": "submission", "request_hash": "a" * 64,
                 "idempotency_key": str(i), "cache_key": f"{i:064x}", "created_at": at} for i in indexes])
-            db.execute(insert(JobStage), [{"id": f"scale-stage-{i}", "job_id": f"scale-job-{i}", "name": "page", "status": "ready"} for i in indexes])
+            db.execute(insert(JobStage), [{"id": f"scale-stage-{i}", "job_id": f"scale-job-{i}", "name": "page",
+                "status": "ready", "service_priority": int(i == count - 1)} for i in indexes])
         db.commit()
         db.execute(text("ANALYZE"))
         db.commit()
@@ -51,21 +53,39 @@ def test_large_queue_lock_duration(scheduler_case, monkeypatch):
     loaded = []
     def capture(job, context):
         loaded.append(job.id)
+    plans = []
+    def explain_election(conn, cursor, statement, parameters, context, many):
+        if not plans and 'ORDER BY job_stages.service_priority DESC' in statement:
+            with conn.connection.cursor() as explain:
+                explain.execute('EXPLAIN (ANALYZE, FORMAT JSON) ' + statement, parameters)
+                plans.append(explain.fetchone()[0])
     event.listen(Job, "load", capture)
+    event.listen(engine(), 'before_cursor_execute', explain_election)
     try:
-        for _ in range(12):
+        for index in range(12):
             acquired.clear()
             loaded.clear()
             lease = claim()
             durations.append(perf_counter() - acquired[0])
             loads.append(len(loaded))
             assert lease is not None
+            if index == 0:
+                assert lease.job_id == f'scale-job-{count - 1}'
             finish_quantum(lease.id, rearm=False)
     finally:
         event.remove(Job, "load", capture)
+        event.remove(engine(), 'before_cursor_execute', explain_election)
     report = {"pages": count, "owners": owners, "claims": len(durations), "lock_median_seconds": round(median(durations), 4),
         "lock_max_seconds": round(max(durations), 4), "max_loaded_jobs": max(loads), "database": "isolated PostgreSQL"}
     print(json.dumps(report))
     if os.environ.get("SCHEDULER_SCALE_REPORT"):
         Path(os.environ["SCHEDULER_SCALE_REPORT"]).write_text(json.dumps(report, indent=2), encoding="utf-8")
     assert max(loads) <= scheduler.CANDIDATE_LIMIT
+    if count >= 1000:
+        assert 'ix_stage_service_ready' in json.dumps(plans), plans
+        def scans(plan):
+            if plan.get('Relation Name') == 'job_stages':
+                yield plan['Actual Loops'] * (plan['Actual Rows'] + plan.get('Rows Removed by Filter', 0))
+            for child in plan.get('Plans', ()):
+                yield from scans(child)
+        assert max(scans(plans[0][0]['Plan'])) <= scheduler.CANDIDATE_LIMIT

@@ -1,6 +1,8 @@
 from io import BytesIO
+import os
 import sys
 from pathlib import Path
+from uuid import uuid4
 import pytest
 from PIL import Image
 
@@ -63,27 +65,58 @@ def catalog_products():
 
 @pytest.fixture(autouse=True)
 def isolated_catalog(monkeypatch, catalog_products):
-    # SQLite and PostgreSQL protocol fixtures use the same sample catalog.
     # Public-catalog tests opt out by returning None from catalog_products.
     if catalog_products is not None:
         from app import billing_catalog
         monkeypatch.setattr(billing_catalog, 'DEFAULT_CATALOG', {'currency': 'usd', 'products': catalog_products})
 
 
+TEST_DATABASE = 'nodecomics_concurrency_test'
+
+
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("APP_ENV", "test")
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
-    monkeypatch.setenv("STORAGE_PATH", str(tmp_path / "objects"))
-    monkeypatch.setenv("DEV_AUTH", "true")
-    monkeypatch.setenv("DEV_AUTH_SECRET", "isolated-tests-signing-key-never-used-in-production")
-    monkeypatch.setenv("CLASSIC_ENABLED", "true")
+def pg_scope(tmp_path, monkeypatch):
+    """Only a generated schema in the named regression database; never inherit DATABASE_URL."""
+    from sqlalchemy import URL, create_engine, text
     from app.config import settings
     from app.db import engine
-    settings.cache_clear()
+    if os.environ.get('TEST_PG_DATABASE', TEST_DATABASE) != TEST_DATABASE or not os.environ.get('TEST_PG_PASSWORD'):
+        pytest.fail('Set TEST_PG_PASSWORD for nodecomics_concurrency_test, or use deploy/compose.tests.yaml')
+    base = URL.create('postgresql+psycopg', username=os.environ.get('TEST_PG_USER', 'nodecomics'),
+        password=os.environ['TEST_PG_PASSWORD'], host=os.environ.get('TEST_PG_HOST', '127.0.0.1'),
+        port=int(os.environ.get('TEST_PG_PORT', '5432')), database=TEST_DATABASE)
+    administration = create_engine(base, isolation_level='AUTOCOMMIT')
+    schema = 'nc_concurrency_' + uuid4().hex
+    with administration.connect() as connection:
+        assert connection.scalar(text('SELECT current_database()')) == TEST_DATABASE
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    app_name = 'nc-test-' + schema
+    url = base.update_query_dict({'options': f'-csearch_path={schema} -clock_timeout=8000 -cstatement_timeout=15000',
+                                  'application_name': app_name})
+    monkeypatch.setenv('DATABASE_URL', url.render_as_string(hide_password=False))
+    monkeypatch.setenv('STORAGE_PATH', str(tmp_path / 'objects'))
+    monkeypatch.setenv('CLASSIC_ENABLED', 'true')
     if engine.cache_info().currsize:
         engine().dispose()
     engine.cache_clear()
+    settings.cache_clear()
+    try:
+        def no_upstream(*args, **kwargs):
+            raise AssertionError('Use an isolated text provider fixture')
+        monkeypatch.setattr('app.classic.call_text', no_upstream)
+        yield {'schema': schema, 'application_name': app_name, 'administration': administration}
+    finally:
+        if engine.cache_info().currsize:
+            engine().dispose()
+        engine.cache_clear()
+        settings.cache_clear()
+        with administration.connect() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        administration.dispose()
+
+
+@pytest.fixture
+def client(pg_scope):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.db import session_factory
@@ -95,9 +128,6 @@ def client(tmp_path, monkeypatch):
             configure_text_provider(db)
             db.commit()
         yield test_client
-    engine().dispose()
-    engine.cache_clear()
-    settings.cache_clear()
 
 
 @pytest.fixture

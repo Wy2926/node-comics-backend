@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Modèles de traduction"
+      "label": "Modèles de traduction avancés"
     },
     "feature": "Caractéristiques et avantages",
     "highlights": "TRADUIRE AVEC PLUS / Pro",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Traduction locale",
-      "free": "MTU auto-hébergé pris en charge",
-      "lite": "MTU auto-hébergé pris en charge",
-      "detail": "La traduction locale nécessite une instance MTU auto-hébergée ; l’accès à Internet dépend des modèles et fournisseurs utilisés."
+      "free": "Traduction intégrée au navigateur et MTU auto-hébergé",
+      "lite": "Traduction intégrée au navigateur et MTU auto-hébergé",
+      "detail": "L’extension prend en charge la traduction intégrée au navigateur (bêta) et MTU auto-hébergé. L’accès à Internet dépend du canal et de la configuration."
     },
     "rate": {
       "label": "Limite de nouvelles demandes de traduction",

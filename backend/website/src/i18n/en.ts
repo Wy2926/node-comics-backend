@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/en';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Local reading is free. Free accounts get 30 pages daily with ${publishedModels.free.join(' · ')}. PLUS includes 2,500 pages per month for US$6.66 per quarter or US$23.99 per year. Pro includes 4,000 pages per month for US$9.99 per quarter or US$35.99 per year. Both retain the free models and add ${publishedModels.paid_extra.join(' · ')}. Pages are granted monthly without rollover; no subscription trial. Non-expiring packs: 3,500 pages for US$5.99 or 7,000 for US$9.99. Taxes and final totals appear at checkout.`;
+const membershipSummary = `Local reading is free. Free accounts get 30 pages of translation per day with the base models. PLUS includes 2,500 pages per month for US$6.66 per quarter or US$23.99 per year. Pro includes 4,000 pages per month for US$9.99 per quarter or US$35.99 per year. Both plans include the base models and additional choices. Check the translation interface for available models and their quota multipliers. Pages are granted monthly without rollover; no subscription trial. Non-expiring packs: 3,500 pages for US$5.99 or 7,000 for US$9.99. Taxes and final totals appear at checkout.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · EPUB imports and two-page reading",
+        "items": [
+          "Import EPUBs from KOOBONE — Choose an EPUB in KOOBONE and save the whole book to your shelf for offline reading.",
+          "Adjust the gap between pages — Read EPUBs side by side in two-page view. Each book remembers your preferred page spacing.",
+          "Compare model costs — See the quota multiplier beside each translation model before you choose.",
+          "Comic site updates — BatCave is now supported. Import chapters from mobile WEBTOON links and read GoodToon on its new domain."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · More sites and better offline reading",
+        "items": [
+          "New site support — Import RIDI webtoons and translate them on the original page. KOOBONE page translation is now supported too.",
+          "More flexible offline caching — Set simultaneous downloads per site. The offline center groups comics by site with clearer progress.",
+          "Smoother comic exports — Faster exports and steadier progress updates, with less interface jumping.",
+          "Stability improvements — Bug fixes for more reliable reading and translation."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

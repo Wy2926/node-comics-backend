@@ -23,6 +23,8 @@ docker build -f backend/Dockerfile.static --target admin --output type=local,des
 
 API 镜像不含页面。官网和后台由 Nginx 提供，参考 [代理模板](../deploy/openresty.comics.conf)。Drive 连接页作为插件仓库的独立静态产物部署。
 
+官网安装包清单的外部 HTTPS 地址沿用 308；站内直链先把已验证的商店原包放入静态根的 `assets/website/downloads/<sha256>/<filename>`，再用 `--manifest backend/extension-release.json` 准备官网。发布脚本核对本地安装包大小和 SHA-256；保留仍在清单中的旧包。
+
 节点控制通道要求 WebSocket Upgrade；代理配置须同时包含 `openresty.comics.conf` 的连接头映射和 `openresty.api.inc` 的转发头。后端、节点与代理按[计算协议](COMPUTE_PROTOCOL.md)配套部署；HTTP 心跳成功不能证明通道已连通。
 
 ## 切换

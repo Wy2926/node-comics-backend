@@ -60,6 +60,8 @@ def main():
                 create_asset(db, user.id, buffer.getvalue())
             db.commit()
         manifest = backup(output / "backup", database_env="DATABASE_URL", pg_container=container)
+        with psycopg.connect(**params, dbname=source) as original:
+            revision, = original.execute("SELECT version_num FROM alembic_version").fetchone()
         # A later write must not alter the restored snapshot.
         with session_factory()() as db:
             db.add(User(subject="restore-test:after-backup", name="after-backup"))
@@ -71,7 +73,7 @@ def main():
         assert result["table_rows"]["public.assets"] == 2
         assert result["object_references"] == 2
         with psycopg.connect(**params, dbname=target) as restored:
-            assert restored.execute("SELECT version_num FROM alembic_version").fetchone() == ("subscription_0001",)
+            assert restored.execute("SELECT version_num FROM alembic_version").fetchone() == (revision,)
         try:
             restore(output / "backup", database_env="RESTORE_DRILL_URL", pg_container=container)
         except BackupError as error:
@@ -81,7 +83,7 @@ def main():
         report = {"verified_at": datetime.now(timezone.utc).isoformat(), "database": "PostgreSQL 17 isolated synthetic drill",
                   "snapshot_sha256": manifest["sha256"], "snapshot_bytes": manifest["size"],
                   "restored_users": result["table_rows"]["public.users"], "restored_asset_grants": result["table_rows"]["public.assets"],
-                  "schema_revision": "subscription_0001",
+                   "schema_revision": revision,
                   "private_file_references": result["object_references"], "overwrite_rejected": True,
                   "post_backup_write_excluded": True, "production_accessed": False}
         (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

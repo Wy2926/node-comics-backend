@@ -28,6 +28,7 @@ services:
       dockerfile: Dockerfile.test
     environment:
       RUN_POSTGRES_CONCURRENCY: "${RUN_POSTGRES_CONCURRENCY:-0}"
+      RUN_QUOTA_SCALE: "${RUN_QUOTA_SCALE:-0}"
       TEST_PG_HOST: postgres
       TEST_PG_USER: nodecomics
       TEST_PG_PASSWORD: isolated-test-only

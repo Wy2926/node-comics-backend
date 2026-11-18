@@ -44,7 +44,7 @@ class MetadataStore:
 
 
 @pytest.fixture
-def document_case(client, monkeypatch):
+def document_case(client, monkeypatch, request):
     from app.documents import api
     from app.translation_models import TranslationProvider
     auth = login(client)
@@ -60,7 +60,10 @@ def document_case(client, monkeypatch):
     store = MetadataStore()
     monkeypatch.setattr(api, 'get_document_settings', lambda: cfg)
     monkeypatch.setattr(api, 'get_document_store', lambda: store)
-    return SimpleNamespace(client=client, auth=auth, owner=owner, provider=provider_id, store=store)
+    case = SimpleNamespace(client=client, auth=auth, owner=owner, provider=provider_id, store=store)
+    if getattr(request, 'param', 'member') == 'member':
+        paid_term(case, unlimited=False)  # Admission only; each test supplies its own page balance.
+    return case
 
 
 def purchase(case, pages, *, service='plus', ends_at=None):
@@ -91,7 +94,8 @@ def prepare(case, key, pages, *, scope=None):
         document.page_count = pages
         document.upload_completed_at = now()
         job.status, job.phase = 'preflight', 'doc_prepare'
-        job.config = {**job.config, 'document': {**job.config['document'], 'service_plans': scope}}
+        if scope is not None:
+            job.config = {**job.config, 'document': {**job.config['document'], 'service_plans': scope}}
         for number in range(1, pages + 1):
             db.add(DocumentPage(job_id=job.id, page_index=number,
                 input_ref={'key': f'documents/work/{job.id}/{number}.png', 'sha256': 'b' * 64,
@@ -184,7 +188,7 @@ def test_capabilities_are_authenticated_and_document_model_specific(document_cas
     assert result.status_code == 200
     assert case.client.put('/v1/documents/' + str(uuid4()), json=body(case)).status_code == 401
     caps = result.json()
-    assert caps['enabled'] and 'paid_allowed' not in caps
+    assert caps['enabled'] and caps['unavailable_reason'] is None
     assert caps['limits']['max_bytes'] == 200_000_000 and caps['limits']['max_pages'] == 200
     assert [item['id'] for item in caps['models']] == [case.provider]
     assert not any(word in str(caps) for word in ('api_key', 'endpoint', 'revision_id'))
@@ -194,13 +198,10 @@ def test_capabilities_are_authenticated_and_document_model_specific(document_cas
     assert case.client.get('/v1/documents/capabilities', headers=case.auth).json()['models'] == []
 
 
-@pytest.mark.parametrize('gifted_membership', [False, True])
-def test_open_document_access_does_not_unlock_higher_tier_models(document_case, gifted_membership):
+def test_document_membership_does_not_unlock_higher_tier_models(document_case):
     from app.translation_models import TranslationProvider
     case = document_case
     configure_system_limits(free_daily_pages=100)
-    if gifted_membership:
-        login_plus(case.client)
     with session_factory()() as db:
         db.get(TranslationProvider, case.provider).text_plan_ids = ['pro']
         db.commit()
@@ -210,7 +211,161 @@ def test_open_document_access_does_not_unlock_higher_tier_models(document_case, 
     assert not case.store.created
 
 
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+def test_document_catalog_and_explicit_intent_read_pack_right_once_without_pricing_pages(document_case):
+    from sqlalchemy import event
+    from app.db import engine
+    from app.translation_models import TranslationProvider
+    case = document_case
+    purchase(case, 1)
+    with session_factory()() as db:
+        db.get(TranslationProvider, case.provider).text_plan_ids = ['plus']
+        for rate in (2, 3, 4):
+            model = configure_text_provider(db, document={'enabled': True})
+            model.text_plan_ids, model.quota_multiplier = ['plus'], rate
+        db.commit()
+    reads = []
+    def record(_conn, _cursor, sql, *_):
+        if sql.startswith('SELECT') and 'FROM quota_periods' in sql:
+            reads.append(sql)
+    event.listen(engine(), 'before_cursor_execute', record)
+    try:
+        caps = case.client.get('/v1/documents/capabilities', headers=case.auth).json()
+        assert len(caps['models']) == 4
+        create(case)
+    finally:
+        event.remove(engine(), 'before_cursor_execute', record)
+    assert len(reads) == 2 and all('JOIN billing_orders' in sql and 'LIMIT' in sql for sql in reads)
+
+
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+def test_upload_admission_is_independent_of_scheduler_and_unrelated_owner(document_case):
+    from app.entitlements import locked_user
+    from app.scheduler import lock_scheduler
+    from test_cluster_submissions import descriptor, submit
+    case = document_case
+    other = login_plus(case.client, 'locked-owner')
+    page = descriptor(b'independent')
+    replay = submit(case.client, other, page)
+    assert replay.status_code == 202
+    owner = case.client.get('/v1/me', headers=other).json()['user']['id']
+    period = purchase(case, 2)
+    with session_factory()() as held:
+        lock_scheduler(held)
+        locked_user(held, owner)
+        # Both requests must commit on other connections while these locks are still held.
+        assert submit(case.client, case.auth, page).status_code == 202
+        create(case)
+        assert submit(case.client, other, page).json()['id'] == replay.json()['id']
+    with session_factory()() as db:
+        assert db.get(QuotaPeriod, period).reserved == 1
+
+
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+def test_book_auto_routes_around_unpayable_model_while_explicit_choice_waits_for_quota(document_case):
+    from app.translation_models import TranslationProvider
+    from app.providers import digest
+    from app.translation_routing import choose_provider
+    case = document_case
+    bucket = purchase(case, 1)
+    with session_factory()() as db:
+        costly = db.get(TranslationProvider, case.provider)
+        costly.text_plan_ids, costly.quota_multiplier = ['plus'], 2
+        cheap = configure_text_provider(db, document={'enabled': True})
+        cheap.text_plan_ids = ['plus']
+        db.commit()
+    weights = {costly.id: 1, cheap.id: 1}
+    hashes = (f'{index:064x}' for index in range(100))
+    sha = next(value for value in hashes if choose_provider(weights, digest([value, 'zh-Hans'])) == costly.id)
+    key = create(case, sha256=sha)
+    assert not reserve(prepare(case, key, 1))
+    auto = create(case, sha256=sha, model_id=None)
+    assert reserve(prepare(case, auto, 1))
+    result = case.client.get('/v1/documents/' + auto, headers=case.auth).json()
+    assert result['model']['id'] == cheap.id and result['quota']['reserved'] == 1
+    with session_factory()() as db:
+        assert db.get(QuotaPeriod, bucket).reserved == 1
+
+
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+@pytest.mark.parametrize('access', ['gift_pages', 'pending_gift', 'expired_gift', 'future_term', 'revoked_trial',
+                                   'expired_pack', 'future_pack', 'revoked_pack', 'spent_pack', 'reserved_pack'])
+def test_document_creation_needs_live_paid_access(document_case, access):
+    from app.billing_models import BillingTerm
+    case = document_case
+    configure_system_limits(free_daily_pages=20)
+    if access.endswith('_pack'):
+        period_id = purchase(case, 5)
+        with session_factory()() as db:
+            period = db.get(QuotaPeriod, period_id)
+            if access == 'expired_pack': period.ends_at = now()
+            elif access == 'future_pack': period.starts_at = now() + timedelta(days=1)
+            elif access == 'revoked_pack': period.revoked_at = now()
+            elif access == 'spent_pack': period.used = 5
+            else: period.reserved = 5
+            db.commit()
+    elif access == 'gift_pages':
+        with session_factory()() as db:
+            db.add(QuotaPeriod(id=uid(), owner_id=case.owner, kind='classic_grant', mode='classic',
+                source='grant', source_key='gift', starts_at=now(), granted=100))
+            db.commit()
+    elif access in ('pending_gift', 'expired_gift'):
+        login_plus(case.client)
+        with session_factory()() as db:
+            user = db.get(User, case.owner)
+            if access == 'pending_gift':
+                user.plus_pending = True
+            else:
+                user.plus_expires_at = now()
+            db.commit()
+    elif access in ('future_term', 'revoked_trial'):
+        term_id = paid_term(case, kind='trial')
+        with session_factory()() as db:
+            term = db.get(BillingTerm, term_id)
+            if access == 'future_term':
+                term.starts_at = now() + timedelta(days=1)
+            else:
+                term.revoked_at = now()
+            db.commit()
+    caps = case.client.get('/v1/documents/capabilities', headers=case.auth).json()
+    assert not caps['enabled'] and caps['models'] == [] and caps['unavailable_reason'] == 'membership_required'
+    for filename, kind in [('book.zip', 'zip'), ('book.cbz', 'zip'), ('book.pdf', 'pdf')]:
+        result = case.client.put('/v1/documents/' + str(uuid4()), headers=case.auth,
+            json=body(case, filename=filename, source_type=kind))
+        assert result.status_code == 403 and result.json()['error']['code'] == 'DOCUMENT_MEMBERSHIP_REQUIRED'
+    assert not case.store.created and not case.store.signed
+    with session_factory()() as db:
+        assert not db.scalar(select(Job.id)) and not db.scalar(select(Ledger.id))
+
+
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+@pytest.mark.parametrize('membership', ['paid', 'trial', 'gift'])
+def test_whole_file_freezes_membership_before_upload_and_replays_after_expiry(document_case, membership):
+    from app.billing_models import BillingTerm
+    case = document_case
+    if membership == 'gift':
+        login_plus(case.client, pages=0)
+    else:
+        term_id = paid_term(case, kind=membership, unlimited=False, trial_pages=0)
+    key = create(case)
+    with session_factory()() as db:
+        job = db.scalar(select(Job).where(Job.idempotency_key == key))
+        assert job.entitlement['priority'] == 1
+        if membership == 'gift':
+            db.get(User, case.owner).plus_expires_at = now()
+        else:
+            db.get(BillingTerm, term_id).ends_at = now()
+        db.commit()
+    assert create(case, key) == key and len(case.store.created) == 1
+    assert case.client.get('/v1/documents', headers=case.auth).json()['items'][0]['id'] == key
+    assert case.client.post('/v1/documents/' + key + '/complete-upload', headers=case.auth).status_code == 202
+    with session_factory()() as db:
+        assert db.scalar(select(JobStage.service_priority).where(JobStage.job_id == job.id)) == 1
+    assert case.client.put('/v1/documents/' + str(uuid4()), headers=case.auth, json=body(case)).status_code == 403
+
+
 @pytest.mark.parametrize('trial_pages', [0, 2])
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
 def test_finite_trial_is_not_mistaken_for_its_unlimited_paid_plan(document_case, trial_pages):
     case = document_case
     paid_term(case, kind='trial', trial_pages=trial_pages)
@@ -381,6 +536,7 @@ def test_model_scope_cannot_borrow_rights_from_another_bucket(document_case):
         assert db.get(QuotaPeriod, plus).reserved == 0
 
 
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
 def test_free_model_preserves_free_then_paid_order(document_case):
     case = document_case
     configure_system_limits(free_daily_pages=1)
@@ -388,6 +544,8 @@ def test_free_model_preserves_free_then_paid_order(document_case):
     job_id = prepare(case, create(case), 3)
     assert reserve(job_id)
     with session_factory()() as db:
+        job = db.get(Job, job_id)
+        assert job.entitlement['plan'] == 'free' and job.service_priority == 1
         assert db.get(QuotaPeriod, purchased).reserved == 2
         assert db.scalar(select(QuotaPeriod.reserved).where(QuotaPeriod.owner_id == case.owner,
                                                           QuotaPeriod.source == 'daily')) == 1
@@ -419,6 +577,7 @@ def test_multi_bucket_settlement_exactly_once_original_buckets_and_no_text(docum
     assert case.client.post('/v1/documents/' + key + '/cancel', headers=case.auth).status_code == 409
 
 
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
 def test_parallel_documents_compete_for_total_balance_not_individual_buckets(document_case):
     case = document_case
     period = purchase(case, 3)
@@ -432,6 +591,26 @@ def test_parallel_documents_compete_for_total_balance_not_individual_buckets(doc
     with session_factory()() as db:
         assert db.get(QuotaPeriod, period).reserved == 3
         assert db.scalar(select(func.count()).select_from(DocumentQuotaAllocation)) == 1
+
+
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+def test_book_and_image_cannot_both_reserve_the_last_pack_page(document_case):
+    from test_cluster_submissions import descriptor, submit
+    case = document_case
+    period = purchase(case, 1)
+    book = prepare(case, create(case), 1)
+    barrier = Barrier(2)
+    def image():
+        barrier.wait(timeout=10)
+        return submit(case.client, case.auth, descriptor(b'last'), model_id=case.provider)
+    with ThreadPoolExecutor(1) as pool:
+        submitting = pool.submit(image)
+        barrier.wait(timeout=10)
+        book_won = reserve(book)
+        assert submitting.result().status_code == (403 if book_won else 202)
+    with session_factory()() as db:
+        assert db.get(QuotaPeriod, period).reserved == 1
+        assert db.scalars(select(Ledger.amount).where(Ledger.kind == 'reserve')).all() == [1]
 
 
 def test_cancel_races_reservation_with_one_serialized_winner(document_case):
@@ -500,7 +679,8 @@ def test_seal_replay_and_metadata_only_history(document_case):
     assert 'https://r2.example' not in history.text and 'source_key' not in history.text
 
 
-def test_purchase_exhaustion_needs_explicit_resume_without_blocking_document_access(document_case):
+@pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
+def test_purchase_exhaustion_blocks_new_documents_but_not_replay_or_resume(document_case):
     case = document_case
     period_id = purchase(case, 1)
     key = create(case)
@@ -508,11 +688,14 @@ def test_purchase_exhaustion_needs_explicit_resume_without_blocking_document_acc
     with session_factory()() as db:
         db.get(QuotaPeriod, period_id).used = 1
         db.commit()
-    assert case.client.get('/v1/documents/capabilities', headers=case.auth).json()['models']
+    assert not case.client.get('/v1/documents/capabilities', headers=case.auth).json()['enabled']
+    assert case.client.put('/v1/documents/' + str(uuid4()), headers=case.auth, json=body(case)).status_code == 403
+    assert create(case, key) == key and len(case.store.created) == 1
     assert reserve(job_id) is False
     snapshot = case.client.get('/v1/documents/' + key, headers=case.auth).json()
     assert snapshot['status'] == 'awaiting_quota' and snapshot['quota']['available'] == 0
     purchase(case, 2)
+    assert case.client.get('/v1/documents/capabilities', headers=case.auth).json()['enabled']
     assert case.client.get('/v1/documents/' + key, headers=case.auth).json()['status'] == 'awaiting_quota'
     response = case.client.post('/v1/documents/' + key + '/resume', headers=case.auth)
     assert response.status_code == 202 and response.json()['quota']['reserved'] == 2

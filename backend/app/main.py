@@ -232,7 +232,7 @@ def capabilities(db: Session = Depends(get_db), user: User | None = Depends(opti
     from .translation_selection import model_catalog
     from .translation_fonts import font_catalog
     entitlements = entitlements_json(db, user) if user else None
-    models, classic_enabled = model_catalog(db, user, entitlements['service_plan'] if entitlements else 'guest')
+    models, classic_enabled = model_catalog(db, user)
     from datetime import timedelta
     from .models import now
     from .queue_models import ComputeNode

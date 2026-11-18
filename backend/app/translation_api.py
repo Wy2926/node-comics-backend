@@ -14,6 +14,7 @@ from .auth import identity
 from .config import settings
 from .db import get_db, session_factory
 from .errors import ANALYSIS_LIMIT_MESSAGES, problem
+from .entitlements import locked_user
 from .jobs import cancel_job, create_job
 from .languages import Language
 from .models import Asset, Attempt, ClassicState, Job, TextCall, User, now
@@ -200,6 +201,7 @@ def accept_translation(db, user, request_id, body, *, submitted_ip=None):
     result_format, model_id, font_id = body.result_format, body.model_id, body.font_id
     previous_id = body.retry_of or body.regenerate_of
     if previous_id:
+        lock_scheduler(db)  # Validate the source verdict before admitting new retry/regeneration work.
         previous = owned_translation(db, user.id, previous_id)
         entry = db.get(Job, previous.job_id) if previous.job_id else None
         expired_regeneration = bool(body.regenerate_of and entry and entry.quota_kind != 'guest_trial'
@@ -269,7 +271,6 @@ def translate(translation_id: UUID, body: TranslationInput, request: Request, us
     db.rollback()
     token = acquire_control(owner_id)
     try:
-        lock_scheduler(db)
         from .client_address import client_ip
         row = accept_translation(db, db.get(User, owner_id), str(translation_id), body, submitted_ip=client_ip(request))
         # Persist admission before building the client snapshot.
@@ -460,6 +461,7 @@ def translation_result(translation_id: UUID, request: Request, user: User = Depe
 @router.delete('/v1/translations/{translation_id}')
 def translation_delete(translation_id: UUID, user: User = Depends(identity), db: Session = Depends(get_db)):
     lock_scheduler(db)
+    locked_user(db, user.id)  # Serialize last-reference deletion with the same owner's new aliases.
     row = owned_translation(db, user.id, translation_id)
     row.revoked_at = row.revoked_at or now()
     db.flush()

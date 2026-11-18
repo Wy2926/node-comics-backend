@@ -1,4 +1,4 @@
-"""Creem HTTP contract and durable grants in disposable SQLite; no payment account calls."""
+"""Creem HTTP contract and durable grants; no payment account calls."""
 import copy
 import hashlib
 import hmac

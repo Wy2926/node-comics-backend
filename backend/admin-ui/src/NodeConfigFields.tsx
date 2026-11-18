@@ -5,6 +5,7 @@ export type ConfigSchema = {
 };
 const labels: Record<string, string> = {
   execution_slots: '最大在途页数', document_slots: '文件保守并发（0 为关闭）',
+  paid_reserved_slots: '付费保留位（留空：多执行位留 1，单执行位共享）',
   performance_weight: '处理能力权重（越大越优先）',
   poll_seconds: '空闲补领间隔（秒）',
   heartbeat_seconds: '心跳间隔（秒）',
@@ -14,6 +15,10 @@ const labels: Record<string, string> = {
 };
 const numeric = (property: Property) => property.anyOf?.find(p => p.type !== 'null') || property;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const poolProperties = (max: number): Record<string, Property> => ({
+  execution_slots: {type: 'integer', minimum: 1, maximum: max},
+  paid_reserved_slots: {type: 'integer', minimum: 0, maximum: max},
+});
 
 export function parseConfig(text: string, schema: ConfigSchema, pool?: string): Record<string, unknown> {
   let value: unknown;
@@ -22,6 +27,7 @@ export function parseConfig(text: string, schema: ConfigSchema, pool?: string): 
   function check(values: Record<string, unknown>, properties: Record<string, Property>) {
     for (const [key, current] of Object.entries(values)) {
       if (!(key in properties)) throw Error(`不支持的配置字段：${key}`);
+      if (key === 'paid_reserved_slots' && current === null) continue;
       const rule = numeric(properties[key]);
       if (typeof current !== 'number' || !Number.isFinite(current) ||
           (rule.type === 'integer' && !Number.isInteger(current)) ||
@@ -29,7 +35,7 @@ export function parseConfig(text: string, schema: ConfigSchema, pool?: string): 
           (rule.const != null && current !== rule.const)) throw Error(`${labels[key] || key} 的数值或范围无效。`);
     }
   }
-  const properties = pool ? {execution_slots: {type: 'integer', minimum: 1, maximum: schema.pool_limits[pool]}} : schema.node.properties;
+  const properties = pool ? poolProperties(schema.pool_limits[pool]) : schema.node.properties;
   check(value, properties);
   if (pool && value.execution_slots == null) throw Error('请填写最大在途页数。');
   return pool ? value : {...schema.defaults, ...value};
@@ -40,19 +46,19 @@ export function NodeConfigFields({value, onChange, schema, pool}: {
   schema: ConfigSchema; pool?: string;
 }) {
   function fields(properties: Record<string, Property>, values: Record<string, unknown>, advanced=false) {
-    return Object.entries(properties).filter(([key]) => key in labels && (advanced !== ['execution_slots', 'performance_weight'].includes(key))).map(([key, property]) => {
+    return Object.entries(properties).filter(([key]) => key in labels && (pool || advanced !== ['execution_slots', 'performance_weight'].includes(key))).map(([key, property]) => {
       const rule = numeric(property);
-      return <label key={key}>{labels[key]}<input type="number" required
+      return <label key={key}>{labels[key]}<input type="number" required={key !== 'paid_reserved_slots'}
         min={rule.minimum} max={rule.maximum} step={rule.type === 'integer' ? 1 : 'any'}
         value={values[key] == null ? '' : String(values[key])}
         onChange={e => {
-          const current = e.target.value === '' ? '' : Number(e.target.value);
+          const current = e.target.value === '' ? (key === 'paid_reserved_slots' ? undefined : '') : Number(e.target.value);
           onChange({...value, [key]: current});
         }}/><small className="muted">{rule.minimum}–{rule.maximum}</small></label>;
     });
   }
   return <>
-    <div className="config-grid">{fields(pool ? {execution_slots: {type: 'integer', minimum: 1, maximum: schema.pool_limits[pool]}} : schema.node.properties, value)}</div>
+    <div className="config-grid">{fields(pool ? poolProperties(schema.pool_limits[pool]) : schema.node.properties, value)}</div>
 
     {!pool && <details><summary>高级设置</summary><div className="config-grid">{fields(schema.node.properties, value, true)}</div></details>}
   </>;

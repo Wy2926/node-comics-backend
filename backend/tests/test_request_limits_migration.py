@@ -1,12 +1,10 @@
 """Build the current schema in an isolated database and verify repeatable startup."""
-from types import SimpleNamespace
-
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 import pytest
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, create_engine, event, inspect, text
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, inspect, text
 
-HEAD = "quota_multipliers_0028"
+HEAD = "stage_service_priority_0029"
 NEW_TABLES = {"guest_sessions", "guest_daily_usage", "guest_daily_budgets", "quota_campaigns", "quota_campaign_awards", "quota_periods", "comic_title_cache", "system_settings",
               "translation_providers", "translation_provider_revisions", "billing_accounts",
               "billing_customers", "billing_price_bindings", "billing_orders", "billing_order_transitions", "billing_plans", "billing_plan_revisions", "billing_prices", "billing_terms", "billing_checkouts", "billing_checkout_aliases", "billing_subscriptions", "billing_events", "billing_invoices", "compute_claims", "upload_reservations", "translation_requests",
@@ -14,21 +12,9 @@ NEW_TABLES = {"guest_sessions", "guest_daily_usage", "guest_daily_budgets", "quo
 
 
 @pytest.fixture
-def isolated_migration_database(tmp_path, monkeypatch):
-    """No environment files, configured database, identity or object store is used."""
-    from app import billing_providers, db
-    private_engine = create_engine(f"sqlite:///{(tmp_path / 'upgrade.db').as_posix()}")
-    @event.listens_for(private_engine, "connect")
-    def foreign_keys(connection, _):
-        connection.execute("PRAGMA foreign_keys=ON")
-    monkeypatch.setattr(db, "engine", lambda: private_engine)
-    isolated_settings = lambda: SimpleNamespace(storage_path=tmp_path / "objects", stripe_enabled=False, creem_enabled=False)
-    monkeypatch.setattr(db, "settings", isolated_settings)
-    monkeypatch.setattr(billing_providers, "settings", isolated_settings)
-    try:
-        yield private_engine
-    finally:
-        private_engine.dispose()
+def isolated_migration_database(pg_scope):
+    from app.db import engine
+    return engine()
 
 
 def assert_current_schema_matches_models(engine):
@@ -46,13 +32,8 @@ def assert_current_schema_matches_models(engine):
         # them explicitly, together with the admission ownership/uniqueness keys.
         for name in NEW_TABLES:
             table = Base.metadata.tables[name]
-            expected_checks = {(constraint.name, str(constraint.sqltext)) for constraint in table.constraints
-                               if isinstance(constraint, CheckConstraint)}
-            # PostgreSQL rewrites IN checks to typed ANY arrays and gives
-            # unnamed constraints generated names; literal SQL equality is
-            # meaningful only for the SQLite migration fixture.
-            if connection.dialect.name == 'sqlite':
-                assert {(constraint["name"], constraint["sqltext"]) for constraint in inspector.get_check_constraints(name)} == expected_checks
+            expected_checks = {c.name for c in table.constraints if isinstance(c, CheckConstraint) and c.name}
+            assert expected_checks <= {c["name"] for c in inspector.get_check_constraints(name)}
             assert inspector.get_pk_constraint(name)["constrained_columns"] == [column.name for column in table.primary_key]
             expected_unique = {tuple(column.name for column in constraint.columns) for constraint in table.constraints
                                if isinstance(constraint, UniqueConstraint)}

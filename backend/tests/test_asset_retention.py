@@ -296,9 +296,9 @@ def test_expiry_index_and_failed_unlink_are_retryable(client, png, monkeypatch):
         template = dict(db.execute(select(Job.__table__).where(Job.id == job_id)).mappings().one())
         db.execute(Job.__table__.insert(), [{**template, 'id': str(uuid4()), 'idempotency_key': str(uuid4()),
             'discard_output': True, 'input_asset_id': None, 'output_asset_id': None} for _ in range(2000)])
-        db.execute(text('ANALYZE'))
-        plan = db.execute(text('EXPLAIN QUERY PLAN SELECT id FROM jobs WHERE ' + IMAGE_RESULT_EXPIRY_FILTER +
-            ' AND completed_at <= :cutoff ORDER BY completed_at, id LIMIT 100'), {'cutoff': now()}).all()
+        db.execute(text('ANALYZE jobs'))
+        plan = db.execute(text('EXPLAIN (FORMAT JSON) SELECT id FROM jobs WHERE ' + IMAGE_RESULT_EXPIRY_FILTER +
+            ' AND completed_at <= :cutoff ORDER BY completed_at, id LIMIT 100'), {'cutoff': now()}).scalar_one()
         assert 'ix_jobs_image_result_expiry' in str(plan)
         original_delete = LocalStore.delete
         monkeypatch.setattr(LocalStore, 'delete', lambda *_: (_ for _ in ()).throw(OSError('busy')))

@@ -75,16 +75,18 @@ def membership_choices(db, user, at=None):
     return choices
 
 
-def membership_benefits(db, user, at=None, *, choices=None):
+def membership_benefits(db, user, at=None, *, choices=None, service_plans=None):
     choices = membership_choices(db, user, at) if choices is None else choices
+    if service_plans is not None:
+        choices = (choice for choice in choices if choice['service_plan'] in service_plans)
     return max(choices, key=lambda value: (value['unlimited'], value['hourly_image_limit'] is None,
         value['hourly_image_limit'] or 0, value['plan']), default={
             'plan': 'free', 'name': 'free', 'service_plan': 'free', 'paid': False, 'hourly_image_limit': None, 'unlimited': False})
 
 
-def plus_dates(db, user, at=None):
+def plus_dates(db, user, at=None, *, terms=None):
     at = at or now()
-    ranges = [(term.starts_at, term.ends_at) for term in active_terms(db, user.id, at)]
+    ranges = [(term.starts_at, term.ends_at) for term in (active_terms(db, user.id, at) if terms is None else terms)]
     if (not user.plus_pending and user.plus_started_at and user.plus_expires_at
             and user.plus_started_at < user.plus_expires_at):
         ranges.append((user.plus_started_at, user.plus_expires_at))
@@ -194,9 +196,13 @@ def quota_kind(user, mode, at=None, db=None, *, benefits=None):
     return UNLIMITED if benefits['unlimited'] else MONTHLY if benefits['paid'] else DAILY
 
 
-def entitlement_version(db, user, kind, at=None):
+def requires_paid(plans):
+    return plans is not None and 'free' not in plans
+
+
+def entitlement_version(user, kind, term_ids):
     return digest({"policy": "membership-pages-v1", "kind": kind,
-                   "membership": [user.membership_id, [t.id for t in active_terms(db, user.id, at)]] if kind in (MONTHLY, UNLIMITED) else None})
+                   "membership": [user.membership_id, term_ids] if kind in (MONTHLY, UNLIMITED) else None})
 
 
 def _period_query(user, mode, at):
@@ -254,11 +260,10 @@ def admission_policy(db, user, mode='classic', at=None, *, benefits=None, servic
     at = at or now()
     if user.kind == 'guest':
         return AdmissionPolicy('guest', 'guest', 'guest_trial', None)
-    benefits = benefits if benefits is not None else membership_benefits(db, user, at)
+    benefits = benefits if benefits is not None else membership_benefits(db, user, at, choices=choices)
     access = benefits
     if service_plans is not None:
-        choices = membership_choices(db, user, at) if choices is None else choices
-        access = membership_benefits(db, user, at, choices=[item for item in choices if item['service_plan'] in service_plans])
+        access = membership_benefits(db, user, at, choices=choices, service_plans=service_plans)
     kind = quota_kind(user, mode, at, db, benefits=access)
     if kind in (UNLIMITED, 'unavailable'):
         return AdmissionPolicy(benefits['plan'], access['service_plan'], kind, access['hourly_image_limit'])
@@ -270,18 +275,18 @@ def admission_policy(db, user, mode='classic', at=None, *, benefits=None, servic
         period, revision = subscription
         return AdmissionPolicy(benefits['plan'], revision.service_plan_id or revision.plan_id,
                                MONTHLY, revision.hourly_image_limit, period)
-    purchase = first_purchase(db, user.id, at, service_plans=service_plans, amount=amount)
+    # A missing scoped right is common. Only look again if a real bucket is too small.
+    purchase = first_purchase(db, user.id, at, service_plans=service_plans, amount=amount if service_plans is None else MIN_QUOTA)
     if purchase:
         period, revision = purchase
+        if period.granted - period.used - period.reserved < amount:
+            payable = first_purchase(db, user.id, at, service_plans=service_plans, amount=amount)
+            period, revision = payable if payable else (None, revision)
         return AdmissionPolicy(benefits['plan'], revision.service_plan_id, PURCHASE, revision.hourly_image_limit, period)
-    if service_plans is not None and amount > MIN_QUOTA:
-        access_purchase = first_purchase(db, user.id, at, service_plans=service_plans)
-        if access_purchase:
-            _, revision = access_purchase
-            return AdmissionPolicy(benefits['plan'], revision.service_plan_id, PURCHASE, revision.hourly_image_limit)
     # The subscription identity remains, but free pages never authorize paid models.
-    if service_plans is not None and 'free' not in service_plans:
-        return AdmissionPolicy(benefits['plan'], access['service_plan'], MONTHLY, access['hourly_image_limit'])
+    if requires_paid(service_plans):
+        return AdmissionPolicy(benefits['plan'], access['service_plan'], MONTHLY if access['paid'] else 'unavailable',
+                               access['hourly_image_limit'])
     return AdmissionPolicy(benefits['plan'], 'free', DAILY, benefits['hourly_image_limit'], _first_period(db, user, mode, DAILY, at, amount))
 
 
@@ -368,13 +373,14 @@ def entitlements_json(db, user, at=None):
             'next_expiry_at': iso(min((row.ends_at for row in buckets
                 if row.ends_at and row.granted > row.used + row.reserved), default=None))}
     from .translation_limits import image_limit
+    terms = active_terms(db, user.id, at)
     modes = {}
     for mode in ("classic",):
         kind = policy.kind if mode == 'classic' else quota_kind(user, mode, at, db, benefits=benefits)
         modes[mode] = {"allowed": kind != "unavailable" and (kind == UNLIMITED or policy.period is not None), "unlimited": kind == UNLIMITED,
-                       "quota_kind": kind, "consent_version": entitlement_version(db, user, kind, at),
+                       "quota_kind": kind, "consent_version": entitlement_version(user, kind, [term.id for term in terms]),
                        "quota": allowance_json(db, user, kind, at, purchase_totals=purchases, periods=periods)}
-    starts_at, expires_at = plus_dates(db, user, at)
+    starts_at, expires_at = plus_dates(db, user, at, terms=terms)
     return {"plan": benefits['plan'], "plan_name": benefits['name'], "service_plan": policy.service_plan,
             "free_quota": balance({'daily', 'grant'}, {'daily'}),
             "subscription_quota": {**balance({'membership', 'subscription'}, {'membership', 'subscription'}),
@@ -436,12 +442,12 @@ def reserve(db, user, job, at=None, *, policy=None):
     policy = policy or admission_policy(db, user, job.mode, at, amount=job.quota_multiplier)
     kind = require_entitlement(user, job.mode, db=db, policy=policy)
     job.quota_kind = kind
+    term_ids = [term.id for term in active_terms(db, user.id, at)]
     job.entitlement = {"plan": policy.plan, "service_plan": policy.service_plan,
                        "priority": policy.priority, "accepted_at": iso(at),
                        "hourly_image_limit": policy.hourly_image_limit,
                        "membership_id": user.membership_id,
-                       "billing_term_ids": [term.id for term in active_terms(db, user.id, at)],
-                       "version": entitlement_version(db, user, kind, at)}
+                       "billing_term_ids": term_ids, "version": entitlement_version(user, kind, term_ids)}
     if kind == UNLIMITED:
         job.quota_pages, job.settlement = 0, "included"
         return

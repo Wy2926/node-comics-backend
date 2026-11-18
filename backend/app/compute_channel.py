@@ -18,7 +18,7 @@ from .notifications import hub
 from .providers import digest
 from .queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
 from .request_models import RequestBody
-from .scheduler import claim_batch, has_eligible_work, lock_scheduler, prepare_claim_candidates
+from .scheduler import claim_batch, has_eligible_work, lock_scheduler, paid_reserve, prepare_claim_candidates, ready_page_priority
 
 router = APIRouter(prefix='/internal/compute/v3')
 RECONCILE_SECONDS = 5
@@ -72,7 +72,7 @@ def withdraw(identity, connection):
 
 def assign(identity, connection, body):
     """Only a received pull can allocate. Nonempty grants and their receipts commit together."""
-    from .documents.compute import claim_document, payload
+    from .documents.compute import claim_document, has_document_work, payload
     with session_factory()() as db:
         key = (identity, body.request_id)
         prepared = (prepare_claim_candidates(db, identity, ['page'], limit=body.count)
@@ -90,7 +90,8 @@ def assign(identity, connection, body):
             if body.config_version != node.config_version:
                 problem('NODE_CONFIG_CONFLICT', '领取前需要同步配置', 409)
             cutoff = now() - timedelta(seconds=PREFERENCE_SECONDS)
-            leases = (claim_batch(db, identity, ['page'], limit=body.count, prepared=prepared, steal_before=cutoff)
+            leases = (claim_batch(db, identity, ['page'], limit=body.count, prepared=prepared, steal_before=cutoff,
+                                  higher_work=has_document_work)
                       if prepared else [])
             if not leases and body.document_count and (document := claim_document(db, node, steal_before=cutoff)):
                 leases = [document]
@@ -117,12 +118,13 @@ def snapshot(identity, connection, tracked, interest):
     from .documents.compute import NODE_STAGES, has_document_work, live
     with session_factory()() as db:
         node = current_node(db, identity, connection)
-        rows = db.execute(select(ExecutionLease, JobStage.name).join(JobStage).where(
+        rows = db.execute(select(ExecutionLease, JobStage.name, JobStage.service_priority).join(JobStage).where(
             ExecutionLease.node_id == identity,
             or_(ExecutionLease.completed_at.is_(None), ExecutionLease.id.in_(tracked)))).all()
-        active = {lease.id for lease, _ in rows if not lease.completed_at}
+        active = {lease.id for lease, _, _ in rows if not lease.completed_at}
+        ordinary = sum(1 for lease, _, rank in rows if not lease.completed_at and not rank)
         replies = []
-        for lease, stage in rows:
+        for lease, stage, _ in rows:
             if stage == 'page':
                 if reply := page_update(db, lease):
                     replies.append(reply)
@@ -137,10 +139,17 @@ def snapshot(identity, connection, tracked, interest):
                 except ProcessingError:
                     replies.append({'lease_id': lease.id, 'status': 'stop', 'code': 'LEASE_STOPPED'})
         # A hint doesn't reserve a stage or bind a document workspace.
-        available = (interest and node.enabled and interest.config_version == node.config_version
-            and len(active) < node.capacity and (
-                interest.count and has_eligible_work(db, node, ['page'])
-                or interest.document_count and has_document_work(db, node)))
+        available = False
+        if interest and node.enabled and interest.config_version == node.config_version and len(active) < node.capacity:
+            if interest.count and 'page' in node.capabilities:
+                minimum = int(ordinary >= node.capacity - paid_reserve(node))
+                if not interest.document_count and 'doc_prepare' in node.capabilities:
+                    rank = ready_page_priority(db, node, minimum)
+                    available = rank is not None and (rank > 0 or not has_document_work(db, node, min_priority=1))
+                else:
+                    available = has_eligible_work(db, node, ['page'], min_priority=minimum)
+            if not available and interest.document_count:
+                available = has_document_work(db, node)
         return config_payload(node), replies, active, bool(available)
 
 

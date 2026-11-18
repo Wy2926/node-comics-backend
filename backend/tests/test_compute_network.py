@@ -27,8 +27,6 @@ import uvicorn
 
 from conftest import create, login_plus, upload
 from test_compute_v3 import v3
-from test_compute_v3_postgres import client
-from test_postgres_concurrency import pg_scope
 from test_compute_node_v3 import FixtureRuntime, Agent, Journal, Transport
 from test_document_compute import documents
 from test_document_quota_api import document_case

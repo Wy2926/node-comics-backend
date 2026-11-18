@@ -11,7 +11,6 @@ import {PlanPrice,PublishedPurchaseAvailability,publishedAmountParts,publishedAn
 import PriceAmount from './PriceAmount';
 import CheckoutButton, { type CheckoutCopy } from './CheckoutButton';
 import QuotaOffers from './QuotaOffers';
-import PlanModels from './PlanModels';
 import PlanComparison from './PlanComparison';
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
 import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
@@ -81,7 +80,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
   const recoverSelected=!!billing&&/^[\w-]{1,36}$/.test(selectedPrice)&&
     (!findCheckoutOffer(billing,selectedPrice)||
       !!requested&&isOneTimePrice(requested)&&membershipCheckoutBlocked(billing,requested));
-  const rows=comparisonRows(locale,0).filter(row=>row.key==='rate'||row.key==='priority');
+  const rows=comparisonRows(locale,0).filter(row=>row.key==='model'||row.key==='rate'||row.key==='priority');
   const annual=offerForInterval(available,'year',selectedPrice);
   const discount=annual?annualSavings(annual,available)?.percent??0:available.length?0:publishedAnnualDiscount;
   return <div className="pricing-comparison">
@@ -97,7 +96,6 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
         <div><p className="price"><PriceAmount parts={publishedAmountParts('free',locale)}/><small className="price-unit">/ {free.priceLabel}</small></p><p className="price-terms">{free.description}</p></div>
         <div className="plan-allowance"><span>{quota.free}</span><strong className="subscription-allowance">{comparison.classic.free}</strong></div>
         <div className="subscription-purchase"><a className="button secondary" data-install-extension href={downloadHref}>{free.action}<span className="ui-icon icon-arrow" aria-hidden="true"/></a><p className="trial-note">{free.note}</p></div>
-        <PlanModels locale={locale} paid={false}/>
         <ul className="subscription-features">{rows.map(row=><li key={row.key} data-feature={row.key}><span>{row.label}</span><strong>{row.free}</strong></li>)}</ul>
       </article>
       {plans.map(offer=>{
@@ -115,7 +113,6 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
         <p className="trial-note">{!oneTime&&offer.trial_days>0&&`${trialCopy(offer.trial_days,locale)} · ${offer.trial_classic_pages===null?copy.classic:quotaPurchaseCopy(locale).pages.replace('{0}',offer.trial_classic_pages.toLocaleString(locale))}`} {renewalCopy(offer,locale)} {!oneTime&&text.cancel} {publishedPricingCopy(locale).tax}</p>
         </>:<PublishedPurchaseAvailability locale={locale} name={offer.name} interval={interval} billingType={billingType} state={error?'error':offers?'unavailable':'loading'}/>}
         </div>
-        <PlanModels locale={locale} paid/>
         <ul className="subscription-features">{rows.map(row=><li key={row.key} data-feature={row.key}><span>{row.label}</span><strong>{paidComparisonValue(row,offer,locale)}</strong></li>)}</ul>
       </article>;})}
     </div>

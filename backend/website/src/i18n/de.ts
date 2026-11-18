@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/de';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Lokales Lesen ist kostenlos. Free bietet täglich 30 Seiten mit ${publishedModels.free.join(' · ')}. PLUS: 2.500 Seiten pro Monat für 6,66 USD pro Quartal oder 23,99 USD pro Jahr. Pro: 4.000 Seiten pro Monat für 9,99 USD pro Quartal oder 35,99 USD pro Jahr. Beide bieten die kostenlosen Modelle sowie zusätzlich ${publishedModels.paid_extra.join(' · ')}. Monatliche Zuteilung ohne Übertrag und ohne Probeabo. Unbefristete Pakete: 3.500 Seiten für 5,99 USD oder 7.000 für 9,99 USD. Steuern und Endbetrag beim Bezahlen.`;
+const membershipSummary = `Lokales Lesen ist kostenlos. Mit Free kannst du täglich 30 Seiten mit den Basismodellen übersetzen. PLUS: 2.500 Seiten pro Monat für 6,66 USD pro Quartal oder 23,99 USD pro Jahr. Pro: 4.000 Seiten pro Monat für 9,99 USD pro Quartal oder 35,99 USD pro Jahr. Beide Tarife enthalten die Basismodelle und weitere Modelle. Die verfügbaren Modelle und ihre Verbrauchsfaktoren findest du in der Übersetzungsansicht. Monatliche Zuteilung ohne Übertrag und ohne Probeabo. Unbefristete Pakete: 3.500 Seiten für 5,99 USD oder 7.000 für 9,99 USD. Steuern und Endbetrag beim Bezahlen.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · EPUB-Import und Doppelseitenansicht",
+        "items": [
+          "EPUBs aus KOOBONE importieren — Wähle ein EPUB in KOOBONE und speichere das ganze Buch zum Offline-Lesen in deinem Regal.",
+          "Seitenabstand anpassen — Lies EPUBs in der Doppelseitenansicht. Der Abstand zwischen den Seiten wird für jedes Buch gespeichert.",
+          "Modellkosten vergleichen — Bei der Modellauswahl siehst du, mit welchem Faktor jedes Übersetzungsmodell dein Kontingent belastet.",
+          "Neues bei Comicseiten — BatCave wird jetzt unterstützt. Importiere Kapitel über mobile WEBTOON-Links und lies GoodToon unter der neuen Domain."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Mehr Websites und besseres Offline-Lesen",
+        "items": [
+          "Neue Websites unterstützt — RIDI-Webtoons importieren und direkt auf der Website übersetzen. Neu: Seitenübersetzung für KOOBONE.",
+          "Flexibler offline speichern — Parallele Downloads je Website einstellen. Das Offline-Center gruppiert Comics nach Website und zeigt den Fortschritt übersichtlicher.",
+          "Flüssigerer Comic-Export — Schnellere Exporte und ruhigere Fortschrittsanzeigen mit weniger springenden Elementen.",
+          "Mehr Stabilität — Fehlerbehebungen für zuverlässigeres Lesen und Übersetzen."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

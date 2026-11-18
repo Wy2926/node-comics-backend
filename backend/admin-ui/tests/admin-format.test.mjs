@@ -42,6 +42,14 @@ test('document slots describe conservative concurrency and keep zero as closed',
   assert.throws(() => parseConfig('{"document_slots":33}', schema), /文件保守并发（0 为关闭） 的数值或范围无效/);
 });
 
+test('the paid reserve can be omitted or explicitly occupy a single control slot', () => {
+  const schema = {defaults: {}, node: {properties: {}}, pool_limits: {text: 100}};
+  const value = parseConfig('{"execution_slots":1}', schema, 'text');
+  const html = renderToStaticMarkup(NodeConfigFields({value, schema, pool: 'text', onChange() {}}));
+  assert.match(html, /付费保留位[^<]*<input (?![^>]*required)/);
+  assert.equal(parseConfig('{"execution_slots":1,"paid_reserved_slots":1}', schema, 'text').paid_reserved_slots, 1);
+});
+
 test('node substage timings are displayed but protocol version is not a duration', () => {
   assert.deepEqual(taskTimingRows({node: {render: 1.9, render_encode: .7, ocr_lock_wait: .2}, delivery: {protocol: 3}}), [
     {key: 'render', seconds: 1.9, source: '节点'},

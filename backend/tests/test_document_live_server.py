@@ -179,7 +179,7 @@ def test_paid_seed_is_idempotent_and_uses_real_entitlement_rules(client, provide
         live.seed_local_accounts(db, providers, run_id)
         db.commit()
         users = list(db.scalars(select(User).where(User.name.in_(live.PAID_USERS))))
-        assert len(users) == 2 and all(user.role == 'user' for user in users)
+        assert len(users) == 2 and all(user.role == 'user' and user.membership_id is None for user in users)
         periods = list(db.scalars(select(QuotaPeriod).where(QuotaPeriod.source_key.like('document-local:%'))))
         assert len(periods) == 2 and all(row.granted == 2000 for row in periods)
         assert {row.owner_id for row in periods} == {user.id for user in users}

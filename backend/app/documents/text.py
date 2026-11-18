@@ -231,7 +231,7 @@ def _intent(job_id, lease_id, request_hash, input_payload, bound):
         provider = require_enabled(db, profile)
         sequence = (db.scalar(select(func.max(TextCall.sequence)).where(TextCall.job_id == job_id)) or 0) + 1
         call_id = uid()
-        reserve_request(provider, call_id)
+        reserve_request(provider, call_id, priority=job.service_priority)
         reserved = _cost_micros(profile, bound, limits.max_output_tokens)
         db.add(TextCall(id=call_id, job_id=job_id, attempt_id=job.attempt_id, execution_lease_id=lease_id,
             group_index=0, sequence=sequence, provider_id=profile['provider_id'], model=profile['model'],

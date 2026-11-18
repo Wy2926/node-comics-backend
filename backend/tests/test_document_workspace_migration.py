@@ -1,6 +1,5 @@
 """Safe v1/v2 cutover, historical result preservation and deferred text payloads."""
 from datetime import timedelta
-import os
 
 import pytest
 from sqlalchemy import MetaData, inspect, select, text
@@ -10,7 +9,6 @@ from app.models import Job, User, now
 from app.queue_models import ComputeNode
 from test_job_results_migration import before_quota_multiplier, migrate
 from test_request_limits_migration import isolated_migration_database
-from test_postgres_concurrency import pg_scope
 
 
 def seed(engine, status):
@@ -67,12 +65,6 @@ def verify_terminal_history(engine):
 
 def test_upgrade_preserves_historical_r2_result_and_admin_owned_capacity(isolated_migration_database):
     verify_terminal_history(isolated_migration_database)
-
-
-@pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1', reason='Dedicated PostgreSQL test database required')
-def test_workspace_upgrade_on_postgresql(pg_scope):
-    from app.db import engine
-    verify_terminal_history(engine())
 
 
 def test_large_text_payloads_are_deferred_from_normal_document_selects():

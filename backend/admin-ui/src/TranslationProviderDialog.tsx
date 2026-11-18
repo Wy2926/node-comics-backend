@@ -154,7 +154,7 @@ export function TranslationProviderDialog({provider, channels, plans, onClose, o
                   aria-invalid={!!errors.text_plan_ids} aria-describedby={errors.text_plan_ids ? 'provider-plans-error' : 'provider-plans-help'}
                   onChange={event => selectPlan(plan.id, event.target.checked)}/>{plan.name}</label>
               )}</div>}
-              <p className="muted" id="provider-plans-help">正文仅在当前有效套餐匹配的供应商中计算权重，无匹配时不分配其他套餐的模型。匿名体验单独配置；漫画名仍使用共享模型池。</p>
+              <p className="muted" id="provider-plans-help">可指定会员服务档位（如 PLUS）或单独的页数包产品。包含普通用户的模型先扣免费额度；仅限付费的模型只扣匹配额度。匿名体验单独配置，漫画名使用共享模型池。</p>
               {errors.text_plan_ids && <p className="settings-field-error" id="provider-plans-error">{errors.text_plan_ids}</p>}
             </fieldset>
             <div className="settings-fields">{routingFields.map(({key, label}) => field(key, `${label}分流权重`,

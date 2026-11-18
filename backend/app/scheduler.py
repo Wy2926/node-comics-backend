@@ -1,15 +1,15 @@
-"""Bounded oldest-first claims, weighted node placement and fenced leases."""
+"""Bounded tier-first claims, weighted node placement and fenced leases."""
 from datetime import timedelta
 from dataclasses import dataclass
 import hmac
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, case, func, literal_column, or_, select, text, update
 from .assets import available
 from .config import settings
 from .errors import ProcessingError
 from .models import Asset, Attempt, ClassicState, Job, now, uid
 from .queue_models import ComputeNode, ExecutionLease, JobStage, SchedulerMutex
 from .translation_models import TranslationProvider
-from .translation_provider_limits import unavailable_providers
+from .translation_provider_limits import request_limit, unavailable_providers
 from .translation_fonts import DEFAULT_FONTS, supports_font
 
 ACTIVE = {"awaiting_upload", "validating_upload", "queued", "running", "outcome_unknown"}
@@ -19,7 +19,7 @@ CANDIDATE_LIMIT = 32
 
 
 def lock_scheduler(db):
-    # All scheduling/admission transactions use this lock before User/Job.
+    # Transactions changing runnable work take this before User/Job.
     # Model work and remote I/O never execute while holding it.
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT pg_advisory_xact_lock(761349211)"))
@@ -44,7 +44,7 @@ def ensure_stages(db, job):
     existing = {s.name for s in db.scalars(select(JobStage).where(JobStage.job_id == job.id))}
     for name in names:
         if name not in existing:
-            db.add(JobStage(job_id=job.id, name=name, status="ready" if name == names[0] else "waiting"))
+            db.add(JobStage.for_job(job, name=name, status="ready" if name == names[0] else "waiting"))
     if job.mode == "classic" and db.get(ClassicState, job.id) is None:
         db.add(ClassicState(job_id=job.id))
     touch_job(db, job)
@@ -70,10 +70,9 @@ def pool_for(stage):
 def _eligible_stages(node, stages, at, *, stage_ids=None, blocked_providers=()):
     """Shared admission predicates, without ordering."""
     image_stage = JobStage.name.in_(IMAGE_STAGES)
-    eligible = (select(JobStage.id).select_from(JobStage).join(Job, Job.id == JobStage.job_id)
+    jobs = (select(Job.id).select_from(Job)
         .outerjoin(Asset, Asset.id == Job.input_asset_id)
-        .where(Job.workflow_kind == 'image', JobStage.status == "ready", JobStage.name.in_(stages), JobStage.available_at <= at,
-            Job.status.in_(["queued", "running", "validating_upload"]),
+        .where(Job.id == JobStage.job_id, Job.workflow_kind == 'image', Job.status.in_(["queued", "running", "validating_upload"]),
             Job.cancel_requested.is_(False), Job.discard_output.is_(False),
             or_(JobStage.name == "validate_upload", and_(Asset.id.is_not(None), Asset.deleted_at.is_(None),
                 Asset.purged_at.is_(None), or_(Asset.expires_at.is_(None), Asset.expires_at > at, Asset.active_references > 0))),
@@ -81,41 +80,46 @@ def _eligible_stages(node, stages, at, *, stage_ids=None, blocked_providers=()):
                 Job.config["engine"]["protocol_version"].as_integer() == 3))))
     if not (node.runtime_report or {}).get('overlay_tiles'):
         result_format = Job.config['result_format'].as_string()
-        eligible = eligible.where(or_(JobStage.name != 'page', result_format.is_(None), result_format != 'overlay-tiles-v1'))
+        jobs = jobs.where(or_(JobStage.name != 'page', result_format.is_(None), result_format != 'overlay-tiles-v1'))
     if 'page' in stages:
         font_id = Job.config['font_id'].as_string()
-        eligible = eligible.where(or_(~image_stage, supports_font(font_id, Job.target_language,
+        jobs = jobs.where(or_(~image_stage, supports_font(font_id, Job.target_language,
             (node.runtime_report or {}).get('supported_font_ids', []))))
-    if stage_ids is not None:
-        eligible = eligible.where(JobStage.id.in_(stage_ids))
     if "text" in stages:
-        eligible = (eligible.outerjoin(TranslationProvider, TranslationProvider.id == Job.config['text']['provider_id'].as_string())
+        full, paid_only = blocked_providers or ((), ())
+        jobs = (jobs.outerjoin(TranslationProvider, TranslationProvider.id == Job.config['text']['provider_id'].as_string())
             .where(or_(JobStage.name != 'text', and_(TranslationProvider.enabled.is_(True),
-                TranslationProvider.id.not_in(blocked_providers)))))
-    return eligible
+                TranslationProvider.id.not_in(full),
+                or_(JobStage.service_priority > 0, TranslationProvider.id.not_in(paid_only))))))
+    # OFFSET 0 keeps PostgreSQL from flattening the per-stage predicate into a
+    # jobs-first join that sorts the entire eligible backlog before LIMIT.
+    eligible = select(JobStage.id).where(JobStage.status == literal_column("'ready'"), JobStage.name.in_(stages),
+        JobStage.available_at <= at, jobs.correlate(JobStage).offset(0).exists())
+    return eligible.where(JobStage.id.in_(stage_ids)) if stage_ids is not None else eligible
 
 
-def _candidate_rows(db, node, stages, at, *, stage_ids=None, materialize=True, blocked_providers=()):
-    # Match ix_stage_ready: FIFO by ready/retry time, then a stable tie-breaker.
-    # Fetch a small surplus so cancellations and missing inputs do not block a batch.
+def _candidate_rows(db, node, stages, at, *, stage_ids=None, materialize=True, blocked_providers=(), min_priority=0):
     query = _eligible_stages(node, stages, at, stage_ids=stage_ids, blocked_providers=blocked_providers)
-    projection = (JobStage, Job) if materialize else (JobStage.id, JobStage.generation)
-    query = query.with_only_columns(*projection).order_by(JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)
-    rows = db.execute(query.execution_options(populate_existing=True)).all()
-    if materialize and rows:
-        # Service was purchased at admission, not at claim time. The last
-        # reserved page, expiry and later membership changes cannot change it.
-        # Legacy jobs already froze plan; no account/history lookup is needed.
-        rows.sort(key=lambda row: -job_priority(row[1]))
-    return rows
+    if min_priority:
+        query = query.where(JobStage.service_priority >= min_priority)
+    elif not materialize:
+        # Do not fill a short paid batch by searching through ineligible ordinary work.
+        paid = query.where(JobStage.service_priority == 1).correlate(None).exists()
+        query = query.where(JobStage.service_priority == case((paid, 1), else_=0))
+    if materialize:
+        query = query.join(Job, Job.id == JobStage.job_id)
+    projection = (JobStage, Job) if materialize else (JobStage.id, JobStage.generation, JobStage.service_priority)
+    query = query.with_only_columns(*projection).order_by(
+        JobStage.service_priority.desc(), JobStage.available_at, JobStage.id).limit(CANDIDATE_LIMIT)
+    return db.execute(query.execution_options(populate_existing=True)).all()
 
 
-def job_priority(job):
-    entitlement = job.entitlement or {}
-    return int(entitlement.get('priority', entitlement.get('plan') not in (None, 'free', 'guest')))
+def paid_reserve(node):
+    configured = (node.desired_config or {}).get('paid_reserved_slots')
+    return int(node.capacity > 1) if configured is None else min(configured, node.capacity)
 
 
-def _preselect(db, node, allowed_stages, blocked_providers=()):
+def _preselect(db, node, allowed_stages, blocked_providers=(), min_priority=0):
     # Reuse the caller's connection, including its uncommitted nodes/pages.
     # A second Session can deadlock a full pool while every claimant holds its
     # first connection. PostgreSQL READ COMMITTED rechecks after the mutex;
@@ -124,14 +128,15 @@ def _preselect(db, node, allowed_stages, blocked_providers=()):
     stages = set(node.capabilities) & set(allowed_stages or node.capabilities)
     if not node.enabled or not stages:
         return {}
-    rows = _candidate_rows(db, node, stages, now(), materialize=False, blocked_providers=blocked_providers)
-    return {row[0]: tuple(row[1:]) for row in rows}
+    rows = _candidate_rows(db, node, stages, now(), materialize=False, blocked_providers=blocked_providers, min_priority=min_priority)
+    return {row.id: (row.generation, row.service_priority) for row in rows}
 
 
 def _blocked_providers(db, node, allowed_stages):
     if not node or 'text' not in (set(node.capabilities) & set(allowed_stages or node.capabilities)):
         return []
-    return unavailable_providers(db.scalars(select(TranslationProvider).where(TranslationProvider.enabled.is_(True))).all())
+    return unavailable_providers(db.execute(select(TranslationProvider.id, TranslationProvider.requests_per_minute)
+        .where(TranslationProvider.enabled.is_(True))).all())
 
 
 def remaining_capacity(db, node):
@@ -142,13 +147,30 @@ def remaining_capacity(db, node):
     return max(0, node.capacity - busy)
 
 
+def slot_budget(db, node):
+    """Free slots and the subset available to ordinary work, including unreleased leases."""
+    if not node or not node.enabled:
+        return 0, 0
+    reserve = paid_reserve(node)
+    if not reserve:
+        free = remaining_capacity(db, node)
+        return free, free
+    busy, ordinary = db.execute(select(func.count(), func.count().filter(JobStage.service_priority == 0))
+        .select_from(ExecutionLease).join(JobStage).where(ExecutionLease.node_id == node.id,
+            ExecutionLease.completed_at.is_(None))).one()
+    free = max(0, node.capacity - busy)
+    return free, min(free, max(0, node.capacity - reserve - ordinary))
+
+
 def compute_loads(db, node, at):
     """One live-node/load snapshot; unreconciled expired leases still occupy slots."""
     peers = db.execute(select(ComputeNode, func.count(ExecutionLease.id),
         func.count(ExecutionLease.id).filter(ExecutionLease.resource_pool.in_(
-            ('doc_prepare', 'doc_ocr', 'doc_render', 'doc_zip'))))
+            ('doc_prepare', 'doc_ocr', 'doc_render', 'doc_zip'))),
+        func.count(ExecutionLease.id).filter(JobStage.service_priority == 0))
         .outerjoin(ExecutionLease, and_(ExecutionLease.node_id == ComputeNode.id,
             ExecutionLease.completed_at.is_(None)))
+        .outerjoin(JobStage, JobStage.id == ExecutionLease.stage_id)
         .where(ComputeNode.enabled.is_(True), ComputeNode.engine_version != 'control',
             ComputeNode.config_error.is_(None),
             or_(ComputeNode.id == node.id, and_(
@@ -159,23 +181,24 @@ def compute_loads(db, node, at):
                  ComputeNode.runtime_report['channel_id'].as_string().is_not(None),
                  ComputeNode.runtime_report['dispatch_until'].as_string() > at.isoformat() + 'Z')))
         .group_by(ComputeNode.id).execution_options(populate_existing=True)).all()
-    return {peer.id: (peer, busy, documents) for peer, busy, documents in peers if busy < peer.capacity}
+    return {peer.id: (peer, busy, documents, ordinary) for peer, busy, documents, ordinary in peers if busy < peer.capacity}
 
 
 def assigned_candidates(node, candidates, loads, *, document=False, steal_before=None):
     """Simulate bounded weighted least-load placement; only the claimant gets leases."""
     from .node_config import NodeConfig
-    configs = {key: NodeConfig.model_validate(peer.desired_config) for key, (peer, _, _) in loads.items()}
+    configs = {key: NodeConfig.model_validate(load[0].desired_config) for key, load in loads.items()}
     planned = {key: 0 for key in loads}
     assigned = set()
     fallback = None
     for stage, job in candidates:
         eligible = []
         font = job.config.get('font_id') or DEFAULT_FONTS.get(job.target_language)
-        for peer_id, (peer, busy, documents) in loads.items():
+        for peer_id, (peer, busy, documents, ordinary) in loads.items():
             config, extra = configs[peer_id], planned[peer_id]
             runtime = peer.runtime_report or {}
             if (busy + extra >= peer.capacity
+                    or (not stage.service_priority and ordinary + extra >= peer.capacity - paid_reserve(peer))
                     or (peer_id != node.id and extra >= runtime.get(
                          'dispatch_documents' if document else 'dispatch_slots', 0))
                     or ('doc_prepare' if document else 'page') not in peer.capabilities
@@ -199,21 +222,33 @@ def assigned_candidates(node, candidates, loads, *, document=False, steal_before
     return assigned or ({fallback} if fallback is not None else set())
 
 
-def has_eligible_work(db, node, stages):
+def has_eligible_work(db, node, stages, *, min_priority=0, blocked_providers=None):
     """Queue existence only; callers that need capacity check it once themselves."""
     stages = set(node.capabilities) & set(stages)
     if not node.enabled or not stages:
         return False
-    eligible = _eligible_stages(node, stages, now(), blocked_providers=_blocked_providers(db, node, stages))
+    blocked = _blocked_providers(db, node, stages) if blocked_providers is None else blocked_providers
+    eligible = _eligible_stages(node, stages, now(), blocked_providers=blocked)
+    if min_priority:
+        eligible = eligible.where(JobStage.service_priority >= min_priority)
     # Advisory only: claim retires missing local inputs. Never stat a backlog here.
     return bool(db.scalar(select(eligible.exists())))
+
+
+def ready_page_priority(db, node, min_priority):
+    return db.scalar(_eligible_stages(node, {'page'}, now()).where(JobStage.service_priority >= min_priority)
+        .with_only_columns(JobStage.service_priority)
+        .order_by(JobStage.service_priority.desc(), JobStage.available_at, JobStage.id)
+        .limit(1))
 
 
 def has_claimable_work(db, node_id, allowed_stages=None):
     """Check capacity and queue eligibility; only a pull performs placement."""
     with db.no_autoflush:
         node = db.get(ComputeNode, node_id)
-        return remaining_capacity(db, node) > 0 and has_eligible_work(db, node, allowed_stages or node.capabilities)
+        free, ordinary = slot_budget(db, node)
+        return free > 0 and has_eligible_work(db, node, allowed_stages or node.capabilities,
+            min_priority=int(not ordinary))
 
 
 def next_control_delay(db, maximum=5):
@@ -226,16 +261,17 @@ def next_control_delay(db, maximum=5):
             Job.cancel_requested.is_(False), Job.discard_output.is_(False)))
     first = db.scalar(pending.order_by(JobStage.available_at).limit(1))
     delay = min(maximum, max(0, (first - at).total_seconds())) if first else maximum
-    providers = db.execute(select(TranslationProvider.id, TranslationProvider.requests_per_minute).join(Job,
+    providers = db.execute(select(TranslationProvider.id, TranslationProvider.requests_per_minute,
+        func.max(JobStage.service_priority).label('priority')).join(Job,
         Job.config['text']['provider_id'].as_string() == TranslationProvider.id)
         .join(JobStage, JobStage.job_id == Job.id).where(TranslationProvider.enabled.is_(True),
             JobStage.name == 'text', JobStage.status == 'ready', JobStage.available_at <= at,
             Job.status.in_(['queued', 'running']), Job.cancel_requested.is_(False), Job.discard_output.is_(False))
-        .distinct()).all()
+        .group_by(TranslationProvider.id, TranslationProvider.requests_per_minute)).all()
     from .redis_state import AdmissionUnavailable, window
     try:
         for provider in providers:
-            retry = window('provider', provider.id, provider.requests_per_minute)['retry_after_seconds']
+            retry = window('provider', provider.id, request_limit(provider.requests_per_minute, provider.priority))['retry_after_seconds']
             if retry:
                 delay = min(delay, retry)
     except AdmissionUnavailable:
@@ -266,15 +302,16 @@ def prepare_claim_candidates(db, node_id, allowed_stages=None, *, limit=CLAIM_BA
         with db.no_autoflush:
             lock_scheduler(db)
     observed_node = db.get(ComputeNode, node_id)
-    can_prepare = bool(limit and remaining_capacity(db, observed_node))
-    blocked = _blocked_providers(db, observed_node, allowed_stages) if can_prepare else ()
-    candidates_before_lock = _preselect(db, observed_node, allowed_stages, blocked) if can_prepare else {}
+    free, ordinary = slot_budget(db, observed_node) if limit else (0, 0)
+    blocked = _blocked_providers(db, observed_node, allowed_stages) if free else ()
+    candidates_before_lock = _preselect(db, observed_node, allowed_stages, blocked,
+        int(not ordinary)) if free else {}
     return ClaimCandidates(node_id, tuple(sorted(allowed_stages)) if allowed_stages is not None else None,
         limit, candidates_before_lock, tuple(blocked))
 
 
 def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, executor_id=None,
-                prepared=None, steal_before=None):
+                prepared=None, steal_before=None, higher_work=None):
     """Select once outside the mutex, then dispatch a bounded batch.
 
     The caller owns commit/rollback. Recheck the bounded snapshot under the
@@ -297,9 +334,17 @@ def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, ex
     if not node or not node.enabled:
         return []
     node.heartbeat_at = at
-    limit = min(limit, remaining_capacity(db, node))
+    free, ordinary = slot_budget(db, node)
+    limit = min(limit, free)
     if not limit or not candidates_before_lock:
         return []
+    rank = next(iter(candidates_before_lock.values()))[1]
+    if not rank:
+        limit = min(limit, ordinary)
+        # A paid stage may have arrived after preselection. Yield without a receipt.
+        if (not limit or has_eligible_work(db, node, stages or node.capabilities, min_priority=1, blocked_providers=blocked)
+                or (higher_work and higher_work(db, node, min_priority=1))):
+            return []
     leases = []
     candidates = _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked)
     pages = [(stage, job) for stage, job in candidates if stage.name == 'page']
@@ -319,7 +364,7 @@ def _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, 
     # under the lock, using current queue/provider/asset/node and stage state.
     candidates = [(stage, job) for stage, job in _candidate_rows(db, node, stages, at,
         stage_ids=candidates_before_lock, blocked_providers=blocked)
-        if (stage.generation,) == candidates_before_lock[stage.id]]
+        if (stage.generation, stage.service_priority) == candidates_before_lock[stage.id]]
     if not candidates:
         return []
     sources = {job.input_asset_id for stage, job in candidates if stage.name != "validate_upload"}

@@ -1,4 +1,4 @@
-"""Upgrade existing catalogs on both SQLite and PostgreSQL without stale CHECKs."""
+"""Upgrade existing PostgreSQL catalogs without stale CHECKs."""
 from sqlalchemy import inspect, text
 from test_job_results_migration import migrate
 from test_request_limits_migration import HEAD, isolated_migration_database  # noqa: F401

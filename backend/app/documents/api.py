@@ -10,10 +10,11 @@ from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 from ..auth import identity
 from ..classic_config import profile_snapshot
+from ..config import settings
 from ..system_settings import get_request_limits
 from .text import PROMPT_VERSION, system_prompt
 from ..db import get_db
-from ..entitlements import locked_user
+from ..entitlements import locked_user, requires_paid
 from ..errors import problem
 from ..languages import LANGUAGES, Language
 from ..models import Job, User, now, uid
@@ -24,8 +25,7 @@ from ..scheduler import lock_scheduler, touch_job
 from ..translation_limits import acquire_control, release_control
 from ..translation_models import TranslationProvider
 from ..translation_providers import _provider_query
-from ..translation_routing import choose_provider
-from ..translation_selection import policy_resolver
+from ..translation_selection import ModelAccess, model_routes
 from ..translation_fonts import resolve_font
 from .config import MAX_PAGES, MAX_SOURCE_BYTES, get_document_settings
 from .models import Document, DocumentPage, DocumentQuotaAllocation
@@ -88,8 +88,6 @@ def _storage(method, *args, **kwargs):
 
 
 def owned_document(db, owner_id, request_id, *, lock=False):
-    if lock:
-        lock_scheduler(db)
     query = select(Job, Document).join(Document, Document.job_id == Job.id).where(
         Job.owner_id == owner_id, Job.operation == OPERATION, Job.idempotency_key == str(request_id),
         Job.workflow_kind == 'document')
@@ -144,50 +142,51 @@ def document_json(db, job, document, *, context=None):
                    'part_count': math.ceil(document.source_size / cfg.upload_part_bytes)} if job.status == 'uploading' else None}
 
 
-def _document_models(db, user, model_id=None):
-    resolve = policy_resolver(db, user)
+def _document_models(db, access, model_id=None):
     query = _provider_query()
     if model_id:
         query = query.where(TranslationProvider.id == model_id)
     rows = list(db.execute(query))
     if model_id and not rows:
         problem('TRANSLATION_MODEL_UNAVAILABLE', '所选模型暂不可用', 503)
-    candidates = []
-    for row in rows:
-        if not (row.config.get('document') or {}).get('enabled'):
-            continue
-        policy, reason = resolve(row.text_plan_ids, row.quota_multiplier)
-        if reason != 'not_allowed':
-            candidates.append((row, policy))
-    return candidates
+    return [row for row in rows if (row.config.get('document') or {}).get('enabled')
+            and (not requires_paid(row.text_plan_ids) or access.paid_service(row.text_plan_ids))]
 
 
-def _model(db, user, body):
-    candidates = _document_models(db, user, body.model_id)
+def _model(db, user, body, at):
+    if not settings().classic_enabled:
+        problem('DOCUMENT_DISABLED', '文件翻译暂未开放', 503)
+    access = ModelAccess(db, user, at)
+    if not access.paid_service():
+        problem('DOCUMENT_MEMBERSHIP_REQUIRED', '整本翻译需要有效会员（含试用、赠送）或有可用余额的页数包', 403)
+    candidates = _document_models(db, access, body.model_id)
     if not candidates:
         problem('MODEL_DOCUMENT_UNSUPPORTED', '当前模型或权益不支持整份文件翻译，请选择支持的模型', 403)
-    selected = choose_provider({row.id: row.weight for row, _ in candidates}, digest([body.sha256, body.target_language]))
-    row, policy = next(item for item in candidates if item[0].id == selected)
+    row = candidates[0] if len(candidates) == 1 else model_routes(candidates, access, digest([body.sha256, body.target_language]))[-1]
     config = profile_snapshot({'provider_id': row.id, 'revision_id': row.revision_id,
                                'channel': row.channel, **row.config}, prompt_version=PROMPT_VERSION,
                               text_prompt=system_prompt(get_request_limits(db).comic_translation_prompt))
     config['document'] = {'service_plans': row.text_plan_ids, 'model_name': row.name}
     config['font_id'] = resolve_font(None, body.target_language)
     config['version'] = digest(config)
-    return config, policy, row.quota_multiplier
+    service = access.paid_service(row.text_plan_ids) if requires_paid(row.text_plan_ids) else 'free'
+    return config, {'plan': access.benefits['plan'], 'service_plan': service, 'priority': 1}, row.quota_multiplier
 
 
-@router.get('/capabilities')
+@router.get('/capabilities', description='整本翻译对有效会员或有可用余额的页数包开放；无此权益时 unavailable_reason 为 membership_required。')
 def document_capabilities(user: User = Depends(guarded_user), db: Session = Depends(get_db)):
     cfg = get_document_settings()
-    return {'enabled': cfg.enabled,
+    access = ModelAccess(db, user) if cfg.enabled and settings().classic_enabled else None
+    enabled = bool(access and access.paid_service())
+    return {'enabled': enabled,
+        'unavailable_reason': 'membership_required' if access is not None and not enabled else None,
         'limits': {'max_bytes': MAX_SOURCE_BYTES, 'max_pages': MAX_PAGES,
                    'part_bytes': cfg.upload_part_bytes, 'waiting_hours': cfg.waiting_retention_hours},
         'source_types': ['pdf', 'zip', 'cbz'], 'output_type': 'zip',
         'languages': [{'id': key, 'label': label} for key, label in LANGUAGES.items()],
         'models': [{'id': row.id, 'name': row.name, 'quota_multiplier': row.quota_multiplier,
-                    'requires_paid': row.text_plan_ids is not None and 'free' not in row.text_plan_ids}
-                   for row, _ in _document_models(db, user)] if cfg.enabled else []}
+                    'requires_paid': requires_paid(row.text_plan_ids)}
+                   for row in _document_models(db, access)] if enabled else []}
 
 
 def _ensure_upload(db, job, document):
@@ -213,11 +212,12 @@ def _ensure_upload(db, job, document):
     return job, document
 
 
-@router.put('/{request_id}', status_code=202)
+@router.put('/{request_id}', status_code=202, responses={
+    403: {'description': '新建整本翻译需要有效会员（含试用、赠送）或可用购买页数，且模型须在权益范围内'}})
 def create_document(request_id: UUID, body: DocumentInput, request: Request, user: User = Depends(guarded_user), db: Session = Depends(get_db)):
     cfg = _enabled()
     request_hash = digest(body.model_dump())
-    lock_scheduler(db)
+    # An upload intent has no runnable stage. Only its owner needs serialization.
     user = locked_user(db, user.id)
     previous = db.scalar(select(Job).where(Job.owner_id == user.id, Job.operation == OPERATION,
                                          Job.idempotency_key == str(request_id)))
@@ -226,14 +226,14 @@ def create_document(request_id: UUID, body: DocumentInput, request: Request, use
             problem('IDEMPOTENCY_CONFLICT', '此操作编号已用于其他文件或参数', 409)
         job, document = previous, db.get(Document, previous.id)
     else:
-        config, policy, quota_multiplier = _model(db, user, body)
         at = now()
+        config, entitlement, quota_multiplier = _model(db, user, body, at)
         from ..client_address import client_ip
         job = Job(id=uid(), owner_id=user.id, submitted_ip=client_ip(request), mode='classic', workflow_kind='document',
             target_language=body.target_language, operation=OPERATION, idempotency_key=str(request_id),
             source_sha256=body.sha256, request_hash=request_hash, cache_key=digest([user.id, request_hash]),
             config=config, quota_pages=0, quota_multiplier=quota_multiplier, quota_kind='document_pages', settlement='unreserved',
-            entitlement={'plan': policy.plan, 'service_plan': policy.service_plan, 'priority': 0},
+            entitlement=entitlement,
             version=1, status='uploading', phase='uploading', created_at=at)
         db.add(job)
         db.flush()
@@ -241,7 +241,6 @@ def create_document(request_id: UUID, body: DocumentInput, request: Request, use
             source_key=f'{cfg.r2_key_prefix}/input/{job.id}/source', source_size=body.byte_size,
             source_sha256=body.sha256, expires_at=at + timedelta(seconds=cfg.upload_lifetime_seconds))
         db.add(document)
-        touch_job(db, job)
     db.commit()
     job, document = _ensure_upload(db, job, document)
     return document_json(db, job, document)
@@ -275,6 +274,7 @@ def complete_upload(request_id: UUID, user: User = Depends(guarded_user), db: Se
     key, upload_id, size, sha = document.source_key, document.upload_id, document.source_size, document.source_sha256
     db.commit()
     _storage('complete_multipart', key, upload_id, expected_size=size, expected_sha256=sha)
+    lock_scheduler(db)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if job.status == 'uploading' and document.expires_at > now() and not document.upload_completed_at:
         document.upload_completed_at = now()
@@ -291,6 +291,7 @@ def complete_upload(request_id: UUID, user: User = Depends(guarded_user), db: Se
 @router.post('/{request_id}/resume', status_code=202)
 def resume_document(request_id: UUID, user: User = Depends(guarded_user), db: Session = Depends(get_db)):
     _enabled()
+    lock_scheduler(db)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if document.reserved_at is not None:
         return document_json(db, job, document)
@@ -306,6 +307,7 @@ def resume_document(request_id: UUID, user: User = Depends(guarded_user), db: Se
 
 @router.post('/{request_id}/cancel')
 def cancel_document(request_id: UUID, user: User = Depends(guarded_user), db: Session = Depends(get_db)):
+    lock_scheduler(db)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if document.reserved_at is not None:
         problem('DOCUMENT_NOT_CANCELLABLE', '额度预占完成后文件任务不能取消', 409)

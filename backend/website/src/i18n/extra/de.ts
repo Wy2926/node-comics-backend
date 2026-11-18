@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Übersetzungsmodelle"
+      "label": "Erweiterte Übersetzungsmodelle"
     },
     "feature": "Funktionen und Vorteile",
     "highlights": "ÜBERSETZEN MIT PLUS / Pro",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Lokale Übersetzung",
-      "free": "Selbst gehostetes MTU unterstützt",
-      "lite": "Selbst gehostetes MTU unterstützt",
-      "detail": "Für lokale Übersetzungen ist eine selbst gehostete MTU-Instanz erforderlich; ob eine Internetverbindung benötigt wird, hängt von den verwendeten Modellen und Anbietern ab."
+      "free": "Integrierte Browserübersetzung und selbst gehostetes MTU",
+      "lite": "Integrierte Browserübersetzung und selbst gehostetes MTU",
+      "detail": "Die Erweiterung unterstützt integrierte Browserübersetzung (Beta) und selbst gehostetes MTU. Ob eine Internetverbindung nötig ist, hängt vom gewählten Kanal und seiner Konfiguration ab."
     },
     "rate": {
       "label": "Limit für neue Übersetzungsanfragen",

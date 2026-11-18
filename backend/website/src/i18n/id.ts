@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/id';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Membaca lokal gratis. Free mendapat 30 halaman per hari dengan ${publishedModels.free.join(' · ')}. PLUS: 2.500 halaman per bulan, US$6,66 per triwulan atau US$23,99 per tahun. Pro: 4.000 halaman per bulan, US$9,99 per triwulan atau US$35,99 per tahun. Keduanya mencakup model gratis dan menambahkan ${publishedModels.paid_extra.join(' · ')}. Kuota diberikan bulanan tanpa akumulasi atau uji coba. Paket tanpa kedaluwarsa: 3.500 halaman US$5,99 atau 7.000 halaman US$9,99. Pajak dan total ditampilkan saat pembayaran.`;
+const membershipSummary = `Membaca lokal gratis. Paket Free dapat menerjemahkan 30 halaman per hari dengan model dasar. PLUS: 2.500 halaman per bulan, US$6,66 per triwulan atau US$23,99 per tahun. Pro: 4.000 halaman per bulan, US$9,99 per triwulan atau US$35,99 per tahun. Keduanya mencakup model dasar dan model tambahan. Lihat model yang tersedia dan pengali penggunaan kuota di layar terjemahan. Kuota diberikan bulanan tanpa akumulasi atau uji coba. Paket tanpa kedaluwarsa: 3.500 halaman US$5,99 atau 7.000 halaman US$9,99. Pajak dan total ditampilkan saat pembayaran.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · Impor EPUB dan tampilan dua halaman",
+        "items": [
+          "Impor EPUB dari KOOBONE — Pilih EPUB di KOOBONE dan simpan seluruh buku ke rak untuk dibaca tanpa koneksi internet.",
+          "Atur jarak antarhalaman — Baca EPUB dalam tampilan dua halaman. Jarak antarhalaman yang Anda pilih disimpan untuk setiap buku.",
+          "Bandingkan penggunaan kuota — Lihat pengali penggunaan kuota di samping setiap model terjemahan sebelum memilih.",
+          "Pembaruan situs komik — BatCave kini didukung. Impor bab dari tautan seluler WEBTOON dan baca GoodToon di domain barunya."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Lebih banyak situs dan membaca offline yang lebih nyaman",
+        "items": [
+          "Dukungan situs baru — Impor webtoon RIDI dan terjemahkan di halaman aslinya. Terjemahan halaman KOOBONE kini juga tersedia.",
+          "Cache offline lebih fleksibel — Atur unduhan bersamaan per situs. Pusat offline mengelompokkan komik menurut situs dengan progres yang lebih jelas.",
+          "Ekspor komik lebih lancar — Ekspor lebih cepat dan tampilan progres lebih stabil, dengan lebih sedikit pergeseran antarmuka.",
+          "Peningkatan stabilitas — Perbaikan bug agar membaca dan menerjemahkan lebih andal."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",

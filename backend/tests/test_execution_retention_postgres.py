@@ -1,18 +1,6 @@
 """The same retention cases run on an isolated PostgreSQL schema."""
 import os
 import pytest
-from test_postgres_concurrency import pg_scope
-from test_compute_v3_postgres import client
-from test_execution_retention import (
-    test_terminal_masks_removed_but_valid_details_and_timing_remain,
-    test_expired_image_details_follow_registered_and_guest_policy,
-    test_running_unsettled_and_unknown_calls_keep_their_checkpoints,
-    test_claim_ttl_uses_all_lease_and_job_end_times_and_bounded_batches,
-    test_history_compacts_once_preserving_billing_identity_and_terminal_receipts,
-    test_database_retention_changes_apply_without_restart,
-    test_document_text_expires_without_changing_page_accounting_or_result,
-    test_checkpoint_batches_are_bounded_and_resume,
-)
 
 pytestmark = pytest.mark.skipif(os.environ.get('RUN_POSTGRES_CONCURRENCY') != '1',
     reason='Requires the dedicated nodecomics_concurrency_test database')

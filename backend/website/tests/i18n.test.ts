@@ -9,6 +9,7 @@ import {languageNoticeCopy} from '../src/i18n/language-notice';
 import {commerceCopy} from '../src/i18n/commerce';
 import { siteUi } from '../src/i18n/site-ui';
 import { homeCopy } from '../src/i18n/home';
+import extensionRelease from '../../../contracts/extension/release.json';
 
 test('homepage locales provide complete text and matching gallery/translation entries', () => {
   function check(value: unknown, reference: unknown, path: string) {
@@ -73,14 +74,20 @@ test('localized releases have stable unique anchors and matching entries',()=>{
   }
 });
 
-test('1.3.0 leads every changelog with four concise user-facing highlights',()=>{
+test('every changelog leads with the current extension notes and preserves the preceding release',()=>{
   for(const locale of locales){
-    const release=dictionaries[locale].documents.releases[0];
-    assert.equal(release.id,'1.3.0',locale);
-    assert.equal(release.date,'2026-11-05',locale);
-    assert.equal(release.items.length,4,locale);
-    assert.ok(release.items.every(item=>item.length<=200),locale);
-    assert.doesNotMatch([release.title,...release.items].join(' '),/待发布|待商店发布|pending (?:store )?release|AMO|SHA-256|manifest\.key|git commit/i,locale);
+    const [latest, previous, older]=dictionaries[locale].documents.releases;
+    assert.equal(latest.id,extensionRelease.version,locale);
+    assert.deepEqual([previous.id,older.id],['1.4.0','1.3.0'],locale);
+    assert.ok(latest.date > previous.date && previous.date > older.date,locale);
+    for(const release of [latest,previous]){
+      assert.equal(release.items.length,4,locale);
+      assert.ok(release.items.every(item=>item.length<=200),locale);
+    }
+    for(const site of ['KOOBONE','BatCave','WEBTOON','GoodToon']) {
+      assert.ok(latest.items.some(item=>item.includes(site)),`${locale}: ${site}`);
+    }
+    assert.doesNotMatch([latest.title,...latest.items].join(' '),/待发布|待商店发布|pending (?:store )?release|AMO|SHA-256|manifest\.key|git commit/i,locale);
   }
 });
 

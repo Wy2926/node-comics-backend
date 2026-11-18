@@ -1,12 +1,15 @@
 """Opt-in isolated permanent-purchase history benchmark; never touches live data."""
 import json
 import os
-from statistics import median
+from statistics import median, quantiles
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from time import perf_counter
+from types import SimpleNamespace
 import tracemalloc
 
 import pytest
-from sqlalchemy import event, insert, or_, select, text
+from sqlalchemy import event, func, insert, or_, select, text
 
 from app.billing_access import first_purchase
 from app.billing_models import BillingOrder
@@ -14,7 +17,10 @@ from app.db import engine, session_factory
 from app.entitlement_models import QuotaPeriod
 from app.entitlements import admission_policy, entitlements_json
 from app.models import User, now
+from app.translation_selection import ModelAccess
 from test_quota_purchase_admission import account, cluster, seed_purchase  # noqa: F401
+from test_cluster_submissions import descriptor, submit
+from conftest import configure_system_limits, login
 
 def measure(function, count=15):
     durations = []
@@ -23,6 +29,33 @@ def measure(function, count=15):
         function()
         durations.append((perf_counter() - start) * 1000)
     return round(median(durations), 3)
+
+
+@pytest.mark.skipif(os.environ.get('RUN_QUOTA_SCALE') != '1', reason='Opt-in concurrent HTTP admission measurement')
+def test_purchased_page_admission_across_accounts(client):
+    from app.models import Ledger
+    configure_system_limits(free_daily_pages=0)
+    accounts = [login(client, f'pack-{i}') for i in range(8)]
+    with session_factory()() as db:
+        for auth in accounts:
+            owner = client.get('/v1/me', headers=auth).json()['user']['id']
+            seed_purchase(db, owner, pages=5)
+        db.commit()
+    barrier = Barrier(len(accounts))
+    def run(auth):
+        elapsed = []
+        for i in range(5):
+            barrier.wait(timeout=10)
+            start = perf_counter()
+            assert submit(client, auth, descriptor(f'page-{i}'.encode()), key=str(i)).status_code == 202
+            elapsed.append((perf_counter() - start) * 1000)
+        return elapsed
+    with ThreadPoolExecutor(len(accounts)) as pool:
+        elapsed = sorted(ms for owner in pool.map(run, accounts) for ms in owner)
+    with session_factory()() as db:
+        assert db.scalars(select(func.sum(Ledger.amount)).where(Ledger.kind == 'reserve').group_by(Ledger.owner_id)).all() == [5] * 8
+    print(json.dumps({'parallel_accounts': len(accounts), 'requests': len(elapsed),
+                      'http_p50_ms': round(median(elapsed), 1), 'http_p95_ms': round(quantiles(elapsed, n=20, method='inclusive')[-1], 1)}))
 
 
 @pytest.mark.skipif(os.environ.get('RUN_QUOTA_SCALE') != '1',
@@ -58,18 +91,21 @@ def test_permanent_history_never_loads_at_admission_or_into_account_response(acc
         event.listen(engine(), 'before_cursor_execute', record)
         try:
             policy = admission_policy(db, user, at=at)
+            admission_reads = len(statements)
+            access = ModelAccess(db, user, at)
+            assert access.paid_service() == 'lite'
+            eligibility_reads = len(statements)
+            scoped, reason = access.resolve(SimpleNamespace(text_plan_ids=['lite'], quota_multiplier=1))
+            assert reason is None and scoped.period.id == active_id
         finally:
             event.remove(engine(), 'before_cursor_execute', record)
         assert policy.period.id == active_id
-        selector = next((sql, params) for sql, params in statements if 'JOIN billing_orders' in sql)
-        assert 'LIMIT' in selector[0] and 'quota_periods.granted > quota_periods.used + quota_periods.reserved' in selector[0]
-        if db.get_bind().dialect.name == 'sqlite':
-            plan = db.connection().exec_driver_sql('EXPLAIN QUERY PLAN ' + selector[0], selector[1]).all()
+        for reads in (statements[:admission_reads], statements[admission_reads:eligibility_reads], statements[eligibility_reads:]):
+            sql, params = next((sql, params) for sql, params in reads if 'JOIN billing_orders' in sql)
+            assert 'LIMIT' in sql or 'EXISTS' in sql
             if history_size:
-                assert any('ix_quota_purchase_available' in str(row) for row in plan), plan
-        elif history_size:
-            plan = db.connection().exec_driver_sql('EXPLAIN (FORMAT JSON) ' + selector[0], selector[1]).scalar_one()
-            assert 'ix_quota_purchase_available' in json.dumps(plan), plan
+                plan = db.connection().exec_driver_sql('EXPLAIN (FORMAT JSON) ' + sql, params).scalar_one()
+                assert 'ix_quota_purchase_available' in str(plan), plan
         select_ms = measure(lambda: admission_policy(db, user, at=at))
         summary_ms = measure(lambda: entitlements_json(db, user, at), count=5)
         payload = entitlements_json(db, user, at)
@@ -101,6 +137,7 @@ def test_permanent_history_never_loads_at_admission_or_into_account_response(acc
         db.get(QuotaPeriod, active_id).used = 1
         db.commit()
         user = db.get(User, owner)
+        assert ModelAccess(db, user, at).paid_service() is None
         fallback_statements = []
         def record_fallback(connection, cursor, statement, parameters, context, many):
             if 'source !=' in statement:
@@ -112,17 +149,13 @@ def test_permanent_history_never_loads_at_admission_or_into_account_response(acc
             event.remove(engine(), 'before_cursor_execute', record_fallback)
         if history_size:
             sql, params = fallback_statements[0]
-            if db.get_bind().dialect.name == 'sqlite':
-                plan = db.connection().exec_driver_sql('EXPLAIN QUERY PLAN ' + sql, params).all()
-                assert any('ix_quota_nonpurchase' in str(row) for row in plan), plan
-            else:
-                plan = db.connection().exec_driver_sql('EXPLAIN (FORMAT JSON) ' + sql, params).scalar_one()
-                assert 'ix_quota_nonpurchase' in json.dumps(plan), plan
+            plan = db.connection().exec_driver_sql('EXPLAIN (FORMAT JSON) ' + sql, params).scalar_one()
+            assert 'ix_quota_nonpurchase' in json.dumps(plan), plan
         fallback_ms = measure(lambda: admission_policy(db, user, at=at))
     report = {'engine': engine().dialect.name, 'depleted_permanent_buckets': history_size,
         'policy_p50_ms': select_ms, 'free_fallback_p50_ms': fallback_ms, 'summary_p50_ms': summary_ms,
         'legacy_full_load_p50_ms': legacy_ms, 'peak_kib': peak_kib, 'entitlements_bytes': payload_bytes,
-        'policy_select_statements': len(statements)}
+        'policy_select_statements': admission_reads}
     print(json.dumps(report))
     if history_size:
         assert select_ms < legacy_ms / 5

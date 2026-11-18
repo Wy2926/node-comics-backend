@@ -7,10 +7,14 @@ UNSTARTED_ERRORS = frozenset({'TEXT_PROVIDER_DISABLED', 'TEXT_PROVIDER_UNAVAILAB
     'TEXT_PROVIDER_REVISION_INVALID', 'TEXT_CHANNEL_UNSUPPORTED', 'TEXT_CONNECT_FAILED'})
 
 
-def reserve_request(provider, request_id=None):
+def request_limit(rpm, priority):
+    return rpm if priority else max(1, rpm - 1)
+
+
+def reserve_request(provider, request_id=None, *, priority=0):
     request_id = request_id or uid()
     try:
-        budget = window('provider', provider.id, provider.requests_per_minute, member=request_id)
+        budget = window('provider', provider.id, request_limit(provider.requests_per_minute, priority), member=request_id)
     except AdmissionUnavailable:
         raise TextError('ADMISSION_UNAVAILABLE', '请求准入服务暂时不可用', retryable=True, retry_after=2) from None
     if budget['retry_after_seconds']:
@@ -28,12 +32,12 @@ def release_unstarted_request(provider_id, request_id, error):
 
 
 def unavailable_providers(providers):
-    """One Redis round trip for a precheck; calls still reserve atomically."""
+    """Full and paid-only windows from one precheck; dispatch never spends RPM."""
     if not providers:
-        return []
+        return (), ()
     try:
-        available = run('provider_capacity', [key('provider', p.id) for p in providers],
-            *[p.requests_per_minute for p in providers])
+        usage = run('provider_capacity', [key('provider', p.id) for p in providers])
     except AdmissionUnavailable:
-        return [p.id for p in providers]
-    return [p.id for p, ready in zip(providers, available) if not ready]
+        return tuple(p.id for p in providers), ()
+    return (tuple(p.id for p, used in zip(providers, usage) if used >= p.requests_per_minute),
+            tuple(p.id for p, used in zip(providers, usage) if request_limit(p.requests_per_minute, 0) <= used < p.requests_per_minute))

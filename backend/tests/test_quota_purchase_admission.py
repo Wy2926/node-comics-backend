@@ -243,7 +243,7 @@ def test_last_reserved_page_retains_scheduler_priority_after_expiry(account):
         for index, job_id in enumerate((free.id, paid.id)):
             entry = db.get(Job, job_id)
             entry.status = 'validating_upload'
-            db.add(JobStage(job_id=job_id, name='validate_upload', status='ready',
+            db.add(JobStage.for_job(entry, name='validate_upload', status='ready',
                 available_at=at - timedelta(seconds=2 - index)))
         db.commit()
         node = SimpleNamespace(supported_languages=['zh-Hans'], runtime_report={})

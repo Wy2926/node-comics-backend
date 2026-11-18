@@ -168,7 +168,7 @@ export const commerce = {
   ],
   "comparison": {
     "model": {
-      "label": "Çeviri modelleri"
+      "label": "Gelişmiş çeviri modelleri"
     },
     "feature": "Özellikler ve faydalar",
     "highlights": "PLUS / Pro İLE ÇEVİR",
@@ -185,9 +185,9 @@ export const commerce = {
     },
     "local": {
       "label": "Yerel çeviri",
-      "free": "Kendi MTU kurulumunuz desteklenir",
-      "lite": "Kendi MTU kurulumunuz desteklenir",
-      "detail": "Yerel çeviri için MTU’yu kendiniz kurup barındırmanız gerekir; İnternet bağlantısı gereksinimi kullanılan model ve sağlayıcılara bağlıdır."
+      "free": "Tarayıcıda yerleşik çeviri ve kendi barındırdığınız MTU",
+      "lite": "Tarayıcıda yerleşik çeviri ve kendi barındırdığınız MTU",
+      "detail": "Uzantı, tarayıcıda yerleşik çeviriyi (beta) ve kendi barındırdığınız MTU’yu destekler. İnternet bağlantısı gereksinimi seçilen kanala ve yapılandırmaya bağlıdır."
     },
     "rate": {
       "label": "Yeni çeviri isteği sınırı",

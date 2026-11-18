@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dictionaries, locales} from '../src/i18n';
-import {publishedModels, publishedOffers} from '../src/data/published-plans';
+import {publishedOffers} from '../src/data/published-plans';
 import {prepaidMembershipCopy} from '../src/i18n/prepaid-membership';
 
 test('prepaid terms and refund pages disclose no renewal, queued purchases and monthly allowance in every locale',()=>{
@@ -63,7 +63,7 @@ test('reading-position sync is scoped to OPDS libraries, not NodeLane cloud sync
 test('terms and refund share the catalog summary with FAQ, including every price and allowance', () => {
   for (const locale of locales) {
     const {policies, faqs} = dictionaries[locale].documents;
-    const summary = faqs.find(faq => faq.answer.includes(publishedModels.free[0]))!.answer;
+    const summary = faqs.find(faq => faq.id === 'free-plan')!.answer;
     for (const key of ['terms', 'refund']) {
       assert.ok(policies[key].sections.some(section => section.paragraphs.includes(summary)), `${locale}: ${key}`);
     }

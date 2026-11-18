@@ -6,26 +6,15 @@ from sqlalchemy import select
 
 
 @pytest.fixture
-def storage_db(tmp_path, monkeypatch):
+def storage_db(pg_scope):
     """Exercise storage transactions independently of HTTP/worker adapters."""
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'storage.db').as_posix()}")
-    monkeypatch.setenv("STORAGE_PATH", str(tmp_path / "objects"))
-    monkeypatch.setenv("DEV_AUTH", "true")
-    from app.config import settings
-    from app.db import Base, engine, session_factory
-    from app import models, upload_models, queue_models, entitlement_models  # noqa: F401
-    settings.cache_clear()
-    if engine.cache_info().currsize:
-        engine().dispose()
-    engine.cache_clear()
+    from app.db import Base, engine, load_models, session_factory
+    from app import queue_models
+    load_models()
     Base.metadata.create_all(engine())
     with session_factory()() as db:
         db.add(queue_models.SchedulerMutex(id=1))
         db.commit()
-    yield
-    engine().dispose()
-    engine.cache_clear()
-    settings.cache_clear()
 
 
 def pending(db, owner_id, data, *, mime="image/png"):

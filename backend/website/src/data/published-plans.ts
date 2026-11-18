@@ -13,4 +13,3 @@ export const publishedOffers:BillingOffer[]=catalog.products.flatMap(product=>
   })));
 export const publishedSubscriptions=publishedOffers.filter(offer=>offer.interval!=='once');
 export const publishedPacks=publishedOffers.filter(offer=>offer.interval==='once');
-export const publishedModels=catalog.models;

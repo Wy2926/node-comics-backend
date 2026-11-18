@@ -1,8 +1,7 @@
-import { publishedModels } from '../data/published-plans';
 import { localTranslationGuides } from './guides/pl';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Czytanie lokalne jest bezpłatne. Free: 30 stron dziennie z ${publishedModels.free.join(' · ')}. PLUS: 2500 stron miesięcznie za 6,66 USD kwartalnie lub 23,99 USD rocznie. Pro: 4000 stron miesięcznie za 9,99 USD kwartalnie lub 35,99 USD rocznie. Oba obejmują darmowe modele oraz dodatkowo ${publishedModels.paid_extra.join(' · ')}. Miesięczne limity bez przenoszenia i okresu próbnego. Bezterminowe pakiety: 3500 stron za 5,99 USD lub 7000 za 9,99 USD. Podatki i suma przy płatności.`;
+const membershipSummary = `Czytanie lokalne jest bezpłatne. Free pozwala tłumaczyć 30 stron dziennie za pomocą modeli podstawowych. PLUS: 2500 stron miesięcznie za 6,66 USD kwartalnie lub 23,99 USD rocznie. Pro: 4000 stron miesięcznie za 9,99 USD kwartalnie lub 35,99 USD rocznie. Oba plany obejmują modele podstawowe i dodatkowe. Dostępne modele i mnożniki zużycia limitu znajdziesz na ekranie tłumaczenia. Miesięczne limity bez przenoszenia i okresu próbnego. Bezterminowe pakiety: 3500 stron za 5,99 USD lub 7000 za 9,99 USD. Podatki i suma przy płatności.`;
 
 export default {
   "ui": {
@@ -653,6 +652,28 @@ export default {
       }
     ],
     "releases": [
+      {
+        "id": "1.5.0",
+        "date": "2026-11-18",
+        "title": "1.5.0 · Import EPUB i widok dwóch stron",
+        "items": [
+          "Import EPUB-ów z KOOBONE — Wybierz EPUB w KOOBONE i zapisz całą książkę na półce, aby czytać ją offline.",
+          "Dostosuj odstęp między stronami — Czytaj EPUB-y po dwie strony obok siebie. Każda książka zapamiętuje wybrany odstęp między stronami.",
+          "Porównaj zużycie limitu — Przed wyborem modelu tłumaczenia możesz sprawdzić jego mnożnik zużycia limitu.",
+          "Zmiany w serwisach z komiksami — Dodano BatCave. Możesz importować rozdziały z mobilnych linków WEBTOON i czytać GoodToon w nowej domenie."
+        ]
+      },
+      {
+        "id": "1.4.0",
+        "date": "2026-11-12",
+        "title": "1.4.0 · Więcej witryn i wygodniejsze czytanie offline",
+        "items": [
+          "Obsługa nowych witryn — Importuj webtoony z RIDI i tłumacz je na oryginalnej stronie. Dodano też tłumaczenie stron KOOBONE.",
+          "Elastyczne pobieranie offline — Ustaw liczbę równoczesnych pobrań dla każdej witryny. Centrum offline grupuje komiksy według witryn i czytelniej pokazuje postęp.",
+          "Płynniejszy eksport komiksów — Szybszy eksport i stabilniejszy wskaźnik postępu, z mniejszą liczbą przeskoków interfejsu.",
+          "Poprawa stabilności — Poprawki błędów zwiększające niezawodność czytania i tłumaczenia."
+        ]
+      },
       {
         "id": "1.3.0",
         "date": "2026-11-05",
