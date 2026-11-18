@@ -1,16 +1,17 @@
 import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import { commerceCopy, formatCopy } from '../i18n/commerce';
 import {pricingHighlightsCopy} from '../i18n/pricing-highlights';
+import type {Locale} from '../i18n/types';
 import {billingBenefitCopy,offerBenefits,type BillingOffer} from './billing';
 
 interface ComparisonRow {label:string;free:string;lite:string;detail?:string}
 export interface PricingComparisonCopy {
   feature:string;highlights:string;
-  reading:ComparisonRow;classic:ComparisonRow;local:ComparisonRow;model:ComparisonRow;
+  reading:ComparisonRow;classic:ComparisonRow;document:ComparisonRow;local:ComparisonRow;model:ComparisonRow;
   rate:Omit<ComparisonRow,'lite'>&{lite:(hourly:number)=>string};
   priority:ComparisonRow;feedback:ComparisonRow;requests:ComparisonRow;early:ComparisonRow;note:string;
 }
-const labels:Record<string,Omit<PricingComparisonCopy,'model'>&{model:{label:string}}>={
+const labels:Record<string,Omit<PricingComparisonCopy,'model'|'document'>&{model:{label:string}}>={
   'zh-CN':{
     feature:'功能与权益',highlights:'PLUS / Pro 翻译权益',
     model:{label:'高级翻译模型'},
@@ -77,11 +78,32 @@ const labels:Record<string,Omit<PricingComparisonCopy,'model'>&{model:{label:str
     note:'새 기능은 릴리스 노트를 확인하세요.',
   },
 };
+const documentCopy:Record<Locale,[label:string,detail:string]>={
+  'zh-CN':['整本翻译','支持 PDF、ZIP 和 CBZ。有可用余额的页数包也可解锁。'],
+  'zh-TW':['整本翻譯','支援 PDF、ZIP 和 CBZ。仍有可用餘額的頁數包也能解鎖。'],
+  en:['Whole-file translation','Supports PDF, ZIP and CBZ. A page pack with available credits also unlocks this feature.'],
+  ja:['ファイル全体の翻訳','PDF、ZIP、CBZ に対応。ページパックに残高があれば、この機能を利用できます。'],
+  ko:['파일 전체 번역','PDF, ZIP, CBZ를 지원합니다. 잔여 페이지가 있는 페이지 팩으로도 이용할 수 있습니다.'],
+  fr:['Traduction de fichiers entiers','Prend en charge les fichiers PDF, ZIP et CBZ. Un pack de pages avec un solde disponible donne aussi accès à cette fonctionnalité.'],
+  es:['Traducción de archivos completos','Admite PDF, ZIP y CBZ. Un paquete de páginas con saldo disponible también da acceso a esta función.'],
+  'pt-BR':['Tradução de arquivos inteiros','Compatível com PDF, ZIP e CBZ. Um pacote de páginas com saldo disponível também libera esse recurso.'],
+  de:['Übersetzung ganzer Dateien','Unterstützt PDF, ZIP und CBZ. Ein Seitenpaket mit verfügbarem Guthaben schaltet diese Funktion ebenfalls frei.'],
+  it:['Traduzione di file interi','Supporta PDF, ZIP e CBZ. Anche un pacchetto di pagine con saldo disponibile dà accesso alla funzione.'],
+  ru:['Перевод целых файлов','Поддерживаются PDF, ZIP и CBZ. Пакет с оставшимися страницами также даёт доступ к этой функции.'],
+  pl:['Tłumaczenie całych plików','Obsługuje PDF, ZIP i CBZ. Pakiet z dostępnymi stronami również odblokowuje tę funkcję.'],
+  uk:['Переклад цілих файлів','Підтримуються PDF, ZIP і CBZ. Пакет із доступним залишком сторінок також відкриває доступ до цієї функції.'],
+  tr:['Tüm dosyayı çevirme','PDF, ZIP ve CBZ desteklenir. Kullanılabilir bakiyesi olan bir sayfa paketi de bu özelliği açar.'],
+  vi:['Dịch toàn bộ tệp','Hỗ trợ PDF, ZIP và CBZ. Gói trang còn số dư khả dụng cũng mở khóa tính năng này.'],
+  id:['Terjemahan seluruh file','Mendukung PDF, ZIP, dan CBZ. Paket halaman yang masih memiliki saldo juga membuka fitur ini.'],
+  ar:['ترجمة الملفات كاملةً','تدعم ملفات PDF وZIP وCBZ. تتيح باقة صفحات ذات رصيد متاح استخدام هذه الميزة أيضًا.'],
+};
 export function comparisonCopy(locale:string):PricingComparisonCopy {
  const copy=commerceCopy(locale)?.comparison;
  const value=copy ? {...copy,rate:{...copy.rate,lite:(n:number)=>formatCopy(copy.rate.lite,{n:n.toLocaleString(locale)})}} : labels[locale]??labels.en;
   const {included,notIncluded}=pricingHighlightsCopy(locale);
+  const [label,detail]=documentCopy[locale as Locale]??documentCopy.en;
   return {...value,model:{...value.model,free:notIncluded,lite:included},
+   document:{label,detail,free:notIncluded,lite:included},
    classic:{...value.classic,lite:subscriptionQuotaCopy(locale).monthly.replace('{0}',(2500).toLocaleString(locale)),detail:subscriptionQuotaCopy(locale).rule}};
 }
 
@@ -102,7 +124,7 @@ export function extraPagesCopy(offer:BillingOffer,plans:BillingOffer[],locale:st
 }
 export function comparisonRows(locale:string,hourly:number){
  const copy=comparisonCopy(locale);
-  return (['classic','model','local','rate','priority','reading','feedback','requests','early'] as const).map(key=>{
+  return (['classic','document','model','local','rate','priority','reading','feedback','requests','early'] as const).map(key=>{
    const row=copy[key],lite=typeof row.lite==='function'?(hourly>0?row.lite(hourly):subscriptionQuotaCopy(locale).paidRate):row.lite;
    return {key,label:row.label,free:row.free,lite,detail:row.detail,shared:row.free===lite};
  });

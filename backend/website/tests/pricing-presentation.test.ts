@@ -55,7 +55,7 @@ test('price hierarchy preserves localized currency order, spaces and minor units
 test('only common benefits are marked shared, while paid advantages retain their full copy',()=>{
   for(const locale of locales){
     const rows=comparisonRows(locale,2400);
-    assert.deepEqual(rows.map(row=>row.key),['classic','model','local','rate','priority','reading','feedback','requests','early'],locale);
+    assert.deepEqual(rows.map(row=>row.key),['classic','document','model','local','rate','priority','reading','feedback','requests','early'],locale);
     assert.deepEqual(rows.filter(row=>row.shared).map(row=>row.key),['local','reading'],locale);
     for(const row of rows)assert.equal(row.free===row.lite,row.shared,`${locale}: ${row.key}`);
     assert.ok(rows.find(row=>row.key==='rate')?.lite.includes((2400).toLocaleString(locale)),locale);
@@ -89,9 +89,9 @@ test('cloud, built-in and self-hosted local translation and member support are l
 test('only detailed feature headings have keyboard-addressable localized tooltip buttons',()=>{
   for(const locale of locales){
     const rows=comparisonRows(locale,1200);
-    assert.deepEqual(rows.filter(row=>row.detail).map(row=>row.key),['classic','local','rate','feedback','requests'],locale);
+    assert.deepEqual(rows.filter(row=>row.detail).map(row=>row.key),['classic','document','local','rate','feedback','requests'],locale);
     const $=load(renderToStaticMarkup(createElement('div',null,rows.map(row=>createElement('div',{'data-feature':row.key,key:row.key},row.detail?createElement(FeatureInfo,{label:row.label,detail:row.detail}):null)))));
-    assert.equal($('.feature-info-trigger').length,5,locale);
+    assert.equal($('.feature-info-trigger').length,6,locale);
     const ids=new Set<string>();
     for(const row of rows){
       const heading=$(`[data-feature="${row.key}"]`),button=heading.find('.feature-info-trigger'),tip=heading.find('[role="tooltip"]');
@@ -108,7 +108,7 @@ test('only detailed feature headings have keyboard-addressable localized tooltip
       ids.add(tip.attr('id')!);
       if(locale!=='en')assert.notEqual(row.detail,comparisonRows('en',1200).find(english=>english.key===row.key)?.detail,`${locale}: ${row.key} detail must be translated`);
     }
-    assert.equal(ids.size,5,locale);
+    assert.equal(ids.size,6,locale);
   }
 });
 
@@ -413,13 +413,17 @@ test('one accessible comparison groups advanced models and shares both local cha
     assert.deepEqual($('thead th').toArray().slice(1).map(el=>$(el).text()),['Free','PLUS','Pro']);
     assert.equal($('[role="region"][tabindex="0"]').length,1);
     assert.equal($('caption').text(),comparisonCopy(locale).feature);
-    assert.equal($('.feature-info-trigger').length,5,'one tooltip per detailed feature, not per plan');
-    const {model,local}=comparisonCopy(locale);
+    assert.equal($('.feature-info-trigger').length,6,'one tooltip per detailed feature, not per plan');
+    const {model,local,document}=comparisonCopy(locale);
     const advanced=$('tr[data-feature="model"]');
     assert.equal($('tr[data-model]').length,0,locale);
     assert.equal(advanced.length,1,locale);
     assert.equal(advanced.find('th').text(),model.label,locale);
     assert.deepEqual(advanced.find('td').toArray().map(el=>$(el).text()),[text.notIncluded,text.included,text.included],locale);
+    const wholeFile=$('tr[data-feature="document"]');
+    assert.equal(wholeFile.find('th .feature-info-trigger').attr('aria-label'),document.label,locale);
+    assert.deepEqual(wholeFile.find('td').toArray().map(el=>$(el).text()),[text.notIncluded,text.included,text.included],locale);
+    assert.match(wholeFile.find('[role="tooltip"]').text(),/PDF.*ZIP.*CBZ/,locale);
     assert.deepEqual($('tr[data-feature="local"] td').toArray().map(el=>$(el).text()),[local.free,local.free,local.free],locale);
     assert.ok($('[data-feature="classic"] td').eq(1).text().includes((2500).toLocaleString(locale)));
     assert.ok($('[data-feature="classic"] td').eq(2).text().includes((4000).toLocaleString(locale)));
@@ -461,7 +465,7 @@ test('visual advantages distinguish paid additions and quota differences, not sh
   const plans=publishedSubscriptions.filter(offer=>offer.interval==='quarter');
   const $=load(renderToStaticMarkup(createElement(PlanComparison,{locale:'zh-CN',plans,freeName:'免费'})));
   for(const key of ['reading','local'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,0);
-  for(const key of ['classic','model','rate','priority','feedback','requests','early'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,2);
+  for(const key of ['classic','document','model','rate','priority','feedback','requests','early'])assert.equal($(`tr[data-feature="${key}"] [data-advantage="true"]`).length,2);
   assert.equal($('[data-more-pages="true"]').length,1);
   assert.match($('.comparison-delta').text(),/1,500/);
 });
