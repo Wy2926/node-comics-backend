@@ -69,15 +69,16 @@ def delete_claims(db, at, limits, batch):
     done_cutoff = at - timedelta(days=limits.completed_claim_retention_days)
     elements = (func.json_array_elements_text(ComputeClaim.lease_ids) if db.get_bind().dialect.name == 'postgresql'
         else func.json_each(ComputeClaim.lease_ids)).table_valued('value')
-    lease_ids = select(elements.c.value).correlate(ComputeClaim)
+    # OFFSET 0 keeps each JSON lease ID on a primary-key lookup instead of scanning lease history.
     unfinished = (select(ExecutionLease.id).join(Job, Job.id == ExecutionLease.job_id).where(
-        ExecutionLease.id.in_(lease_ids), or_(ExecutionLease.completed_at.is_(None),
+        ExecutionLease.id == elements.c.value, or_(ExecutionLease.completed_at.is_(None),
             ExecutionLease.completed_at > done_cutoff, Job.status.not_in(TERMINAL),
             Job.settlement.not_in(('settled', 'released', 'included')),
             Job.completed_at.is_(None), Job.completed_at > done_cutoff, unresolved_text()))
-        .correlate(ComputeClaim).exists())
+        .correlate(elements).offset(0).exists())
     candidates = (select(ComputeClaim.node_id, ComputeClaim.request_id).where(
-        ComputeClaim.created_at <= done_cutoff, ~unfinished)
+        ComputeClaim.created_at <= done_cutoff,
+        ~select(elements.c.value).where(unfinished).correlate(ComputeClaim).exists())
         .order_by(ComputeClaim.created_at, ComputeClaim.node_id, ComputeClaim.request_id).limit(batch))
     return db.execute(delete(ComputeClaim).where(tuple_(ComputeClaim.node_id, ComputeClaim.request_id)
         .in_(candidates)).execution_options(synchronize_session=False)).rowcount
