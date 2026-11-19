@@ -106,13 +106,14 @@ def input_descriptor(db, lease, source):
 
 
 def translations_payload(db, job_id):
-    state = db.get(ClassicState, job_id)
-    text = db.scalar(select(JobStage).where(JobStage.job_id == job_id, JobStage.name == 'text'))
-    if not state or not state.analysis or not text or text.status != 'succeeded':
+    # Read readiness and its checkpoint in one snapshot; the text worker commits concurrently.
+    row = db.execute(select(ClassicState.analysis, ClassicState.translations, Job.target_language)
+        .join(Job, Job.id == ClassicState.job_id).join(JobStage, JobStage.job_id == Job.id)
+        .where(Job.id == job_id, JobStage.name == 'text', JobStage.status == 'succeeded')).one_or_none()
+    if not row or not row.analysis:
         return None
-    job = db.get(Job, job_id)
-    result = {'analysis_hash': digest(state.analysis), 'language': job.target_language,
-              'translations': state.translations}
+    result = {'analysis_hash': digest(row.analysis), 'language': row.target_language,
+              'translations': row.translations}
     return {**result, 'revision': digest(result)}
 
 

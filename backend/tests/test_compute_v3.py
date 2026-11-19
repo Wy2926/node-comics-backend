@@ -234,6 +234,22 @@ def test_analysis_text_revision_and_delivery_settle_once(v3, png):
         assert db.scalar(select(func.count()).select_from(TextCall)) == 1
 
 
+def test_page_update_reads_committed_translations_even_with_cached_checkpoint(v3):
+    from app.compute_v3 import page_update
+    from app.models import ClassicState
+    v3['create']()
+    lease = claim(v3)[0]
+    body, _ = analyze(v3, lease)
+    with session_factory()() as reader:
+        page = reader.get(ExecutionLease, lease['lease_id'])
+        cached = reader.get(ClassicState, lease['job_id'])
+        assert not cached.translations and page_update(reader, page) is None
+        text(lease)  # The worker commits in another session while the channel is reading.
+        payload = page_update(reader, page)['translations']
+        assert payload['analysis_hash'] == body['analysis_hash']
+        assert payload['translations'] == {'0': 'Hello'}
+
+
 @pytest.mark.parametrize('representation', ['overlay-v1', 'original'])
 def test_all_empty_translations_deliver_and_settle_once(v3, png, monkeypatch, representation):
     from app.models import Ledger
