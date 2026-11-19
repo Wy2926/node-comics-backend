@@ -19,7 +19,8 @@ async function connection() {
     const sessions = new SharedSession(localStorage, sessionPrefix + config.issuer + ':' + config.client_id,
       navigator.locks, async user => {
         const state: RefreshState = { ...user, refresh_token: user.refresh_token!, data: user.state };
-        return new User({ ...state, ...await client.useRefreshToken({ state, resource: config.audience, timeoutInSeconds: 15 }) });
+        const renewed = await client.useRefreshToken({ state, resource: config.audience, timeoutInSeconds: 15 });
+        return new User({ ...renewed, refresh_token: renewed.refresh_token ?? state.refresh_token });
       }, () => changes.dispatchEvent(new Event('change')));
     return { client, sessions };
   })().catch(error => { connectionPromise = undefined; throw error; });
@@ -116,14 +117,22 @@ export async function authenticatedFetch(path: string, options: RequestInit = {}
   let response = await send(binding.user.access_token);
   sessions.assert(id);
   // Writes are never replayed. A late 401 reuses a token rotated by another tab.
-  if (response.status === 401 && ['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase())) {
+  const rejected = async (value: Response) => {
+    if (value.status !== 401) return false;
+    if ((!value.url || new URL(value.url).origin === location.origin) &&
+      ['AUTH_REQUIRED','TOKEN_INVALID'].includes((await value.clone().json().catch(() => null))?.error?.code)) return true;
+    throw new ApiError('账户服务暂时不可用，请重试。', 503, 'AUTH_UNAVAILABLE');
+  };
+  if (await rejected(response)) {
     const renewed = await sessions.get(binding.user.access_token, id);
     if (!renewed) throw changedSession();
+    if (!['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase()))
+      throw new ApiError('登录已续期，请重试刚才的操作。', 409, 'AUTH_RENEWED');
     binding = renewed;
     response = await send(binding.user.access_token);
     sessions.assert(id);
+    if (await rejected(response)) await sessions.expire(binding);
   }
-  if (response.status === 401) await sessions.expire(binding);
   return response;
 }
 

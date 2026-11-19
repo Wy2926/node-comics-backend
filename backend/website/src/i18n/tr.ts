@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Oturumunuz yenilendi. Lütfen işlemi tekrar deneyin.",
     "赠送 PLUS {0} 天": "{0} gün PLUS hediyesi",
     "赠送安排处理中，请刷新查看。": "Hediyeniz planlanıyor. Kontrol etmek için yenileyin.",
     "赠送生效：{0}": "Hediye başlangıcı: {0}",

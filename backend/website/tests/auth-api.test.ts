@@ -51,18 +51,32 @@ test('authenticated GET retries once through the installed OIDC SDK and persists
   assert.equal((await session())?.refresh_token, 'refresh-two');
 });
 
-test('POST 401 is not replayed and a business 403 does not clear a valid login', async context => {
+test('POST 401 renews the session without replaying the write, and a business 403 keeps that login', async context => {
   seed(); let calls = 0;
   context.mock.method(globalThis, 'fetch', async (path: string) => {
     const configured = configuration(path); if (configured) return configured;
-    calls++; return unauthorized();
+    calls++; return path === config.token_endpoint ? renewed() : unauthorized();
   });
-  await assert.rejects(api('/v1/billing/checkouts', 'POST', { price_id: 'quote' }, { 'Idempotency-Key': 'same' }), ApiError);
-  assert.equal(calls, 1); assert.equal(await session(), null);
-  seed();
+  await assert.rejects(api('/v1/billing/checkouts', 'POST', { price_id: 'quote' }, { 'Idempotency-Key': 'same' }), {code:'AUTH_RENEWED'});
+  assert.equal(calls, 2); assert.equal((await session())?.refresh_token, 'refresh-two');
   context.mock.method(globalThis, 'fetch', async () => Response.json({ error: { code: 'FORBIDDEN' } }, { status: 403 }));
   await assert.rejects(api('/v1/me'), error => error instanceof ApiError && error.status === 403);
-  assert.equal((await session())?.access_token, 'old-token');
+  assert.equal((await session())?.access_token, 'new-token');
+});
+
+test('first read the following day renews before the API call, even without a rotated refresh token', async context => {
+  seed();
+  const tomorrow=Date.now()+86400000;
+  context.mock.method(Date,'now',() => tomorrow);
+  const calls:string[]=[];
+  context.mock.method(globalThis,'fetch',async (path:string,init:RequestInit)=>{
+    const configured=configuration(path);if(configured)return configured;
+    calls.push(path);
+    if(path===config.token_endpoint)return Response.json({access_token:'new-token',token_type:'Bearer',expires_in:3600});
+    assert.equal(new Headers(init.headers).get('Authorization'),'Bearer new-token');return Response.json({ok:true});
+  });
+  assert.deepEqual(await api('/v1/me'),{ok:true});
+  assert.deepEqual(calls,[config.token_endpoint,'/v1/me']);assert.equal((await session())?.refresh_token,'refresh-one');
 });
 
 test('second GET 401 expires the session and stops retrying', async context => {
@@ -72,6 +86,13 @@ test('second GET 401 expires the session and stops retrying', async context => {
     calls++; return path === config.token_endpoint ? renewed() : unauthorized();
   });
   await assert.rejects(api('/v1/me'), ApiError); assert.equal(calls, 3); assert.equal(await session(), null);
+});
+
+test('a proxy 401 is a service error, not a reason to sign out',async context=>{
+  seed();
+  context.mock.method(globalThis,'fetch',async(path:string)=>configuration(path)??new Response('proxy',{status:401}));
+  await assert.rejects(api('/v1/me'),{status:503,code:'AUTH_UNAVAILABLE'});
+  assert.equal((await session())?.access_token,'old-token');
 });
 
 test('a multi-request operation cannot switch accounts or reuse its former login identity', async context => {

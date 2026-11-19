@@ -151,7 +151,7 @@ test('failed replacement account clears prior data and rejects late billing; acc
   assert.equal(view.byClass('account-summary'),undefined);assert.doesNotMatch(view.text(),/Reader A/);
   view.response('/v1/me',1).reject(new TypeError('offline'));await view.flush();
   view.response('/v1/billing/status',1).resolve(billing);await view.flush();
-  assert.equal(view.byClass('account-summary'),undefined);assert.ok(view.byClass('login-passport'));
+  assert.equal(view.byClass('account-summary'),undefined);assert.equal(view.byClass('login-passport'),undefined);
   click(view.button('重试连接'));await view.flush();view.response('/v1/me',2).resolve(account('Reader B'));
   view.response('/v1/billing/status',2).resolve(billing);await view.flush();assert.match(view.text(),/Reader B/);
 });

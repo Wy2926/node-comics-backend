@@ -5,9 +5,13 @@ export class ApiError extends Error {
   constructor(message: string, public status: number, public code?: string) { super(message); }
 }
 export class RefreshUnavailable extends Error {
-  constructor() { super('登录续期未完成，请检查网络后重试；授权已失效时请重新登录。'); }
+  constructor(reason: RefreshFailure = 'service') {
+    super(reason === 'network' ? '网络连接失败，请检查连接后重试。' : reason === 'configuration' ?
+      '正式登录服务尚未配置，请稍后重试或联系支持。' : '账户服务暂时不可用，请重试。');
+  }
 }
-interface StoredSession { id: string; user: string | null; retryAt?: number; relogin?: boolean }
+type RefreshFailure = 'network' | 'configuration' | 'service';
+interface StoredSession { id: string; user: string | null; retryAt?: number; retryReason?: RefreshFailure; accessRejected?: boolean; relogin?: boolean }
 interface SessionBinding { id: string; user: User }
 export const changedSession = () => new ApiError('账户已退出，请重新登录。', 401);
 
@@ -85,42 +89,46 @@ export class SharedSession {
     if (expectedId !== undefined && initial.id !== expectedId) throw changedSession();
     const first = this.user(initial);
     if (!first) return null;
-    const needsRefresh = (user: User) => user.expired || (user.expires_in ?? 0) < 60 ||
+    const needsRefresh = (user: User, record: StoredSession) => record.accessRejected || user.expired || (user.expires_in ?? 0) < 60 ||
       rejectedToken === user.access_token;
-    if (!needsRefresh(first)) return { id: initial.id, user: first };
+    if (!needsRefresh(first, initial)) return { id: initial.id, user: first };
     return this.locks.request(this.key + ':refresh', async () => {
       const before = this.read();
       if (before.id !== initial.id) throw changedSession();
       const user = this.user(before);
       if (!user) return null;
       const binding = { id: before.id, user };
-      if (!needsRefresh(user)) return binding;
+      if (!needsRefresh(user, before)) return binding;
+      const rejected = !!before.accessRejected || rejectedToken === user.access_token;
       if ((before.retryAt ?? 0) > Date.now()) {
-        if (!user.expired && !rejectedToken) return binding;
-        throw new RefreshUnavailable();
+        if (!user.expired && !rejected) return binding;
+        if (rejected && !before.accessRejected) await this.locks.request(this.key + ':write', () => {
+          this.assert(before.id); this.write({ ...before, accessRejected: true });
+        });
+        throw new RefreshUnavailable(before.retryReason);
       }
       let renewed: User;
       try {
         renewed = await this.refresh(user);
-        if (!validUser(renewed) || renewed.expired || renewed.profile.sub !== user.profile.sub) {
-          await this.expire(binding);
-          throw changedSession();
-        }
+        if (!validUser(renewed) || renewed.expired) throw new RefreshUnavailable();
+        if (renewed.profile.sub !== user.profile.sub) throw changedSession();
       } catch (error) {
         this.assert(before.id);
         if (error instanceof ApiError || error instanceof ErrorResponse &&
-          ['invalid_grant', 'login_required', 'interaction_required'].includes(error.error ?? '')) {
+          ['invalid_grant', 'login_required', 'interaction_required', 'consent_required', 'account_selection_required'].includes(error.error ?? '')) {
           await this.expire(binding);
           throw changedSession();
         }
+        const reason = error instanceof TypeError || error instanceof Error && error.name === 'ErrorTimeout' ? 'network' :
+          error instanceof ErrorResponse && ['invalid_client','unauthorized_client','invalid_scope','invalid_target','invalid_request'].includes(error.error ?? '') ? 'configuration' : 'service';
         await this.locks.request(this.key + ':write', () => {
           const current = this.read();
           if (current.id === before.id && current.user === before.user)
-            this.write({ ...current, retryAt: Date.now() + 30000 });
+            this.write({ ...current, retryAt: Date.now() + 30000, retryReason: reason, accessRejected: rejected });
         });
         this.assert(before.id);
-        if (!user.expired && !rejectedToken) return binding;
-        throw new RefreshUnavailable();
+        if (!user.expired && !rejected) return binding;
+        throw new RefreshUnavailable(reason);
       }
       return this.locks.request(this.key + ':write', () => {
         const current = this.read();

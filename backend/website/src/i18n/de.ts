@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Ihre Sitzung wurde verlängert. Bitte wiederholen Sie den Vorgang.",
     "赠送 PLUS {0} 天": "{0} Tage begabter PLUS",
     "赠送安排处理中，请刷新查看。": "Ihr Geschenk wird geplant. Zur Überprüfung aktualisieren.",
     "赠送生效：{0}": "Geschenkbeginn: {0}",

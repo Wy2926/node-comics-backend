@@ -84,8 +84,8 @@ test('a revoked refresh token clears only its own session and notifies once', as
 test('offline refresh preserves an expired session and shares a 30s cooldown without sending old tokens', async () => {
   let calls = 0; const f = fixture(async () => { calls++; throw new TypeError('offline'); });
   await f.login(); f.expire();
-  await assert.rejects(f.first.get(), RefreshUnavailable);
-  await assert.rejects(f.tab().get(), RefreshUnavailable);
+  await assert.rejects(f.first.get(), /网络连接失败/);
+  await assert.rejects(f.tab().get(), /网络连接失败/);
   assert.equal(calls, 1); assert.ok(JSON.parse(f.storage.getItem('session')!).user);
 });
 
@@ -95,6 +95,14 @@ test('temporary refresh failure permits a still-valid access token, not a token 
   assert.equal((await f.first.get())?.user.access_token, 'access-one');
   assert.equal((await f.tab().get())?.user.access_token, 'access-one');
   await assert.rejects(f.tab().get('access-one'), RefreshUnavailable); assert.equal(calls, 1);
+  await assert.rejects(f.tab().get(), /账户服务暂时不可用/); assert.equal(calls, 1);
+});
+
+test('a configuration failure keeps the saved grant and its specific error across tabs',async()=>{
+  const f=fixture(async()=>{throw new ErrorResponse({error:'invalid_client',error_description:'private diagnostic'});});
+  await f.login();f.expire();
+  for(const tab of [f.first,f.tab()])await assert.rejects(tab.get(),{message:'正式登录服务尚未配置，请稍后重试或联系支持。'});
+  assert.ok(JSON.parse(f.storage.getItem('session')!).user);assert.ok(!f.storage.getItem('session')!.includes('private diagnostic'));
 });
 
 test('late 401 uses a rotated token without a second refresh; stale 401 cannot clear it', async () => {

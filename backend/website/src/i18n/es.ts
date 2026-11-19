@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Tu sesión se ha renovado. Vuelve a intentar la operación.",
     "赠送 PLUS {0} 天": "{0} días de superdotado PLUS",
     "赠送安排处理中，请刷新查看。": "Se está programando tu donación. Actualizar para comprobar.",
     "赠送生效：{0}": "El regalo comienza: {0}",

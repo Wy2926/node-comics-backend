@@ -17,6 +17,7 @@ export default function Account({ callback = false, locale = 'zh-CN', copy = {},
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [retryOnly,setRetryOnly]=useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [billing, setBilling] = useState<Billing | null>(null);
   const [billingLoading,setBillingLoading]=useState(false),[billingError,setBillingError]=useState('');
@@ -34,12 +35,12 @@ export default function Account({ callback = false, locale = 'zh-CN', copy = {},
   function reset(){
     const current=++epoch.current;
     billingRevision.current++;accountIdentity.current=null;actionFlight.current=false;
-    setMe(null);setBilling(null);setLoading(false);setBillingLoading(false);setBillingError('');setBusy(false);setConfirmCancel(false);
+    setMe(null);setBilling(null);setLoading(false);setBillingLoading(false);setBillingError('');setBusy(false);setConfirmCancel(false);setRetryOnly(false);
     return current;
   }
   function accountFailed(err:unknown,current:number){
     if(current!==epoch.current)return;
-    reset();setError(t(message(err)));
+    reset();setRetryOnly(!(err instanceof ApiError&&err.status===401));setError(t(message(err)));
   }
   function read(identity:AuthIdentity,current:number,billingOnly=false){
     const revision=++billingRevision.current,operation=++billingOperation.current;
@@ -116,7 +117,7 @@ export default function Account({ callback = false, locale = 'zh-CN', copy = {},
   if (callback) return <div className="status-panel" role="status">{loading ? t("正在确认登录结果，请稍候…") : <><p>{error}</p><a className="text-link" href={local('/account/')}>{t("返回账户重新登录 ↗")}</a></>}</div>;
   return <div className="website-account" aria-busy={loading || busy}>
     {error && <div className="status-panel error" role="alert">{error} <button className="button compact secondary" disabled={busy || loading} onClick={() => void load()}>{t("重试连接")}</button></div>}
-    {loading ? <div className="loading" role="status">{t("正在读取你的账户…")}</div> : !me ? <div className="login-passport"><div className="login-cover"><p className="eyebrow">NODELANE COMICS / READER PASS</p><h2>{t("下一页，")}<br />{t("读懂新世界。")}</h2><div className="login-ticket">{t("あ → 你好")}</div><p>{t("一个账户，连接官网与插件。")}<br />{t("你的翻译权益，都在这里。")}</p></div><div className="login-form"><p className="eyebrow">WELCOME BACK</p><h2>{t("打开你的读者通行证")}</h2><p>{t("前往统一身份服务安全登录，完成后自动回到这里。")}</p><button className="button" disabled={busy} onClick={() => void action(() => signIn(accountHref+location.search))}>{busy ? t("正在前往登录…") : t("登录 / 注册")} <span aria-hidden="true">↗</span></button><small>{t("继续前请阅读")}<a className="text-link" href={local('/terms/')}>{t("服务条款")}</a>{t("与")}<a className="text-link" href={local('/privacy/')}>{t("隐私政策")}</a>{t("。官网不会收集你的登录密码。")}</small></div></div> : <>
+    {loading ? <div className="loading" role="status">{t("正在读取你的账户…")}</div> : retryOnly ? null : !me ? <div className="login-passport"><div className="login-cover"><p className="eyebrow">NODELANE COMICS / READER PASS</p><h2>{t("下一页，")}<br />{t("读懂新世界。")}</h2><div className="login-ticket">{t("あ → 你好")}</div><p>{t("一个账户，连接官网与插件。")}<br />{t("你的翻译权益，都在这里。")}</p></div><div className="login-form"><p className="eyebrow">WELCOME BACK</p><h2>{t("打开你的读者通行证")}</h2><p>{t("前往统一身份服务安全登录，完成后自动回到这里。")}</p><button className="button" disabled={busy} onClick={() => void action(() => signIn(accountHref+location.search))}>{busy ? t("正在前往登录…") : t("登录 / 注册")} <span aria-hidden="true">↗</span></button><small>{t("继续前请阅读")}<a className="text-link" href={local('/terms/')}>{t("服务条款")}</a>{t("与")}<a className="text-link" href={local('/privacy/')}>{t("隐私政策")}</a>{t("。官网不会收集你的登录密码。")}</small></div></div> : <>
       <section className="account-summary" aria-label={t("账户信息")}>
         <div className="account-identity"><span className="account-avatar" aria-hidden="true">{me.user.name.slice(0,1).toUpperCase()}</span><div><h2>{me.user.name}</h2><span className="account-plan" data-plus={me.entitlements.plan!=='free'}>{me.entitlements.plan==='plus'?'PLUS':me.entitlements.plan==='lite'?'Lite':t("普通账户")}</span></div><button className="account-signout" disabled={busy} onClick={() => void action(async () => { await signOut(); })}>{t("退出登录")}</button></div>
         {me.entitlements.plan!=='free'&&me.entitlements.plus_expires_at&&<p className="account-expiry">{t("会员有效期至")}{date(me.entitlements.plus_expires_at,locale)}{t("（北京时间）")}</p>}

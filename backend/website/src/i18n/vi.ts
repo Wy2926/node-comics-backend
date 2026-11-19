@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Phiên đăng nhập đã được gia hạn. Vui lòng thử lại thao tác vừa rồi.",
     "赠送 PLUS {0} 天": "Tặng {0} ngày PLUS",
     "赠送安排处理中，请刷新查看。": "Quà tặng của bạn đang được lên lịch. Làm mới để kiểm tra.",
     "赠送生效：{0}": "Quà tặng bắt đầu: {0}",

@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Votre session a été renouvelée. Veuillez réessayer l’opération.",
     "赠送 PLUS {0} 天": "{0} jours de surdoués PLUS",
     "赠送安排处理中，请刷新查看。": "Votre don est en cours de programmation. Actualisez pour vérifier.",
     "赠送生效：{0}": "Début du cadeau : {0}",

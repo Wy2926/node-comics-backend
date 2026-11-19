@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "Your session has been renewed. Please try the action again.",
     "赠送 PLUS {0} 天": "{0} days of gifted PLUS",
     "赠送安排处理中，请刷新查看。": "Your gift is being scheduled. Refresh to check.",
     "赠送生效：{0}": "Gift starts: {0}",

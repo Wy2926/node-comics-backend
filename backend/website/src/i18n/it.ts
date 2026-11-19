@@ -874,6 +874,7 @@ export default {
     ]
   },
   "account": {
+    "登录已续期，请重试刚才的操作。": "La sessione è stata rinnovata. Riprova l’operazione.",
     "赠送 PLUS {0} 天": "{0} giorni di regalo PLUS",
     "赠送安排处理中，请刷新查看。": "Il tuo regalo è in fase di pianificazione. Aggiorna per controllare.",
     "赠送生效：{0}": "Inizio regalo: {0}",
