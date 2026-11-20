@@ -17,6 +17,11 @@ def config(**changes):
         database_url='postgresql+psycopg://user:private@postgres/' + seed.DATABASE_NAME) | changes)
 
 
+@pytest.fixture
+def catalog_products():
+    return None  # Exercise the current storefront's publication rules.
+
+
 @pytest.mark.parametrize('changes', [
     {'app_env': 'production'}, {'app_env': 'development'}, {'dev_auth': True},
     {'creem_enabled': False}, {'creem_environment': 'live'},
@@ -36,6 +41,17 @@ def test_environment_guard_accepts_only_named_test_database():
 def test_live_database_name_guard_rejects_query_override():
     connection = SimpleNamespace(dialect=SimpleNamespace(name='postgresql'), scalar=lambda query: 'nodecomics_production')
     with pytest.raises(seed.SeedError, match='CREEM_TEST_DATABASE_REQUIRED'):
+        seed.require_database(connection)
+
+
+def test_seed_requires_a_migrated_schema(pg_scope, monkeypatch):
+    from app.db import engine, initialize
+    from conftest import TEST_DATABASE
+    monkeypatch.setattr(seed, 'DATABASE_NAME', TEST_DATABASE)
+    with engine().connect() as connection, pytest.raises(RuntimeError, match='incomplete'):
+        seed.require_database(connection)
+    initialize()
+    with engine().connect() as connection:
         seed.require_database(connection)
 
 
@@ -64,9 +80,8 @@ def catalog_fixture(request, monkeypatch):
     from app import creem_client
     ids = seed.product_ids(environment_ids())
     products = {ids[key]: {'id': ids[key], 'object': 'product', 'mode': 'test', 'status': 'active',
-        'price': amount, 'currency': 'USD', 'billing_type': 'onetime' if interval == 'once' else 'recurring',
-        'billing_period': {'month': 'every-month', 'year': 'every-year', 'once': 'once'}[interval]}
-        for key, (_, _, interval, amount) in seed.QUOTES.items()}
+        'price': amount, 'currency': 'USD', 'billing_type': 'onetime', 'billing_period': 'once'}
+        for key, (_, _, _, amount) in seed.QUOTES.items()}
     calls = []
 
     def read_product(method, path, **kwargs):
@@ -112,7 +127,8 @@ def test_seed_is_idempotent_and_keeps_order_history(catalog_fixture):
         assert {(item['interval'], item['unit_amount']) for item in subscriptions} == {('month', 599), ('year', 5999)}
         assert {(item['quota_pages'], item['quota_validity_days']) for item in packs} == {(100, None), (50, 30)}
         assert all(item['service_plan_id'] == 'lite' and item['unit_amount'] == 599 for item in packs)
-        assert all(item['hourly_image_limit'] == 1200 and not item['trial_days'] and not item['monthly_classic_pages']
+        assert all(item['billing_type'] == 'onetime' and item['hourly_image_limit'] == 1200
+            and not item['trial_days'] and not item['monthly_classic_pages']
             for item in subscriptions + packs)
         order = BillingOrder(id='existing-order', owner_id=actor.id, provider='creem', environment='test',
             kind='initial', status='paid', price_id=seed.QUOTES['PERMANENT'][0],

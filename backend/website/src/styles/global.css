@@ -10,11 +10,8 @@
 .billing-cycle legend {font-size:.78rem;color:var(--muted);margin-bottom:10px}
 .billing-cycle .billing-cycle-card {position:relative;display:flex;flex-direction:column;gap:7px;align-items:flex-start;padding:18px 36px 18px 16px;margin:0;min-width:0}
 .billing-cycle-card strong {font-size:1.1rem}
-.billing-cycle-card small {font-size:.73rem}
 .billing-cycle .billing-cycle-card input {position:absolute;right:12px;top:19px;width:16px;height:16px;margin:0;accent-color:var(--accent)}
-.billing-plan-picker {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px;margin-bottom:20px}
-.billing-plan-card {display:flex;flex-direction:column;text-align:left;gap:8px;padding:18px}
-.billing-plan-card span {font-size:.82rem}.annual-badge{display:inline-block;border:var(--comic-badge-border);border-radius:var(--comic-badge-radius);padding:3px 8px;background:var(--accent-soft);color:var(--accent);font-size:.7rem;font-weight:750;line-height:1.5;letter-spacing:0}.billing-total{font-size:.77rem;color:var(--muted);line-height:1.8}.annual-saving{display:grid;gap:3px;margin-top:12px;font-size:.76rem;color:var(--muted)}.annual-saving strong{color:var(--success);font-weight:650}
+.annual-badge{display:inline-block;border:var(--comic-badge-border);border-radius:var(--comic-badge-radius);padding:3px 8px;background:var(--accent-soft);color:var(--accent);font-size:.7rem;font-weight:750;line-height:1.5;letter-spacing:0}.billing-total{font-size:.77rem;color:var(--muted);line-height:1.8}
 
 /* Account panels use the same surfaces and controls as the public site. */
 .website-account {display:grid;gap:20px;min-width:0;margin-inline:auto}

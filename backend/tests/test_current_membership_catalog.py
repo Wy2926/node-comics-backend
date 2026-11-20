@@ -153,12 +153,18 @@ def test_paid_periods_grant_monthly_without_early_access_or_duplicates(client, p
 
 
 def test_models_are_restricted_to_the_confirmed_tiers(client):
+    from app.billing_catalog import DEFAULT_CATALOG
+    from app.scheduler import lock_scheduler
     from app.translation_models import TranslationProvider
-    from app.translation_providers import provider_resolver
-    from manual_membership_server import seed_models
+    from app.translation_providers import ProviderWrite, provider_resolver, write_provider
     with session_factory()() as db:
+        lock_scheduler(db)
         db.execute(update(TranslationProvider).values(enabled=False))
-        seed_models(db)
+        for tier, scopes in [('free', None), ('paid_extra', ['plus', 'pro'])]:
+            for name in DEFAULT_CATALOG['models'][tier]:
+                write_provider(db, ProviderWrite(name=name, channel='openai', text_plan_ids=scopes,
+                    title_weight=0, config={'model': name, 'base_url': 'https://text.example/v1'},
+                    api_key='isolated-test-text-key'))
         for plan in ('guest', 'free', 'plus', 'pro'):
             resolve = provider_resolver(db, plan_id=plan)
             selected = {resolve(f'catalog-acceptance-{index}')['model'] for index in range(200)}

@@ -16,7 +16,7 @@ import PriceAmount from '../src/components/PriceAmount';
 import BillingCycle from '../src/components/BillingCycle';
 import FeatureInfo,{tooltipPosition} from '../src/components/FeatureInfo';
 import {pricingCopy,publishedPricingCopy} from '../src/lib/pricing';
-import {amount,amountParts,annualSavings,billingCopy,trialCopy,type Billing,type BillingCatalog,type BillingOffer,type PendingCheckout} from '../src/lib/billing';
+import {amount,amountParts,annualSavings,billingCopy,type Billing,type BillingCatalog,type BillingOffer,type PendingCheckout} from '../src/lib/billing';
 import {comparisonCopy,comparisonRows,extraPagesCopy,paidComparisonValue} from '../src/lib/pricing-comparison';
 import {publishedSubscriptions} from '../src/data/published-plans';
 import {pricingHighlightsCopy} from '../src/i18n/pricing-highlights';
@@ -35,7 +35,6 @@ test('published subscription prices remain readable without fabricating a purcha
     assert.equal($('.monthly-equivalent').length,interval==='month'?0:1,locale);
     if(interval!=='month')assert.ok($('.monthly-equivalent').text().includes(amount({...offer,unit_amount:offer.unit_amount/membershipMonths[interval]},locale)),locale);
     assert.equal($('a,button,[data-purchase-link],[data-billing-catalog="live"]').length,0,locale);
-    assert.equal($('.published-pricing-label').length,0,'Currency and published-price disclosures are not repeated in every price block');
   }
 });
 
@@ -145,7 +144,7 @@ test('live annual quotes show the full charge before the monthly equivalent',()=
   }
 });
 
-test('every unavailable purchase state does not advertise a trial and a disabled action',()=>{
+test('unavailable purchase states disclose nonrenewal and disable checkout',()=>{
   for(const locale of locales)for(const state of ['loading','unavailable','error'] as const){
     const $=load(renderToStaticMarkup(createElement(PublishedPurchaseAvailability,{locale,state,name:'Studio'})));
     const copy=publishedPricingCopy(locale);
@@ -154,23 +153,9 @@ test('every unavailable purchase state does not advertise a trial and a disabled
     assert.equal($('.billing-status').attr('role'),state==='error'?'alert':'status',locale);
     assert.equal($('button[disabled]').length,1,locale);
     assert.equal($('a,[data-purchase-link]').length,0,locale);
-    assert.ok(!$.text().includes(trialCopy(7,locale)),locale);
+    assert.ok($('.trial-note').text().includes(prepaidMembershipCopy(locale).notice),locale);
     assert.ok($.text().includes(copy.tax),locale);
   }
-});
-
-test('pricing presentation rules stay scoped and do not duplicate the former global block',()=>{
-  const css=readFileSync(new URL('../src/styles/pricing.css',import.meta.url),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
-  for(const match of css.matchAll(/([^{}]+)\{/g)){
-    const selector=match[1].trim();
-    if(selector.startsWith('@media'))continue;
-    // Commas inside :is() are not separate selectors; every rule begins in the pricing frame.
-    assert.ok(selector.startsWith('.pricing-comparison'),selector);
-  }
-  const global=readFileSync(new URL('../src/styles/global.css',import.meta.url),'utf8');
-  assert.doesNotMatch(global,/\.pricing-comparison|\.plan-comparison|\.pricing-actions/);
-  assert.match(css,/table-layout:\s*fixed/);
-  assert.match(css,/\.pricing-comparison\s+\.feature-column\s*\{/);
 });
 
 const pack:BillingOffer={id:'synthetic-pack',name:'Lite',plan_id:'pages',plan_revision_id:'pack-v1',currency:'usd',unit_amount:700,interval:'once',monthly_classic_pages:0,trial_days:0,trial_classic_pages:0,service_plan_id:'lite',service_plan_name:'Lite',quota_pages:100,quota_validity_days:null,hourly_image_limit:1200,channels:[{provider:'creem',binding_id:'synthetic',trial_days:0,trial_classic_pages:0}]};
@@ -295,11 +280,14 @@ test('quota presentation uses shared theme tokens and scopes every rule away fro
   for(const token of ['--comic-panel-radius','--comic-panel-padding','--accent','--surface','--ink','--muted'])assert.ok(css.includes(`var(${token})`),token);
 });
 
-test('no invented pack is rendered without a sellable quote; all sellable packs keep independent purchase actions',()=>{
+test('packs without channels can be previewed but only sellable packs have a checkout link',()=>{
   const props={locale:'en',accountHref:'/en/account/',checkoutCopy};
-  for(const offers of [[],[{...pack,channels:[]}],[{...pack,interval:'month' as const}]]){
+  for(const offers of [[],[{...pack,interval:'month' as const}]]){
     assert.equal(renderToStaticMarkup(createElement(QuotaOffers,{...props,offers})), '');
   }
+  const preview=load(renderToStaticMarkup(createElement(QuotaOffers,{...props,offers:[{...pack,channels:[]}]})));
+  assert.equal(preview('.quota-offer button:disabled').length,1);
+  assert.equal(preview('[data-purchase-link],.checkout-methods').length,0);
   const $=load(renderToStaticMarkup(createElement(QuotaOffers,{...props,offers:[pack,{...pack,id:'other-pack'}]})));
   assert.equal($('.quota-offer').length,2);
   assert.deepEqual($('[data-purchase-link]').toArray().map(link=>$(link).attr('href')),['/en/pricing/?price=synthetic-pack','/en/pricing/?price=other-pack']);

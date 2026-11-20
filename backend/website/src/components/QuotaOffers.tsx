@@ -14,9 +14,9 @@ function QuotaIcon({kind}:{kind:keyof typeof iconPaths}){
   return <svg className="quota-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={iconPaths[kind]}/></svg>;
 }
 
-export default function QuotaOffers({locale,offers,billing,blocked=false,preview=false,accountHref,checkoutCopy,onEmbed}:{locale:string;offers:BillingOffer[];billing?:Billing|null;blocked?:boolean;preview?:boolean;accountHref:string;checkoutCopy:CheckoutCopy;onEmbed?:(purchase:CreemPurchase)=>void}){
+export default function QuotaOffers({locale,offers,billing,blocked=false,accountHref,checkoutCopy,onEmbed}:{locale:string;offers:BillingOffer[];billing?:Billing|null;blocked?:boolean;accountHref:string;checkoutCopy:CheckoutCopy;onEmbed?:(purchase:CreemPurchase)=>void}){
   const copy=quotaPurchaseCopy(locale);
-  const visible=offers.filter(offer=>offer.interval==='once'&&(preview||offer.channels.length>0));
+  const visible=offers.filter(offer=>offer.interval==='once');
   if(!visible.length)return null;
   const [beforePages,afterPages]=copy.pages.split('{0}');
   return <section className="quota-offers" aria-label={copy.title}>

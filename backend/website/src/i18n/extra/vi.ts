@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Chi phí tương đương mỗi tháng",
-    "save": "Tiết kiệm khoảng {n}% khi trả theo năm",
-    "saving": "Tiết kiệm {a} so với 12 lần thanh toán hàng tháng",
-    "billed": "Thanh toán {a} mỗi năm",
-    "total": "12 lần thanh toán hàng tháng",
-    "cancel": "Hủy trước lần gia hạn tiếp theo."
+    "save": "Tiết kiệm khoảng {n}% khi trả theo năm"
   },
   "publishedPricing": {
-    "label": "Giá PLUS / Pro niêm yết · Đô la Mỹ (USD)",
-    "monthly": "Hàng tháng",
-    "yearly": "Hàng năm",
-    "annualPayment": "Thanh toán một lần mỗi năm. Tự động gia hạn.",
     "loading": "Đang kiểm tra khả năng đăng ký…",
     "unavailable": "Hiện chưa thể đăng ký trực tuyến",
     "error": "Không thể xác nhận khả năng đăng ký. Vui lòng làm mới trang. Giá niêm yết vẫn được hiển thị.",
-    "unconfirmedTiming": "Khả năng đăng ký phụ thuộc vào các gói đang được cung cấp. Hãy làm mới trang hoặc kiểm tra mục đăng ký trong tài khoản trên website hay tiện ích.",
-    "checking": "Đang xác nhận khả năng đăng ký",
-    "noScript": "Bật JavaScript để kiểm tra khả năng đăng ký hiện tại.",
     "tax": "Thuế và số tiền cuối cùng được hiển thị khi thanh toán."
   },
   "billing": {
-    "plan": "Gói đăng ký",
     "month": "tháng",
     "year": "năm",
-    "unavailable": "Đăng ký chưa có sẵn",
     "loading": "Đang tải các gói…",
-    "error": "Không thể tải các gói. Vui lòng làm mới trang.",
     "classic": "Dịch không giới hạn",
     "renewMonthly": "Gia hạn hàng tháng.",
     "renewAnnual": "Gia hạn hàng năm."
   },
-  "billingBenefits": {
-    "hourly": "Tối đa {n} trang dịch mới trong mỗi khoảng 60 phút trượt",
-    "trial": "Tài khoản mới đủ điều kiện được dùng thử {d} ngày. Yêu cầu thẻ.",
-    "subscribe": "Đăng ký {name}",
-    "description": "Dịch với giới hạn yêu cầu dịch mới theo giờ.",
-    "intro": "Chọn một gói dịch để sử dụng quyền lợi đăng ký trong tiện ích."
-  },
+  "hourly": "Tối đa {n} trang dịch mới trong mỗi khoảng 60 phút trượt",
   "manage": "Quản lý đăng ký",
   "statuses": [
     "Đang hoạt động",
@@ -218,13 +198,7 @@ export const commerce = {
       "lite": "Quyền truy cập sớm vào các tính năng nâng cao"
     },
     "note": "Xem nhật ký cập nhật để biết tính năng mới."
-  },
-  "billingCycle": [
-    "Hàng tháng",
-    "Hàng năm",
-    "Thanh toán hàng tháng",
-    "Thanh toán hàng năm"
-  ]
+  }
 };
 
 export default { translate, uninstall, paymentSuccess, project, commerce };

@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Equivalente mensual",
-    "save": "Ahorre ≈{n}% anual",
-    "saving": "Ahorre {a} en comparación con 12 pagos mensuales",
-    "billed": "Facturado {a} por año",
-    "total": "12 pagos mensuales",
-    "cancel": "Cancela antes de tu próxima renovación."
+    "save": "Ahorre ≈{n}% anual"
   },
   "publishedPricing": {
-    "label": "Precios publicados PLUS / Pro · Dólares estadounidenses (USD)",
-    "monthly": "Mensual",
-    "yearly": "Anual",
-    "annualPayment": "Un pago anual. Se renueva automáticamente.",
     "loading": "Comprobando disponibilidad de compra…",
     "unavailable": "Las suscripciones en línea no están disponibles actualmente",
     "error": "No se puede confirmar la disponibilidad de la compra. Por favor actualice. Los precios publicados siguen siendo visibles.",
-    "unconfirmedTiming": "Las ofertas vigentes determinan la disponibilidad de compra. Actualice esta página o verifique las suscripciones en su sitio web o cuenta de extensión.",
-    "checking": "Esperando disponibilidad de compra",
-    "noScript": "Habilite JavaScript para verificar la disponibilidad de compra actual.",
     "tax": "Los impuestos y el importe final se muestran al finalizar la compra."
   },
   "billing": {
-    "plan": "Plan de suscripción",
     "month": "mes",
     "year": "año",
-    "unavailable": "Las suscripciones aún no están disponibles",
     "loading": "Cargando planes…",
-    "error": "No se pueden cargar planes. Por favor actualice.",
     "classic": "Traducción ilimitada",
     "renewMonthly": "Se renueva mensualmente.",
     "renewAnnual": "Se renueva anualmente."
   },
-  "billingBenefits": {
-    "hourly": "Hasta {n} nuevas páginas de traducción por hora consecutiva",
-    "trial": "Las cuentas nuevas elegibles pueden probar durante {d} días. Se requiere una tarjeta.",
-    "subscribe": "Obtener {name}",
-    "description": "Traducción con límite horario para nuevas solicitudes de traducción.",
-    "intro": "Elija un plan de traducción para utilizar los beneficios de su suscripción en la extensión."
-  },
+  "hourly": "Hasta {n} nuevas páginas de traducción por hora consecutiva",
   "manage": "Administrar suscripción",
   "statuses": [
     "Activo",
@@ -218,11 +198,5 @@ export const commerce = {
       "lite": "Acceso temprano a funciones avanzadas"
     },
     "note": "Consulta las notas de versión para conocer las nuevas funciones."
-  },
-  "billingCycle": [
-    "Mensual",
-    "Anual",
-    "Facturado cada mes",
-    "Facturado anualmente"
-  ]
+  }
 };

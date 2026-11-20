@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Equivalente mensile",
-    "save": "Risparmia il ≈{n}% all'anno",
-    "saving": "Risparmia {a} rispetto a 12 pagamenti mensili",
-    "billed": "Fatturato {a} all'anno",
-    "total": "12 pagamenti mensili",
-    "cancel": "Annulla prima del prossimo rinnovo."
+    "save": "Risparmia il ≈{n}% all'anno"
   },
   "publishedPricing": {
-    "label": "Prezzi pubblicati PLUS / Pro · Dollari statunitensi (USD)",
-    "monthly": "Mensile",
-    "yearly": "Annuale",
-    "annualPayment": "Un pagamento annuale. Si rinnova automaticamente.",
     "loading": "Verifica della disponibilità dell'acquisto…",
     "unavailable": "Gli abbonamenti online non sono al momento disponibili",
     "error": "Impossibile confermare la disponibilità dell'acquisto. Aggiorna. I prezzi pubblicati rimangono visibili.",
-    "unconfirmedTiming": "Le offerte attuali determinano la disponibilità di acquisto. Aggiorna questa pagina o controlla gli abbonamenti nel tuo sito web o nell'account di estensione.",
-    "checking": "In attesa di disponibilità per l'acquisto",
-    "noScript": "Abilita JavaScript per verificare la disponibilità attuale dell'acquisto.",
     "tax": "Le tasse e l'importo finale vengono visualizzati al momento del pagamento."
   },
   "billing": {
-    "plan": "Piano di abbonamento",
     "month": "mese",
     "year": "anno",
-    "unavailable": "Gli abbonamenti non sono ancora disponibili",
     "loading": "Caricamento piani…",
-    "error": "Impossibile caricare i piani. Aggiorna.",
     "classic": "Traduzione illimitata",
     "renewMonthly": "Si rinnova mensilmente.",
     "renewAnnual": "Rinnovo annuale."
   },
-  "billingBenefits": {
-    "hourly": "Fino a {n} nuove pagine di traduzione per finestra mobile di un’ora",
-    "trial": "I nuovi account idonei possono provare per {d} giorni. È richiesta una carta.",
-    "subscribe": "Ottieni {name}",
-    "description": "Traduzione con limite orario sulle nuove richieste di traduzione.",
-    "intro": "Scegli un piano di traduzione per utilizzare i vantaggi dell'abbonamento nell'estensione."
-  },
+  "hourly": "Fino a {n} nuove pagine di traduzione per finestra mobile di un’ora",
   "manage": "Gestisci l'abbonamento",
   "statuses": [
     "Attivo",
@@ -218,11 +198,5 @@ export const commerce = {
       "lite": "Accesso anticipato alle funzionalità avanzate"
     },
     "note": "Consulta le note di rilascio per le nuove funzionalità."
-  },
-  "billingCycle": [
-    "Mensile",
-    "Annuale",
-    "Fatturato ogni mese",
-    "Fatturato annualmente"
-  ]
+  }
 };

@@ -2,7 +2,7 @@ import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import { commerceCopy, formatCopy } from '../i18n/commerce';
 import {pricingHighlightsCopy} from '../i18n/pricing-highlights';
 import type {Locale} from '../i18n/types';
-import {billingBenefitCopy,offerBenefits,type BillingOffer} from './billing';
+import {hourlyLimitCopy,offerBenefits,type BillingOffer} from './billing';
 
 interface ComparisonRow {label:string;free:string;lite:string;detail?:string}
 export interface PricingComparisonCopy {
@@ -110,7 +110,7 @@ export function comparisonCopy(locale:string):PricingComparisonCopy {
 export function paidComparisonValue(row:ReturnType<typeof comparisonRows>[number],offer:BillingOffer,locale:string){
  if(row.key==='classic')return offerBenefits(offer,locale);
  if(row.key==='rate')return offer.hourly_image_limit
-   ?`${subscriptionQuotaCopy(locale).paidRate} · ${billingBenefitCopy(locale).hourly(offer.hourly_image_limit)}`
+   ?`${subscriptionQuotaCopy(locale).paidRate} · ${hourlyLimitCopy(offer.hourly_image_limit,locale)}`
    :subscriptionQuotaCopy(locale).paidRate;
  return row.lite;
 }

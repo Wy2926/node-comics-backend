@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "W przeliczeniu na miesiąc",
-    "save": "Oszczędź ≈{n}% przy płatności rocznej",
-    "saving": "Zaoszczędź {a} w porównaniu z 12 miesięcznymi płatnościami",
-    "billed": "Opłata roczna: {a}",
-    "total": "12 miesięcznych płatności",
-    "cancel": "Anuluj przed kolejnym odnowieniem."
+    "save": "Oszczędź ≈{n}% przy płatności rocznej"
   },
   "publishedPricing": {
-    "label": "Opublikowano ceny PLUS / Pro · Dolary amerykańskie (USD)",
-    "monthly": "Miesięcznie",
-    "yearly": "Rocznie",
-    "annualPayment": "Jedna płatność roczna. Odnawia się automatycznie.",
     "loading": "Sprawdzam dostępność zakupu…",
     "unavailable": "Subskrypcje online są obecnie niedostępne",
     "error": "Nie można potwierdzić dostępności zakupu. Odśwież. Opublikowane ceny pozostają widoczne.",
-    "unconfirmedTiming": "Aktualne oferty określają dostępność zakupu. Odśwież tę stronę lub sprawdź subskrypcje w swojej witrynie lub na koncie rozszerzenia.",
-    "checking": "Oczekiwanie na dostępność zakupu",
-    "noScript": "Włącz JavaScript, aby sprawdzić aktualną dostępność zakupu.",
     "tax": "Podatki i ostateczna kwota są widoczne przy kasie."
   },
   "billing": {
-    "plan": "Abonament",
     "month": "miesiąc",
     "year": "rok",
-    "unavailable": "Subskrypcje nie są jeszcze dostępne",
     "loading": "Ładuję plany…",
-    "error": "Nie można wczytać planów. Odśwież.",
     "classic": "Tłumaczenie bez łącznego limitu stron",
     "renewMonthly": "Odnawia się co miesiąc.",
     "renewAnnual": "Odnawia się co rok."
   },
-  "billingBenefits": {
-    "hourly": "Do {n} nowych stron tłumaczenia w ruchomym oknie godzinnym",
-    "trial": "Nowe konta spełniające warunki mogą korzystać z okresu próbnego przez {d} dni. Wymagana karta.",
-    "subscribe": "Zdobądź {name}",
-    "description": "Tłumaczenie z godzinowym limitem nowych zleceń tłumaczeniowych.",
-    "intro": "Wybierz plan tłumaczeń, aby skorzystać z zalet subskrypcji w rozszerzeniu."
-  },
+  "hourly": "Do {n} nowych stron tłumaczenia w ruchomym oknie godzinnym",
   "manage": "Zarządzaj subskrypcją",
   "statuses": [
     "Aktywny",
@@ -218,13 +198,7 @@ export const commerce = {
       "lite": "Wczesny dostęp do zaawansowanych funkcji"
     },
     "note": "Nowe funkcje opisano w informacjach o wydaniach."
-  },
-  "billingCycle": [
-    "Miesięcznie",
-    "Rocznie",
-    "Rozliczane co miesiąc",
-    "Rozliczane co roku"
-  ]
+  }
 };
 
 export default { translate, uninstall, paymentSuccess, project, commerce };

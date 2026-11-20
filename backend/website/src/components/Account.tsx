@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, finishLogin, sessionIdentity, signIn, signOut, loginReturnPath, subscribeAuth, type AuthIdentity } from '../lib/auth';
 import { checkoutUrl } from '../lib/auth-config';
-import {billingCopy,billingBenefitCopy,offerLabel,offerBenefits,manageLabel,hasCurrentSubscription,hasPrepaidMembership,subscriptionStatusLabel,type Billing,type BillingProvider,type MembershipGift,type PurchaseQuota} from '../lib/billing';
+import {billingCopy,hourlyLimitCopy,offerLabel,offerBenefits,manageLabel,hasCurrentSubscription,hasPrepaidMembership,subscriptionStatusLabel,type Billing,type BillingProvider,type MembershipGift,type PurchaseQuota} from '../lib/billing';
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
 import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
@@ -26,7 +26,6 @@ export default function Account({ callback = false, locale = 'zh-CN', copy = {},
   const subscription=billing?.subscription;
   const prepaid=billing&&hasPrepaidMembership(billing)?billing.prepaid_membership:null;
   const prepaidCopy=prepaidMembershipCopy(locale);
-  const benefitText=billingBenefitCopy(locale);
   const quotaText=quotaPurchaseCopy(locale),quotaCopy=subscriptionQuotaCopy(locale);
   const epoch = useRef(0);
   const accountIdentity=useRef<AuthIdentity|null>(null);
@@ -125,7 +124,7 @@ export default function Account({ callback = false, locale = 'zh-CN', copy = {},
         <div className="account-identity"><span className="account-avatar" aria-hidden="true">{Array.from(me.user.name)[0]?.toUpperCase()}</span><div><p className="account-caption">{t("账户信息")}</p><h2>{me.user.name}</h2></div><span className="account-plan" data-plus={me.entitlements.plan!=='free'}>{me.entitlements.plan==='free'?t("普通账户"):me.entitlements.plan_name??me.entitlements.plan}</span><button className="account-signout" disabled={busy} onClick={() => void action(async () => { await signOut(); })}>{t("退出登录")}</button></div>
         <div className="account-meta">
           {me.entitlements.plan!=='free'&&me.entitlements.plus_expires_at&&<p className="account-expiry">{t("会员有效期至")} <time dateTime={me.entitlements.plus_expires_at}>{date(me.entitlements.plus_expires_at,locale)}</time>{t("（北京时间）")}</p>}
-          {me.entitlements.hourly_image_rate_limit&&<p className="account-rate-limit">{benefitText.hourly(me.entitlements.hourly_image_rate_limit.limit)}</p>}
+          {me.entitlements.hourly_image_rate_limit&&<p className="account-rate-limit">{hourlyLimitCopy(me.entitlements.hourly_image_rate_limit.limit,locale)}</p>}
           {me.entitlements.service_plan&&<p>{quotaText.currentService.replace('{0}',me.entitlements.service_plan==='free'?t('普通账户'):me.entitlements.service_plan)}</p>}
         </div>
       </section>

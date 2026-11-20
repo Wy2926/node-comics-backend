@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Setara bulanan",
-    "save": "Hemat ≈{n}% setiap tahun",
-    "saving": "Hemat {a} dibandingkan dengan 12 pembayaran bulanan",
-    "billed": "Ditagih {a} per tahun",
-    "total": "12 pembayaran bulanan",
-    "cancel": "Batalkan sebelum perpanjangan berikutnya."
+    "save": "Hemat ≈{n}% setiap tahun"
   },
   "publishedPricing": {
-    "label": "Harga PLUS / Pro yang dipublikasikan · dolar AS (USD)",
-    "monthly": "Bulanan",
-    "yearly": "Tahunan",
-    "annualPayment": "Satu pembayaran setiap tahun. Diperpanjang otomatis.",
     "loading": "Memeriksa ketersediaan pembelian…",
     "unavailable": "Langganan online saat ini tidak tersedia",
     "error": "Tidak dapat mengonfirmasi ketersediaan pembelian. Harap segarkan. Harga yang dipublikasikan tetap terlihat.",
-    "unconfirmedTiming": "Penawaran saat ini menentukan ketersediaan pembelian. Segarkan halaman ini atau periksa langganan di situs web atau akun ekstensi Anda.",
-    "checking": "Menunggu ketersediaan pembelian",
-    "noScript": "Aktifkan JavaScript untuk memeriksa ketersediaan pembelian saat ini.",
     "tax": "Pajak dan jumlah akhir ditampilkan saat checkout."
   },
   "billing": {
-    "plan": "Paket berlangganan",
     "month": "bulan",
     "year": "tahun",
-    "unavailable": "Langganan belum tersedia",
     "loading": "Memuat paket…",
-    "error": "Tidak dapat memuat paket. Silakan muat ulang.",
     "classic": "Terjemahan tanpa batas",
     "renewMonthly": "Diperpanjang setiap bulan.",
     "renewAnnual": "Diperpanjang setiap tahun."
   },
-  "billingBenefits": {
-    "hourly": "Hingga {n} halaman terjemahan baru dalam setiap periode bergulir 60 menit",
-    "trial": "Akun baru yang memenuhi syarat dapat mencoba selama {d} hari. Kartu diperlukan.",
-    "subscribe": "Dapatkan {name}",
-    "description": "Terjemahan dengan batas permintaan terjemahan baru per jam.",
-    "intro": "Pilih paket terjemahan untuk menggunakan manfaat langganan Anda di ekstensi."
-  },
+  "hourly": "Hingga {n} halaman terjemahan baru dalam setiap periode bergulir 60 menit",
   "manage": "Kelola langganan",
   "statuses": [
     "Aktif",
@@ -218,13 +198,7 @@ export const commerce = {
       "lite": "Akses awal ke fitur-fitur lanjutan"
     },
     "note": "Lihat catatan rilis untuk fitur baru."
-  },
-  "billingCycle": [
-    "Bulanan",
-    "Tahunan",
-    "Ditagih setiap bulan",
-    "Ditagih setiap tahun"
-  ]
+  }
 };
 
 export default { translate, uninstall, paymentSuccess, project, commerce };

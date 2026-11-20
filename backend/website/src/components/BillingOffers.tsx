@@ -5,8 +5,8 @@ import {comparisonCopy,comparisonRows,extraPagesCopy,paidComparisonValue} from '
 import {pricingHighlightsCopy} from '../i18n/pricing-highlights';
 import {checkoutStatusCopy} from '../i18n/commerce';
 import {publishedSubscriptions,publishedPacks,publishedCurrency} from '../data/published-plans';
-import BillingCycle,{type BillingInterval} from './BillingCycle';
-import {membershipIntervals,membershipPricing} from '../lib/billing-cycle';
+import BillingCycle from './BillingCycle';
+import {membershipIntervals,membershipPricing,type BillingInterval} from '../lib/billing-cycle';
 import {PlanPrice,PublishedPurchaseAvailability} from './PublishedPlanPricing';
 import PriceAmount from './PriceAmount';
 import CheckoutButton, { type CheckoutCopy } from './CheckoutButton';
@@ -85,7 +85,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
   const recoveries=[recurring,pending&&!plans.some(offer=>offer.id===pending.id&&(!billing||!membershipCheckoutBlocked(billing,offer)))?pending:undefined].filter(price=>!!price);
   const recoverSelected=!!billing&&/^[\w-]{1,36}$/.test(selectedPrice)&&
     (!findCheckoutOffer(billing,selectedPrice)||
-      !!requested&&isOneTimePrice(requested)&&membershipCheckoutBlocked(billing,requested));
+       !!requested&&membershipCheckoutBlocked(billing,requested));
   const rows=comparisonRows(locale,0).filter(row=>row.key==='model'||row.key==='rate'||row.key==='priority');
   return <div className="pricing-comparison">
     <BillingCycle offers={display} value={cadence} onChange={value=>{setPreferred(value);setSelectedPrice('');}} locale={locale}/>
@@ -114,7 +114,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
         <div className="plan-allowance"><span>{prepaid.allowance}</span><strong className="subscription-allowance">{offerBenefits(offer,locale)}</strong>{extra&&<p className="plan-difference">{extra}</p>}</div>
         <div className="subscription-purchase">
         {offer.channels.length>0?<>
-        {managed?<a className="button" href={accountHref}>{manageLabel(locale)} ↗</a>:<CheckoutButton priceId={offer.id} accountHref={accountHref} label={pending?.id===offer.id?checkoutCopy.resume??prepaid.buy.replace('{0}',offer.name):prepaid.buy.replace('{0}',offer.name)} copy={buttonCopy} methods={checkoutMethods(offer,locale,billing)} onEmbed={openCheckout} disabled={billing===undefined||billing?.enabled===false||!!recurring&&pending?.id!==offer.id}/>}
+        {managed?<a className="button" href={accountHref}>{manageLabel(locale)} ↗</a>:<CheckoutButton priceId={offer.id} accountHref={accountHref} label={(pending?.id===offer.id?checkoutCopy.resume:undefined)??prepaid.buy.replace('{0}',offer.name)} copy={buttonCopy} methods={checkoutMethods(offer,locale,billing)} onEmbed={openCheckout} disabled={billing===undefined||billing?.enabled===false||!!recurring&&pending?.id!==offer.id}/>}
         <p className="trial-note">{prepaid.notice} {publishedPricingCopy(locale).tax}</p>
         </>:<PublishedPurchaseAvailability locale={locale} name={offer.name} state={availability}/>}
         </div>
@@ -126,7 +126,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
     <p className="comparison-note">{prepaid.quotaRule}</p>
     <p className="comparison-note">{comparison.note}</p>
     {recoverSelected&&!recoveries.some(price=>price.id===selectedPrice)&&<div className="billing-recovery"><CheckoutButton priceId={selectedPrice} accountHref={accountHref} label={checkoutCopy.resume??retry} copy={buttonCopy} onEmbed={openCheckout} showDisclosure={false} continueAfterLogin={false}/></div>}
-    <QuotaOffers preview locale={locale} offers={billing?.quota_offers??catalog?.quota_offers??(error?[]:publishedPacks)} billing={billing} blocked={billing===undefined||billing?.enabled===false} accountHref={accountHref} checkoutCopy={buttonCopy} onEmbed={openCheckout}/>
+    <QuotaOffers locale={locale} offers={billing?.quota_offers??catalog?.quota_offers??(error?[]:publishedPacks)} billing={billing} blocked={billing===undefined||billing?.enabled===false} accountHref={accountHref} checkoutCopy={buttonCopy} onEmbed={openCheckout}/>
     {checkout&&<CreemCheckout purchase={checkout} locale={locale} successHref={accountHref.replace(/account\/$/,'payment/success/')} onClose={()=>setCheckout(null)}/>}
   </div>;
 }

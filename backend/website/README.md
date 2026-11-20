@@ -10,9 +10,9 @@ npm run build
 npm run preview
 ```
 
-开发地址 `http://127.0.0.1:4321`。完整模拟账户流程先构建，再从仓库根运行 `python backend/tests/manual_website_server.py`，使用独立的 `4322` 端口。
+开发地址 `http://127.0.0.1:4321`。验证付款流程：构建并启动 `npm run preview`，再从仓库根运行 `node scripts/verify_website_checkout.mjs`。使用本地模拟订单，不会扣款。
 
-付款设计体验：`npm run dev:checkout` 后打开 `http://127.0.0.1:5193/`。复用官网付款窗口；收银表单、支付方式和回执均为本机模拟，不需要账户或密钥。
+付款设计体验：`npm run dev:checkout` 后打开 `http://127.0.0.1:5193/`。账户验收共用此服务，从仓库根运行 `node scripts/verify_website_account.mjs`。
 
 - 语言与文案：`src/i18n/`；公开页面同步 17 语。
 - 域名与商店：`src/data/site.ts`；安装包：`../extension-release.json`。

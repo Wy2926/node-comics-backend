@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Umgerechnet pro Monat",
-    "save": "Bei jährlicher Zahlung ≈{n}% sparen",
-    "saving": "Sparen Sie {a} im Vergleich zu 12 monatlichen Zahlungen",
-    "billed": "Jährliche Zahlung: {a}",
-    "total": "12 monatliche Zahlungen",
-    "cancel": "Kündigen Sie vor Ihrer nächsten Verlängerung."
+    "save": "Bei jährlicher Zahlung ≈{n}% sparen"
   },
   "publishedPricing": {
-    "label": "Veröffentlichte PLUS / Pro Preise · US-Dollar (USD)",
-    "monthly": "Monatlich",
-    "yearly": "Jährlich",
-    "annualPayment": "Eine jährliche Zahlung. Verlängert sich automatisch.",
     "loading": "Kaufverfügbarkeit prüfen…",
     "unavailable": "Online-Abonnements sind derzeit nicht verfügbar",
     "error": "Die Kaufverfügbarkeit kann nicht bestätigt werden. Bitte aktualisieren. Veröffentlichte Preise bleiben sichtbar.",
-    "unconfirmedTiming": "Aktuelle Angebote bestimmen die Kaufverfügbarkeit. Aktualisieren Sie diese Seite oder überprüfen Sie die Abonnements auf Ihrer Website oder Ihrem Erweiterungskonto.",
-    "checking": "Warten auf Kaufverfügbarkeit",
-    "noScript": "Aktivieren Sie JavaScript, um die aktuelle Kaufverfügbarkeit zu prüfen.",
     "tax": "Steuern und der Endbetrag werden an der Kasse angezeigt."
   },
   "billing": {
-    "plan": "Abonnementplan",
     "month": "Monat",
     "year": "Jahr",
-    "unavailable": "Abonnements sind noch nicht verfügbar",
     "loading": "Pläne werden geladen…",
-    "error": "Pläne können nicht geladen werden. Bitte aktualisieren.",
     "classic": "Übersetzung ohne Gesamtseitenlimit",
     "renewMonthly": "Wird monatlich erneuert.",
     "renewAnnual": "Verlängert sich jährlich."
   },
-  "billingBenefits": {
-    "hourly": "Bis zu {n} neue Übersetzungsseiten in jedem gleitenden Stundenfenster",
-    "trial": "Berechtigte Erstnutzer erhalten eine Testphase von {d} Tagen. Eine Karte ist erforderlich.",
-    "subscribe": "Holen Sie sich {name}",
-    "description": "Übersetzung mit einem stündlichen Limit für neue Übersetzungsanfragen.",
-    "intro": "Wählen Sie einen Übersetzungsplan, um Ihre Abonnementvorteile in der Erweiterung zu nutzen."
-  },
+  "hourly": "Bis zu {n} neue Übersetzungsseiten in jedem gleitenden Stundenfenster",
   "manage": "Abonnement verwalten",
   "statuses": [
     "Aktiv",
@@ -218,13 +198,7 @@ export const commerce = {
       "lite": "Frühzeitiger Zugriff auf erweiterte Funktionen"
     },
     "note": "Neue Funktionen finden Sie in den Versionshinweisen."
-  },
-  "billingCycle": [
-    "Monatlich",
-    "Jährlich",
-    "Wird jeden Monat in Rechnung gestellt",
-    "Jährliche Abrechnung"
-  ]
+  }
 };
 
 export default { translate, uninstall, paymentSuccess, project, commerce };

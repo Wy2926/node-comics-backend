@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Aylık eşdeğer",
-    "save": "Yıllık ödemede yaklaşık %{n} tasarruf",
-    "saving": "12 aylık ödemeye kıyasla {a} tasarruf",
-    "billed": "Yılda {a} tahsil edilir",
-    "total": "12 aylık ödeme",
-    "cancel": "Bir sonraki yenilemenizden önce iptal edin."
+    "save": "Yıllık ödemede yaklaşık %{n} tasarruf"
   },
   "publishedPricing": {
-    "label": "Yayınlanan PLUS / Pro fiyatları · ABD doları (USD)",
-    "monthly": "Aylık",
-    "yearly": "Yıllık",
-    "annualPayment": "Yılda tek ödeme. Otomatik yenilenir.",
     "loading": "Abonelik satın alınabilirliği kontrol ediliyor…",
     "unavailable": "Çevrimiçi abonelikler şu anda kullanılamıyor",
     "error": "Aboneliğin satın alınabilirliği doğrulanamadı. Lütfen sayfayı yenileyin. Yayımlanan fiyatlar görünmeye devam eder.",
-    "unconfirmedTiming": "Satın alınabilecek abonelikler mevcut tekliflere göre belirlenir. Sayfayı yenileyin veya web sitesi ya da uzantı hesabınızdaki abonelikleri kontrol edin.",
-    "checking": "Satın alınabilirlik doğrulanıyor",
-    "noScript": "Mevcut satın alma durumunu kontrol etmek için JavaScript'i etkinleştirin.",
     "tax": "Vergiler ve son tutar ödeme sırasında gösterilir."
   },
   "billing": {
-    "plan": "Abonelik planı",
     "month": "ay",
     "year": "yıl",
-    "unavailable": "Abonelikler henüz kullanılamıyor",
     "loading": "Planlar yükleniyor…",
-    "error": "Planlar yüklenemiyor. Lütfen yenileyin.",
     "classic": "Sınırsız çeviri",
     "renewMonthly": "Aylık olarak yenilenir.",
     "renewAnnual": "Yıllık yenilenir."
   },
-  "billingBenefits": {
-    "hourly": "Her kayan bir saatlik dönemde en fazla {n} yeni çeviri sayfası",
-    "trial": "Koşulları sağlayan ilk kez kullanıcılar {d} gün deneyebilir. Kart gereklidir.",
-    "subscribe": "{name} alın",
-    "description": "Yeni çeviri istekleri için saatlik sınırı olan çeviri.",
-    "intro": "Uzantıdaki abonelik avantajlarınızdan yararlanmak için bir çeviri planı seçin."
-  },
+  "hourly": "Her kayan bir saatlik dönemde en fazla {n} yeni çeviri sayfası",
   "manage": "Aboneliği yönet",
   "statuses": [
     "Etkin",
@@ -218,13 +198,7 @@ export const commerce = {
       "lite": "Gelişmiş özelliklere erken erişim"
     },
     "note": "Yeni özellikler için sürüm notlarına bakın."
-  },
-  "billingCycle": [
-    "Aylık",
-    "Yıllık",
-    "Her ay faturalandırılır",
-    "Yıllık olarak faturalandırılır"
-  ]
+  }
 };
 
 export default { translate, uninstall, paymentSuccess, project, commerce };

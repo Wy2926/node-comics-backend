@@ -13,8 +13,7 @@ from types import SimpleNamespace
 from urllib.parse import urlencode
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-import asyncio
+from fastapi.responses import JSONResponse, RedirectResponse
 from app import website
 
 ORIGIN = 'http://127.0.0.1:4322'
@@ -23,7 +22,7 @@ app = FastAPI()
 codes = {}
 tokens = set()
 refreshes = set()
-state = {'me_failure': 0, 'refresh_failure': 0, 'signed_out': False, 'checkout_count': 0, 'exchange_count': 0, 'cancel_at': None, 'subscribed': False}
+state = {'me_failure': 0, 'refresh_failure': 0, 'exchange_count': 0}
 
 
 @app.post('/test/reset')
@@ -45,17 +44,8 @@ def config():
 
 
 @app.get('/v1/billing/catalog')
-async def catalog():
-    # Loopback acceptance data only. Never calls a billing provider.
-    await asyncio.sleep(min(15, max(0, state.get('catalog_delay_ms', 0) / 1000)))
-    month = {'id':'lite-month','plan_id':'lite','plan_revision_id':'fixture-lite',
-        'name':'Lite','currency':'usd','unit_amount':599,'interval':'month',
-        'hourly_image_limit':1200,'monthly_classic_pages':0,'trial_days':7,
-        'trial_classic_pages':0,'channels':[{'provider':'stripe','binding_id':'fixture',
-            'trial_days':7,'trial_classic_pages':0}]}
-    offers = [month, {**month, 'id':'lite-year', 'interval':'year', 'unit_amount':5999}]
-    return JSONResponse({'offers':state.get('catalog_offers', offers)},
-        status_code=state.get('catalog_status', 200))
+def catalog():
+    return {'offers': [], 'quota_offers': []}
 
 
 @app.get('/test-identity/auth')
@@ -113,30 +103,16 @@ def me(request: Request):
         return JSONResponse({'error':{'message':'账户服务暂时不可用，请重试。'}}, status_code=state['me_failure'] or 401)
     return {'user':{'id':'fixture-reader','name':'Demo Reader'},'entitlements':{'plan':'plus',
         'plus_expires_at':'2026-10-20T00:00:00Z','image_rate_limit':{'limit':100},
-        'modes':{'classic':{'allowed':True,'unlimited':True,'quota':None},'classic':{'allowed':True,'unlimited':False,'quota':{'available':287,'granted':300,'reserved':3}}}}}
+        'modes':{'classic':{'allowed':True,'unlimited':False,'quota':{'available':287,'granted':300,'reserved':3}}}}}
 
 
 @app.get('/v1/billing/status')
 def billing(request: Request):
     if not authorized(request):
         return JSONResponse({},status_code=401)
-    return {'enabled':True,'trial_eligible':True,'subscription_checkout':None,'subscription':
-        {'status':'active','next_billed_at':'2026-10-20T00:00:00Z','cancel_at':state['cancel_at']} if state['subscribed'] else None}
-
-
-@app.post('/v1/billing/checkouts')
-def checkout(request: Request):
-    if not authorized(request):
-        return JSONResponse({},status_code=401)
-    state['checkout_count'] += 1
-    return {'checkout_url':'https://checkout.stripe.com/c/pay/cs_test_fixture'}
-
-
-@app.post('/v1/billing/portal')
-def portal(request: Request):
-    if not authorized(request):
-        return JSONResponse({},status_code=401)
-    return {'url':'https://billing.stripe.com/p/session/fixture'}
+    return {**catalog(), 'enabled':True, 'providers':[], 'environment':'test', 'provider':None,
+        'trial_eligible':False, 'pending_checkout':None, 'subscription_checkout':None, 'subscription':None,
+        'entitlement_expires_at':None, 'gift':None}
 
 
 @app.post('/v1/billing/sync')

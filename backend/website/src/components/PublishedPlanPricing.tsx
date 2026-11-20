@@ -5,8 +5,6 @@ import {pricingCopy,publishedPricingCopy} from '../lib/pricing';
 import {quarterlyCopy} from '../i18n/billing-cadence';
 import PriceAmount from './PriceAmount';
 
-export type PurchaseAvailability='loading'|'unavailable'|'error';
-
 // The large figure always means the actual amount charged for the selected period.
 // Published numbers never acquire an API price ID or enable a checkout action.
 export function PlanPrice({locale,offer,offers=[]}:{locale:string;offer:BillingOffer;offers?:BillingOffer[]}){
@@ -31,7 +29,7 @@ export function PlanPrice({locale,offer,offers=[]}:{locale:string;offer:BillingO
   </div>;
 }
 
-export function PublishedPurchaseAvailability({locale,state,name}:{locale:string;state:PurchaseAvailability;name:string}){
+export function PublishedPurchaseAvailability({locale,state,name}:{locale:string;state:'loading'|'unavailable'|'error';name:string}){
   const published=publishedPricingCopy(locale),prepaid=prepaidMembershipCopy(locale);
   return <div className="billing-availability" data-state={state}>
     <button className="button" type="button" disabled>{prepaid.buy.replace('{0}',name)}</button>

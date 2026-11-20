@@ -118,43 +118,23 @@ export const project = {
 export const commerce = {
   "pricing": {
     "monthly": "Equivalente mensal",
-    "save": "Economize ≈{n}% anualmente",
-    "saving": "Economize {a} em comparação com 12 pagamentos mensais",
-    "billed": "Faturado {a} por ano",
-    "total": "12 pagamentos mensais",
-    "cancel": "Cancele antes da sua próxima renovação."
+    "save": "Economize ≈{n}% anualmente"
   },
   "publishedPricing": {
-    "label": "Preços PLUS / Pro publicados · Dólares americanos (USD)",
-    "monthly": "Mensalmente",
-    "yearly": "Anualmente",
-    "annualPayment": "Um pagamento anual. Renova automaticamente.",
     "loading": "Verificando disponibilidade de compra…",
     "unavailable": "Assinaturas online não estão disponíveis no momento",
     "error": "Não foi possível confirmar a disponibilidade da compra. Atualize. Os preços publicados permanecem visíveis.",
-    "unconfirmedTiming": "As ofertas atuais determinam a disponibilidade de compra. Atualize esta página ou verifique as assinaturas em seu site ou conta de extensão.",
-    "checking": "Aguardando disponibilidade de compra",
-    "noScript": "Ative o JavaScript para verificar a disponibilidade atual de compras.",
     "tax": "Os impostos e o valor final são mostrados na finalização da compra."
   },
   "billing": {
-    "plan": "Plano de assinatura",
     "month": "mês",
     "year": "ano",
-    "unavailable": "As assinaturas ainda não estão disponíveis",
     "loading": "Carregando planos…",
-    "error": "Não foi possível carregar os planos. Atualize.",
     "classic": "Tradução ilimitada",
     "renewMonthly": "Renova mensalmente.",
     "renewAnnual": "Renovação anual."
   },
-  "billingBenefits": {
-    "hourly": "Até {n} novas páginas de tradução por janela móvel de uma hora",
-    "trial": "Contas novas elegíveis podem testar por {d} dias. É necessário um cartão.",
-    "subscribe": "Obtenha {name}",
-    "description": "Tradução com limite de hora em novas solicitações de tradução.",
-    "intro": "Escolha um plano de tradução para usar os benefícios da sua assinatura na extensão."
-  },
+  "hourly": "Até {n} novas páginas de tradução por janela móvel de uma hora",
   "manage": "Gerenciar assinatura",
   "statuses": [
     "Ativo",
@@ -218,11 +198,5 @@ export const commerce = {
       "lite": "Acesso antecipado a recursos avançados"
     },
     "note": "Consulte as notas de versão para conhecer os novos recursos."
-  },
-  "billingCycle": [
-    "Mensalmente",
-    "Anualmente",
-    "Faturado todo mês",
-    "Faturado anualmente"
-  ]
+  }
 };

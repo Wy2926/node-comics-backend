@@ -1,5 +1,5 @@
 import {quarterlyCopy} from '../i18n/billing-cadence';
-import { commerceCopy, formatCopy } from '../i18n/commerce';
+import {commerceCopy} from '../i18n/commerce';
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
 import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
@@ -66,27 +66,23 @@ export function subscriptionStatusLabel(status:string,locale:string){
   };
   return (commerceCopy(locale)?.statuses??text[locale]??text.en)[index[status]??7];
 }
-const labels:Record<string,{plan:string;month:string;year:string;unavailable:string;loading:string;error:string;classic:string;renew:(annual:boolean)=>string}>={
-  'zh-CN':{plan:'订阅套餐',month:'月',year:'年',unavailable:'订阅暂未开放',loading:'正在读取套餐…',error:'暂时无法读取套餐，请刷新重试。',classic:'翻译不限页数',renew:a=>a?'按年自动续费。':'按月自动续费。'},
-  'zh-TW':{plan:'訂閱方案',month:'月',year:'年',unavailable:'訂閱尚未開放',loading:'正在讀取方案…',error:'暫時無法讀取方案，請重新整理。',classic:'翻譯不限頁數',renew:a=>a?'按年自動續訂。':'按月自動續訂。'},
-  en:{plan:'Subscription plan',month:'month',year:'year',unavailable:'Subscriptions are not available yet',loading:'Loading plans…',error:'Unable to load plans. Please refresh.',classic:'Unlimited translation',renew:a=>a?'Renews annually.':'Renews monthly.'},
-  ja:{plan:'購読プラン',month:'月',year:'年',unavailable:'購読受付は準備中です',loading:'プランを読み込み中…',error:'プランを取得できません。再読み込みしてください。',classic:'翻訳はページ数無制限',renew:a=>a?'毎年自動更新。':'毎月自動更新。'},
-  ko:{plan:'구독 요금제',month:'월',year:'년',unavailable:'구독 서비스 준비 중',loading:'요금제 불러오는 중…',error:'요금제를 불러올 수 없습니다. 새로고침해 주세요.',classic:'번역 페이지 무제한',renew:a=>a?'매년 자동 갱신됩니다.':'매월 자동 갱신됩니다.'},
+const labels:Record<string,{month:string;year:string;loading:string;classic:string;renew:(annual:boolean)=>string}>={
+  'zh-CN':{month:'月',year:'年',loading:'正在读取套餐…',classic:'翻译不限页数',renew:a=>a?'按年自动续费。':'按月自动续费。'},
+  'zh-TW':{month:'月',year:'年',loading:'正在讀取方案…',classic:'翻譯不限頁數',renew:a=>a?'按年自動續訂。':'按月自動續訂。'},
+  en:{month:'month',year:'year',loading:'Loading plans…',classic:'Unlimited translation',renew:a=>a?'Renews annually.':'Renews monthly.'},
+  ja:{month:'月',year:'年',loading:'プランを読み込み中…',classic:'翻訳はページ数無制限',renew:a=>a?'毎年自動更新。':'毎月自動更新。'},
+  ko:{month:'월',year:'년',loading:'요금제 불러오는 중…',classic:'번역 페이지 무제한',renew:a=>a?'매년 자동 갱신됩니다.':'매월 자동 갱신됩니다.'},
 };
 export function billingCopy(locale:string) {
  const copy=commerceCopy(locale)?.billing;
  return copy ? {...copy,renew:(annual:boolean)=>annual?copy.renewAnnual:copy.renewMonthly} : labels[locale]??labels.en;
 }
-const benefitLabels = {
-  'zh-CN': {hourly:(n:number)=>`每滚动小时最多新增 ${n.toLocaleString('zh-CN')} 页翻译`,trial:(d:number)=>`符合条件的首次账户可绑卡试用 ${d} 天。`,subscribe:(name:string)=>`开通 ${name}`},
-  'zh-TW': {hourly:(n:number)=>`每滾動小時最多新增 ${n.toLocaleString('zh-TW')} 頁翻譯`,trial:(d:number)=>`符合資格的首次帳戶可綁卡試用 ${d} 天。`,subscribe:(name:string)=>`訂閱 ${name}`},
-  en: {hourly:(n:number)=>`Up to ${n.toLocaleString('en')} new translation pages per rolling hour`,trial:(d:number)=>`Eligible first-time accounts can try ${d} days. Card required.`,subscribe:(name:string)=>`Get ${name}`},
-  ja: {hourly:(n:number)=>`直近1時間の新規翻訳受付は最大 ${n.toLocaleString('ja')} ページ`,trial:(d:number)=>`対象の初回アカウントはカード登録で ${d} 日間体験できます。`,subscribe:(name:string)=>`${name} に登録`},
-  ko: {hourly:(n:number)=>`최근 1시간 동안 새 번역 요청 최대 ${n.toLocaleString('ko')}페이지`,trial:(d:number)=>`조건에 맞는 첫 계정은 카드 등록으로 ${d}일간 체험할 수 있습니다.`,subscribe:(name:string)=>`${name} 구독`},
+const hourlyLabels:Record<string,string>={
+  'zh-CN':'每滚动小时最多新增 {n} 页翻译','zh-TW':'每滾動小時最多新增 {n} 頁翻譯',
+  en:'Up to {n} new translation pages per rolling hour',ja:'直近1時間の新規翻訳受付は最大 {n} ページ',ko:'최근 1시간 동안 새 번역 요청 최대 {n}페이지',
 };
-export function billingBenefitCopy(locale:string) {
- const copy=commerceCopy(locale)?.billingBenefits;
- return copy ? {...copy,hourly:(n:number)=>formatCopy(copy.hourly,{n:n.toLocaleString(locale)}),trial:(d:number)=>formatCopy(copy.trial,{d}),subscribe:(name:string)=>formatCopy(copy.subscribe,{name})} : benefitLabels[locale as keyof typeof benefitLabels]??benefitLabels.en;
+export function hourlyLimitCopy(limit:number,locale:string){
+  return (commerceCopy(locale)?.hourly??hourlyLabels[locale]??hourlyLabels.en).replace('{n}',limit.toLocaleString(locale));
 }
 export function offerBenefits(offer:Pick<BillingPrice,'hourly_image_limit'> & Partial<Pick<BillingPrice,'interval'|'quota_pages'|'monthly_classic_pages'>>,locale:string){
   if(offer.interval==='once')return quotaPurchaseCopy(locale).pages.replace('{0}',(offer.quota_pages??0).toLocaleString(locale));
@@ -96,9 +92,6 @@ export function renewalCopy(offer:Pick<BillingPrice,'interval'|'billing_type'>,l
   if(offer.interval==='once')return quotaPurchaseCopy(locale).once;
   if(isOneTimePrice(offer))return prepaidMembershipCopy(locale).notice;
   return offer.interval==='quarter'?quarterlyCopy(locale).renewal:billingCopy(locale).renew(offer.interval==='year');
-}
-export function trialCopy(days:number,locale:string){
-  return billingBenefitCopy(locale).trial(days);
 }
 export function amountParts(offer:Pick<BillingPrice,'currency'|'unit_amount'>,locale:string){
   const formatter=new Intl.NumberFormat(locale,{style:'currency',currency:offer.currency});
@@ -115,9 +108,7 @@ export function annualSavings(offer:BillingOffer,offers:BillingOffer[]){
   const monthly=comparable.filter(p=>p.interval==='month');
   const baseline=monthly.length?monthly:comparable.filter(p=>p.interval==='quarter');
   if(!baseline.length)return null;
-  return annualSavingsForAmounts(Math.min(...baseline.map(p=>p.unit_amount/(p.interval==='quarter'?3:1))),offer.unit_amount);
-}
-export function annualSavingsForAmounts(monthly:number,yearly:number){
-  const regular=monthly*12,saved=regular-yearly;
-  return monthly>0&&yearly>=0&&saved>0?{regular,saved,percent:Math.round(saved/regular*1000)/10}:null;
+  const regular=Math.min(...baseline.map(p=>p.unit_amount*(p.interval==='quarter'?4:12)));
+  const saved=regular-offer.unit_amount;
+  return offer.unit_amount>=0&&saved>0?{regular,saved,percent:Math.round(saved/regular*1000)/10}:null;
 }

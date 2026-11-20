@@ -4,7 +4,6 @@ import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
 import {pricingCopy} from '../lib/pricing';
 import {membershipIntervals,type BillingInterval} from '../lib/billing-cycle';
 
-export type {BillingInterval} from '../lib/billing-cycle';
 export default function BillingCycle({offers,value,onChange,locale}:{offers:BillingOffer[];value:BillingInterval;onChange:(value:BillingInterval)=>void;locale:string}){
   const id=useId(),prepaid=prepaidMembershipCopy(locale);
   const annualOffers=offers.filter(p=>p.interval==='year');

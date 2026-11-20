@@ -29,11 +29,10 @@ def test_legacy_price_request_infers_payment_type(interval, expected):
     assert PriceRequest(**payload).billing_type == expected
 
 
-@pytest.mark.parametrize('interval,billing_type', [('once', 'recurring')])
-def test_invalid_payment_duration_combinations_are_rejected(interval, billing_type):
+def test_page_pack_cannot_be_recurring():
     from app.billing_catalog import PriceRequest
     with pytest.raises(ValidationError):
-        PriceRequest(**price_request(interval=interval, billing_type=billing_type))
+        PriceRequest(**price_request(interval='once', billing_type='recurring'))
 
 
 def admin_auth(client):

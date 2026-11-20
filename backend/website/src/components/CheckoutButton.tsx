@@ -28,7 +28,7 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
       if(current!==epoch.current)return;
       if (!signedIn) {
         if (!allowLogin) throw Error('LOGIN_REQUIRED');
-        const path = `${accountHref.replace(/account\/$/, 'pricing/')}?price=${encodeURIComponent(id)}`;
+         const path = `${pricing}?price=${encodeURIComponent(id)}`;
         rememberCheckout(sessionStorage, path, id);
         try { await signIn(path); }
         catch (error) { sessionStorage.removeItem(checkoutIntentKey); throw error; }

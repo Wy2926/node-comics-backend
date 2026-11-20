@@ -18,8 +18,8 @@ sys.path[:0] = [str(ROOT / 'backend'), str(ROOT)]
 DATABASE_NAME = 'nodecomics_creem_manual_test'
 SYSTEM_SUBJECT = 'system:creem-manual-test-catalog'
 QUOTES = {
-    'MONTH': ('creem-test-lite-month-v1', 'creem-test-lite-v1', 'month', 599),
-    'YEAR': ('creem-test-lite-year-v1', 'creem-test-lite-v1', 'year', 5999),
+    'MONTH': ('creem-test-lite-month-prepaid-v1', 'creem-test-lite-v1', 'month', 599),
+    'YEAR': ('creem-test-lite-year-prepaid-v1', 'creem-test-lite-v1', 'year', 5999),
     'PERMANENT': ('creem-test-permanent-price-v1', 'creem-test-permanent-v1', 'once', 599),
     'EXPIRING': ('creem-test-expiring-price-v1', 'creem-test-expiring-v1', 'once', 599),
 }
@@ -52,8 +52,8 @@ def require_database(connection):
     # The live database name also catches connection-string query overrides.
     if connection.dialect.name != 'postgresql' or connection.scalar(text('SELECT current_database()')) != DATABASE_NAME:
         raise SeedError('CREEM_TEST_DATABASE_REQUIRED')
-    from app.runtime import check_schema
-    from app.db import check_payment_environment
+    from app.db import check_payment_environment, check_schema, load_models
+    load_models()
     check_schema(connection)
     check_payment_environment(connection)
 
@@ -70,7 +70,7 @@ def seed_catalog(db, ids):
         if not isinstance(remote, dict) or remote.get('object') != 'product' or type(remote.get('price')) is not int:
             raise SeedError('CREEM_TEST_PRODUCT_INVALID')
         creem.approved_product(remote, ids[key], SimpleNamespace(unit_amount=amount, currency='usd', interval=interval,
-            billing_type='onetime' if interval == 'once' else 'recurring'), 0)
+            billing_type='onetime'), 0)
 
     catalog.lock_catalog(db)
     if db.get(BillingSettings, 1) is None:
@@ -96,9 +96,10 @@ def seed_catalog(db, ids):
             "monthly_classic_pages": 0 if product.get("quota_pages") else None}), db=db, actor=actor)
 
     for key, (price_id, revision_id, interval, amount) in QUOTES.items():
-        binding_id = 'creem-test-' + key.lower() + '-binding-v1'
+        # Prepaid memberships must not reuse a historical subscription binding.
+        binding_id = f'creem-test-{key.lower()}{"-prepaid" if interval != "once" else ""}-binding-v1'
         catalog.create_price(catalog.PriceRequest(id=price_id, plan_revision_id=revision_id,
-            environment='test', currency='usd', unit_amount=amount, interval=interval), db=db, actor=actor)
+            environment='test', currency='usd', unit_amount=amount, interval=interval, billing_type='onetime'), db=db, actor=actor)
         catalog.create_binding(price_id, catalog.BindingRequest(id=binding_id, provider='creem',
             environment='test', product_id=ids[key]), db=db, actor=actor)
         binding, price = db.get(BillingPriceBinding, binding_id), db.get(BillingPrice, price_id)

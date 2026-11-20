@@ -6,7 +6,7 @@ import { homeCopy } from '../src/i18n/home';
 import { translationCopy } from '../src/i18n/translate';
 import { commerceCopy } from '../src/i18n/commerce';
 import catalog from '../../app/catalog_defaults.json';
-import { billingCopy, billingBenefitCopy, offerBenefits, renewalCopy, trialCopy } from '../src/lib/billing';
+import { billingCopy, hourlyLimitCopy, offerBenefits, renewalCopy } from '../src/lib/billing';
 
 const retiredFeature = /redraw|重[绘繪]|再描画|다시\s*그리|neuzeich|redessin|redibuj|redesenh|ridisegn|przerys|перерис|перемал|yeniden\s*çiz|gambar\s+ulang|vẽ\s+lại/iu;
 const clean = (text: string, label: string) => assert.equal(retiredFeature.exec(text)?.[0], undefined, label);
@@ -60,13 +60,12 @@ test('all website locales omit the retired image feature from prose, metadata an
       workspace: translationCopy[locale], commerce: commerceCopy(locale),
     })) clean(JSON.stringify(copy) ?? '', `${locale}: ${name}`);
     clean(JSON.stringify(billingCopy(locale)), `${locale}: billing labels`);
-    clean(JSON.stringify(billingBenefitCopy(locale)), `${locale}: billing benefits`);
+    clean(hourlyLimitCopy(1200,locale), `${locale}: hourly limit`);
     for (const pages of [0, 300]) {
       const offer = { hourly_image_limit: 1200, monthly_classic_pages: pages, interval: 'year' as const };
       clean(offerBenefits(offer, locale), `${locale}: offer benefits`);
       clean(renewalCopy(offer, locale), `${locale}: renewal`);
     }
-    clean(trialCopy(7, locale), `${locale}: trial`);
   }
 });
 

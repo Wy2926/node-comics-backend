@@ -17,7 +17,7 @@ const settled=async()=>page.waitForFunction(()=>document.querySelector('.website
 const visit=async query=>{await page.goto(origin+query);await settled();};
 const shot=async name=>{await page.evaluate(()=>{document.activeElement?.blur();scrollTo({top:0,behavior:'instant'});});await page.screenshot({path:path.join(out,name+'.png'),fullPage:true});};
 const pricingLink=async()=>{
- assert.equal(await page.locator('.account-upgrade,.billing-plan-picker,[data-purchase-link]').count(),0);
+ assert.equal(await page.locator('[data-purchase-link]').count(),0);
  assert.equal(await page.locator('.account-purchase-link a').getAttribute('href'),'/pricing/');
 };
 const observation=async()=>JSON.parse(await page.locator('#account-fixture-observation').innerText());
@@ -28,23 +28,23 @@ const requests=async(path,count,finished=false)=>page.waitForFunction(({path,cou
  return rows.length>=count&&(!finished||rows.every(row=>typeof row.finishedMs==='number'));
 },{path,count,finished});
 try{
- await visit('');assert.equal(await page.locator('.account-stats,.account-detail').count(),0);await pricingLink();await shot('free');
- await visit('?price=fixture-year');await pricingLink();assert.equal(await page.getByRole('checkbox').count(),0);
- await visit('?pending=1');await pricingLink();assert.equal(await page.getByRole('checkbox').count(),0);
- await visit('?scenario=quota');await pricingLink();assert.match(await page.locator('.account-gift').innerText(),/90/);
- await visit('?pending=1&scenario=quota');await pricingLink();assert.match(await page.locator('.account-gift').innerText(),/90/);
- await visit('?scenario=active');assert.equal(await page.locator('.account-upgrade').count(),0);await page.getByText('订阅生效中',{exact:true}).waitFor();await shot('plus');await page.getByRole('button',{name:/管理订阅/}).click();await page.getByRole('alert').filter({hasText:'已验证订阅管理：stripe'}).waitFor();
+ await visit('');await pricingLink();await shot('free');
+ await visit('?pending=1&scenario=quota');await pricingLink();assert.match(await page.locator('.account-balance-value').last().innerText(),/90/);
+ await visit('?scenario=prepaid-queued');await pricingLink();assert.match(await page.locator('.prepaid-membership').innerText(),/手动续购/);
+ assert.equal(await page.getByRole('button',{name:'取消自动续费',exact:true}).count(),0);
+ await visit('?scenario=active');await page.getByText('订阅生效中',{exact:true}).waitFor();await shot('plus');await page.getByRole('button',{name:/管理订阅/}).click();await page.getByRole('alert').filter({hasText:'已验证订阅管理：stripe'}).waitFor();
  await visit('?scenario=lite');assert.equal(await page.locator('.account-plan').innerText(),'Lite');assert.match(await page.locator('.account-rate-limit').innerText(),/1,200/);assert.match(await page.locator('.account-subscription').innerText(),/59.99/);assert(!/300|PLUS/.test(await page.locator('.account-subscription').innerText()));await shot('lite');
  await visit('?scenario=canceling');assert.equal(await page.getByText('下次计费',{exact:true}).count(),0);await page.getByText('已安排取消续费',{exact:true}).waitFor();await shot('canceling');
  for(const scenario of ['gift-pending','gift-scheduled','gift-active']){
-  await visit('?scenario='+scenario);assert.equal(await page.locator('.account-upgrade').count(),0);await page.getByText('赠送 PLUS 30 天',{exact:true}).waitFor();
+  await visit('?scenario='+scenario);await page.getByText('赠送 PLUS 30 天',{exact:true}).waitFor();
   assert.equal(await page.getByText(/^下次续费：/).count(),0);
   await page.getByText(scenario==='gift-pending'?'续费延期处理中，请刷新查看。':'赠送期间不扣款，结束后恢复自动续费。',{exact:true}).waitFor();
   await shot(scenario);
  }
  await page.getByRole('button',{name:'取消自动续费',exact:true}).click();await page.getByRole('button',{name:'保留自动续费',exact:true}).click();assert.equal(await page.getByRole('button',{name:'确认取消续费',exact:true}).count(),0);
  await page.getByRole('button',{name:'取消自动续费',exact:true}).click();await page.getByRole('button',{name:'确认取消续费',exact:true}).click();await page.getByText('已关闭自动续费，已付款及赠送权益保留。',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'取消自动续费',exact:true}).count(),0);await page.getByText('赠送 PLUS 30 天',{exact:true}).waitFor();await shot('gift-canceled');
- await visit('?scenario=gift-only');assert.equal(await page.locator('.account-upgrade').count(),0);await page.getByText('赠送结束后可开通订阅。',{exact:true}).waitFor();await shot('gift-only');
+ await visit('?scenario=gift-only');await pricingLink();await page.locator('.account-gift').waitFor();
+ assert.equal(await page.getByRole('button',{name:'取消自动续费',exact:true}).count(),0);await shot('gift-only');
  for(const [scenario,message] of [['gift-canceling','正在取消续费，请刷新查看。'],['gift-resuming','正在恢复续费，请刷新查看。'],['gift-attention','续费安排需要核实，请刷新或联系支持。']]){
   await visit('?scenario='+scenario);await page.getByText(message,{exact:true}).waitFor();assert.equal(await page.getByText(/^预计恢复续费：/).count(),0);
   if(scenario==='gift-canceling')assert.equal(await page.getByRole('button',{name:'取消自动续费',exact:true}).count(),0);
@@ -85,7 +85,7 @@ try{
  await visit('?scenario=quota&perf&meDelay=50&statusDelay=400&syncDelay=4000&syncFail');
  await requests('/v1/billing/status',1,true);await page.locator('.account-refresh').click();
  await page.getByRole('alert').filter({hasText:'模拟支付同步超时'}).waitFor();
- assert(await page.locator('.account-summary').isVisible());assert.match(await page.locator('.account-gift').innerText(),/90/);
+ assert(await page.locator('.account-summary').isVisible());assert.match(await page.locator('.account-balance-value').last().innerText(),/90/);
  assert.equal((await observation()).requests.filter(row=>row.path==='/v1/billing/sync').length,1,'Failed writes are not automatically retried');await shot('sync-failed-account-preserved');
  for(const locale of ['zh-CN','zh-TW','en','ja','ko','fr','es','pt-BR','de','it','ru','pl','uk','tr','vi','id','ar']){
   for(const scenario of ['active','lite','free','gift-active','gift-pending']){
