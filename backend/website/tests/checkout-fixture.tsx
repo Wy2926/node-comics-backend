@@ -25,6 +25,6 @@ createRoot(document.getElementById('root')!).render(<main style={{maxWidth:1200,
   <h1>{t.pricing} · 隔离验收</h1><p>所有金额和数量仅为测试夹具。不连接真实身份或支付服务，响应丢失后不自动重发。</p>
   <p id="checkout-observation" role="status">等待操作</p><button type="button" onClick={()=>void signOut()}>模拟另一个标签页退出</button>
   <BillingOffers locale={locale} accountHref={localPath('/account/',locale)} downloadHref={localPath('/download/',locale)}
-    checkoutCopy={{busy:accountText('正在确认登录结果，请稍候…'),error:accountText('操作暂未完成，请重试或重新登录。'),before:accountText('继续前请阅读'),refund:accountText('订阅与退款说明'),renewal:accountText('，了解自动续费规则。'),resume:accountText('继续原结账')}}
+    checkoutCopy={{busy:accountText('正在确认登录结果，请稍候…'),error:accountText('操作暂未完成，请重试或重新登录。'),before:accountText('继续前请阅读'),refund:t.refund,resume:accountText('继续原结账')}}
     free={{name:t.freePlan,description:t.freePlanDescription,action:t.freeStart,note:t.freeNote,priceLabel:t.free}}/>
 </main>);

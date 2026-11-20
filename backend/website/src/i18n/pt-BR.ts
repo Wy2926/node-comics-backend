@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/pt-BR';
 import type { Dictionary } from './types';
 
-const membershipSummary = `A leitura local é gratuita. O plano Free permite traduzir 30 páginas por dia com os modelos básicos. PLUS: 2.500 páginas por mês, US$6,66 por trimestre ou US$23,99 por ano. Pro: 4.000 páginas por mês, US$9,99 por trimestre ou US$35,99 por ano. Ambos incluem os modelos básicos e modelos adicionais. Confira os modelos disponíveis e seus multiplicadores de consumo da cota na tela de tradução. Crédito mensal sem acúmulo nem teste. Pacotes sem validade: 3.500 páginas por US$5,99 ou 7.000 por US$9,99. Impostos e total no pagamento.`;
+const membershipSummary = `A leitura local é gratuita. O plano Free permite traduzir 30 páginas por dia com os modelos básicos. PLUS: 2.500 páginas por mês, US$2,99 por um mês, US$6,66 por três meses ou US$23,99 por um ano. Pro: 4.000 páginas por mês, US$3,99 por um mês, US$9,99 por três meses ou US$35,99 por um ano. Ambos incluem os modelos básicos e modelos adicionais. Confira os modelos disponíveis e seus multiplicadores de consumo da cota na tela de tradução. Crédito mensal sem acúmulo nem teste. Pagamento único, sem renovação automática. Pacotes sem validade: 3.500 páginas por US$5,99 ou 7.000 por US$9,99. Impostos e total no pagamento.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Registro de alterações",
     "privacy": "Política de privacidade",
     "terms": "Termos de serviço",
-    "refund": "Assinaturas e reembolsos",
+    "refund": "Compras e reembolsos",
     "home": "Página inicial",
     "skip": "Pular para o conteúdo",
     "navigation": "Navegação principal",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Abra uma história que você tenha o direito de ler. Traduza quando quiser e mantenha o original por perto.",
     "ctaButton": "Comece sua jornada de leitura",
     "pricingTitle": "Leia de graça. Escolha seu plano de tradução.",
-    "pricingDescription": "PLUS / Pro e pacotes sem validade. Pagamento trimestral ou anual, páginas mensais. Sem teste da assinatura.",
+    "pricingDescription": "Passes PLUS / Pro de um mês, três meses ou um ano e pacotes sem validade. Pagamento único, sem renovação automática nem teste. Páginas mensais.",
     "freePlan": "Grátis",
     "freePlanDescription": "Para ler um pouco todos os dias",
     "free": "grátis",
@@ -136,7 +136,7 @@ export default {
     "changelogDescription": "Acompanhe atualizações do tradutor de mangá, suporte a novos sites, compatibilidade de navegadores e correções de leitura. As aprovações das lojas Chrome, Edge e Firefox podem ser diferentes; verifique sua versão instalada.",
     "rss": "Acompanhe as atualizações via RSS",
     "accountTitle": "Minha conta",
-    "accountDescription": "Gerencie sua conta e assinatura. A tradução de imagens no site e a extensão compartilham a cota da sua conta.",
+    "accountDescription": "Confira a validade e o saldo de páginas e renove quando precisar. Uma conta para o site e a extensão.",
     "callbackTitle": "Abrindo seu passe de leitor.",
     "callbackDescription": "Você retornará à sua conta quando o login for concluído.",
     "noscript": "JavaScript é necessário para fazer login na conta. Páginas de produtos, preços e guias funcionam sem ele.",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Serviço e contas",
             "paragraphs": [
-              "NodeLane Comics fornece serviços de extensão, leitura e tradução. Leia estes termos e a política de privacidade antes de usar; pare de usar o serviço se discordar. Atualizado em 2026-10-17. O site fornece informações de produtos, guias, downloads e gerenciamento de contas, não um catálogo de quadrinhos ou vendas de quadrinhos.",
+              "NodeLane Comics fornece serviços de extensão, leitura e tradução. Leia estes termos e a política de privacidade antes de usar; pare de usar o serviço se discordar. O site fornece informações de produtos, guias, downloads e gerenciamento de contas, não um catálogo de quadrinhos ou vendas de quadrinhos.",
               "Use uma conta que você tenha direito de usar e proteja suas credenciais e dispositivo. Os benefícios e o acesso são verificados no servidor. Não se faça passar por terceiros, acesse seus registros privados, ignore limites de frequência ou imagem, interrompa serviços com automação abusiva ou ataque o produto e seus fornecedores. O uso indevido pode levar à restrição de acesso.",
               "O código da extensão usa GPL-3.0-only; componentes de terceiros mantêm suas licenças. Estes termos do serviço on-line não restringem direitos de uso, modificação ou redistribuição da GPL e não concedem direitos sobre quadrinhos."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Benefícios e assinaturas",
             "paragraphs": [
               membershipSummary,
-              "Novas assinaturas são trimestrais ou anuais, sem teste com cartão, com renovação automática nesse intervalo. Cada período contém 3/12 janelas mensais ancoradas na data UTC original de cobrança; páginas não acumulam nem podem ser antecipadas. Preços, tributos e benefícios seguem pedido e conta. Assinaturas existentes mantêm preço e versão de benefícios originais; testes e presentes antigos seguem seus registros.",
+              "Novas adesões são passes de um mês, três meses ou um ano com pagamento único, sem renovação automática nem teste. As janelas mensais são ancoradas no período UTC original de direitos; páginas não acumulam nem podem ser antecipadas. Preços, tributos e benefícios seguem pedido e conta. Assinaturas existentes mantêm preço, versão de benefícios e condições de renovação originais; testes e presentes antigos seguem seus registros.",
               "Modelos gratuitos usam páginas gratuitas (incluindo presentes aplicáveis), de assinatura e compradas, nessa ordem. Modelos pagos usam apenas assinatura ou compras. Cada nova versão de página gerada com sucesso consome 1 página. Mesma solicitação, reutilização de resultado próprio válido e tentativas internas não cobram duas vezes; retraduzir expressamente uma nova versão conta. Falha, cancelamento ou ausência de texto traduzível liberam reservas pelas regras; resultados incertos são verificados. Os pacotes atuais não expiram nem se renovam. Tarefas que realmente consomem páginas compradas recebem os limites de admissão e a prioridade de execução PLUS do pacote; apenas ter saldo não dá admissão paga a tarefas que usam a cota gratuita. Ao se esgotar, o pacote deixa de conceder seus benefícios.",
               "Taxa de admissão e saldo são separados. Padrão: 10 imagens novas por 60 segundos móveis para contas comuns e 100 para níveis pagos. Limites por hora só se aplicam quando configurados nos direitos; prevalecem os limites reais da conta e serviço. Mesma solicitação e reutilização válida não contam duas vezes; falhas ou cancelamentos aceitos podem ocupar a janela. Limites de imagem, concorrência e capacidade continuam, sem garantia de velocidade."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Assinaturas, cancelamento e reembolsos",
-        "description": "Novas assinaturas são trimestrais ou anuais, sem teste com cartão, com renovação automática nesse intervalo.",
+        "title": "Compras de passes e reembolsos",
+        "description": "Passes de um mês, três meses ou um ano com pagamento único, sem renovação automática. Validade, cotas, reembolsos e gestão das assinaturas existentes.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Planos atuais e renovação",
+            "title": "Planos atuais e validade",
             "paragraphs": [
               membershipSummary,
-              "Novas assinaturas são trimestrais ou anuais, sem teste com cartão, com renovação automática nesse intervalo. Cada período contém 3/12 janelas mensais ancoradas na data UTC original de cobrança; páginas não acumulam nem podem ser antecipadas. Preços, tributos e benefícios seguem pedido e conta. Assinaturas existentes mantêm preço e versão de benefícios originais; testes e presentes antigos seguem seus registros."
+              "Novas adesões são passes de um mês, três meses ou um ano com pagamento único, sem renovação automática nem teste. As janelas mensais são ancoradas no período UTC original de direitos; páginas não acumulam nem podem ser antecipadas. Preços, tributos e benefícios seguem pedido e conta. Assinaturas existentes mantêm preço, versão de benefícios e condições de renovação originais; testes e presentes antigos seguem seus registros."
             ]
           },
           {
-            "title": "Pare a renovação futura",
+            "title": "Gerenciar uma assinatura existente",
             "paragraphs": [
               "Faça login na conta do seu site ou use a entrada da conta de extensão para gerenciar a assinatura. O cancelamento interrompe a próxima renovação e não apaga automaticamente os benefícios já válidos; confie no vencimento mostrado em sua conta.",
               "Cancele na conta do site antes da renovação. Para teste antigo, cancele antes do término original para evitar cobrança. Desinstalar, fechar o navegador ou sair não cancela a assinatura. Pedidos pagos permanecem separados, sem fusão, rateio ou reembolso automático. Compra incorreta ou dificuldade de acesso: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Como faço para cancelar?",
-        "answer": "Use o site ou a entrada da conta de extensão para gerenciar a assinatura. Cancelar antes da próxima renovação ou expiração do teste; a desinstalação não cancela. Os benefícios existentes seguem o prazo de validade exibido em sua conta. Para obter ajuda sobre cobrança, envie um e-mail para comics@nodelane.net.",
+        "question": "Preciso cancelar a renovação?",
+        "answer": "Assinaturas existentes continuam com as condições originais. Gerencie-as na conta do site ou da extensão e cancele antes da próxima renovação para interromper futuras cobranças. Desinstalar não cancela a assinatura. Os benefícios pagos permanecem até a data indicada na conta. Ajuda: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

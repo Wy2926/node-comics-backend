@@ -16,7 +16,7 @@ const locale=(new URLSearchParams(location.search).get('locale')||'zh-CN') as Lo
 const d=dictionaries[locale];
 document.documentElement.lang=locale;
 document.documentElement.dir=locale==='ar'?'rtl':'ltr';
-document.body.dataset.siteTheme='midnight';
+document.body.dataset.siteTheme=new URLSearchParams(location.search).get('theme')==='light'?'paper':'midnight';
 document.body.dataset.page='/account/';
 function Fixture(){
   useEffect(observeAccountFixture,[]);

@@ -1,32 +1,21 @@
-import {publishedSubscriptions} from '../data/published-plans';
-import {amountParts,annualSavings,billingCopy,billingBenefitCopy,renewalCopy,type BillingOffer,type BillingType} from '../lib/billing';
+import {amountParts,annualSavings,billingCopy,type BillingOffer} from '../lib/billing';
 import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
-import type {BillingInterval} from '../lib/billing-cycle';
+import {membershipMonths} from '../lib/billing-cycle';
 import {pricingCopy,publishedPricingCopy} from '../lib/pricing';
 import {quarterlyCopy} from '../i18n/billing-cadence';
 import PriceAmount from './PriceAmount';
 
 export type PurchaseAvailability='loading'|'unavailable'|'error';
-export const publishedAnnualDiscount=annualSavings(publishedSubscriptions.find(offer=>offer.plan_id==='plus'&&offer.interval==='year')!,publishedSubscriptions)?.percent??0;
-export function publishedAmountParts(interval:BillingInterval|'free',locale:string,monthlyEquivalent=false,unitAmount?:number):Intl.NumberFormatPart[]{
-  const value=interval==='free'?0:(unitAmount??publishedSubscriptions.find(offer=>offer.plan_id==='plus'&&offer.interval===interval)?.unit_amount??0)/100;
-  const digits=interval==='free'?0:2;
-  return [{type:'currency',value:'US$'},...new Intl.NumberFormat(locale,{minimumFractionDigits:digits,maximumFractionDigits:digits}).formatToParts(monthlyEquivalent?value/(interval==='year'?12:interval==='quarter'?3:1):value)];
-}
-export function publishedAmount(interval:BillingInterval,locale:string,monthlyEquivalent=false){
-  return publishedAmountParts(interval,locale,monthlyEquivalent).map(part=>part.value).join('');
-}
 
 // The large figure always means the actual amount charged for the selected period.
 // Published numbers never acquire an API price ID or enable a checkout action.
-export function PlanPrice({locale,interval,offer,offers}:{locale:string;interval:BillingInterval;offer?:BillingOffer;offers?:BillingOffer[]}){
+export function PlanPrice({locale,offer,offers=[]}:{locale:string;offer:BillingOffer;offers?:BillingOffer[]}){
   const copy=billingCopy(locale),text=pricingCopy(locale);
-  const annual=interval==='year',quarter=interval==='quarter',live=!!offer&&offer.channels?.length!==0;
-  const parts=live?amountParts(offer!,locale):publishedAmountParts(interval,locale,false,offer?.unit_amount);
-  const months=annual?12:quarter?3:1;
-  const monthly=months>1?(live?amountParts({...offer!,unit_amount:offer!.unit_amount/months},locale):publishedAmountParts(interval,locale,true,offer?.unit_amount)):null;
-  const quote=offer??publishedSubscriptions.find(item=>item.plan_id==='plus'&&item.interval===interval);
-  const savings=quote?annualSavings(quote,offers??(live?[]:publishedSubscriptions)):null;
+  const interval=offer.interval,annual=interval==='year',quarter=interval==='quarter',live=offer.channels.length>0;
+  const parts=amountParts(offer,locale);
+  const months=interval==='once'?1:membershipMonths[interval];
+  const monthly=months>1?amountParts({...offer,unit_amount:offer.unit_amount/months},locale):null;
+  const savings=annualSavings(offer,offers);
   return <div className={live?'billing-offer':'published-plan-pricing'} data-billing-catalog={live?'live':'published'} data-billing-interval={interval}>
     <p className="price"><PriceAmount parts={parts}/><small className="price-unit">/ {quarter?quarterlyCopy(locale).unit:annual?copy.year:copy.month}</small></p>
     <div className="price-terms">
@@ -42,15 +31,11 @@ export function PlanPrice({locale,interval,offer,offers}:{locale:string;interval
   </div>;
 }
 
-export default function PublishedPlanPricing({locale,interval='quarter'}:{locale:string;interval?:BillingInterval}){
-  return <PlanPrice locale={locale} interval={interval}/>;
-}
-
-export function PublishedPurchaseAvailability({locale,state,name='PLUS',interval='quarter',billingType='recurring'}:{locale:string;state:PurchaseAvailability;name?:string;interval?:BillingInterval;billingType?:BillingType}){
-  const published=publishedPricingCopy(locale),oneTime=billingType==='onetime';
+export function PublishedPurchaseAvailability({locale,state,name}:{locale:string;state:PurchaseAvailability;name:string}){
+  const published=publishedPricingCopy(locale),prepaid=prepaidMembershipCopy(locale);
   return <div className="billing-availability" data-state={state}>
-    <button className="button" type="button" disabled>{oneTime?prepaidMembershipCopy(locale).buy.replace('{0}',name):billingBenefitCopy(locale).subscribe(name)}</button>
+    <button className="button" type="button" disabled>{prepaid.buy.replace('{0}',name)}</button>
     <p className="billing-status" role={state==='error'?'alert':'status'}>{published[state]}</p>
-    <p className="trial-note">{renewalCopy({interval,billing_type:billingType},locale)} {!oneTime&&pricingCopy(locale).cancel} {published.tax}</p>
+    <p className="trial-note">{prepaid.notice} {published.tax}</p>
   </div>;
 }

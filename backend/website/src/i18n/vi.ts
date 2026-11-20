@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/vi';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Đọc cục bộ miễn phí. Gói Free cho phép dịch 30 trang mỗi ngày bằng các mô hình cơ bản. PLUS: 2.500 trang/tháng, US$6,66/quý hoặc US$23,99/năm. Pro: 4.000 trang/tháng, US$9,99/quý hoặc US$35,99/năm. Cả hai gói đều có mô hình cơ bản và mô hình bổ sung. Xem các mô hình khả dụng và hệ số tiêu hao hạn mức trên màn hình dịch. Cấp hàng tháng, không cộng dồn và không dùng thử. Gói không hết hạn: 3.500 trang US$5,99 hoặc 7.000 trang US$9,99. Thuế và tổng tiền hiển thị khi thanh toán.`;
+const membershipSummary = `Đọc cục bộ miễn phí. Gói Free cho phép dịch 30 trang mỗi ngày bằng các mô hình cơ bản. PLUS: 2.500 trang/tháng, US$2,99 cho một tháng, US$6,66 cho ba tháng hoặc US$23,99 cho một năm. Pro: 4.000 trang/tháng, US$3,99 cho một tháng, US$9,99 cho ba tháng hoặc US$35,99 cho một năm. Cả hai gói đều có mô hình cơ bản và mô hình bổ sung. Xem các mô hình khả dụng và hệ số tiêu hao hạn mức trên màn hình dịch. Cấp hàng tháng, không cộng dồn và không dùng thử. Thanh toán một lần, không tự động gia hạn. Gói không hết hạn: 3.500 trang US$5,99 hoặc 7.000 trang US$9,99. Thuế và tổng tiền hiển thị khi thanh toán.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Nhật ký cập nhật",
     "privacy": "Chính sách quyền riêng tư",
     "terms": "Điều khoản dịch vụ",
-    "refund": "Đăng ký và hoàn tiền",
+    "refund": "Mua hàng và hoàn tiền",
     "home": "Trang chủ",
     "skip": "Chuyển đến nội dung",
     "navigation": "Điều hướng chính",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Để lại bản dịch cho NodeLane Comics. Lưu sự chú ý của bạn cho trang tiếp theo.",
     "ctaButton": "Bắt đầu hành trình đọc của bạn",
     "pricingTitle": "Đọc miễn phí. Chọn gói dịch của bạn.",
-    "pricingDescription": "PLUS / Pro và gói trang không hết hạn. Thanh toán theo quý hoặc năm, cấp trang hàng tháng. Không có dùng thử thuê bao.",
+    "pricingDescription": "Thẻ PLUS / Pro một tháng, ba tháng hoặc một năm và gói trang không hết hạn. Thanh toán một lần, không tự gia hạn hay dùng thử. Cấp trang hàng tháng.",
     "freePlan": "Miễn phí",
     "freePlanDescription": "Để đọc một chút mỗi ngày",
     "free": "miễn phí",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Dịch vụ và tài khoản",
             "paragraphs": [
-              "NodeLane Comics cung cấp dịch vụ mở rộng, đọc và dịch thuật. Đọc các điều khoản này và chính sách quyền riêng tư trước khi sử dụng; ngừng sử dụng dịch vụ nếu bạn không đồng ý. Cập nhật ngày 2026-10-17. Trang web cung cấp thông tin sản phẩm, hướng dẫn, tải xuống và quản lý tài khoản, không phải danh mục truyện tranh hay bán truyện tranh.",
+              "NodeLane Comics cung cấp dịch vụ mở rộng, đọc và dịch thuật. Đọc các điều khoản này và chính sách quyền riêng tư trước khi sử dụng; ngừng sử dụng dịch vụ nếu bạn không đồng ý. Trang web cung cấp thông tin sản phẩm, hướng dẫn, tải xuống và quản lý tài khoản, không phải danh mục truyện tranh hay bán truyện tranh.",
               "Sử dụng tài khoản bạn có quyền sử dụng và bảo vệ thông tin xác thực cũng như thiết bị của bạn. Lợi ích và quyền truy cập được xác minh trên máy chủ. Không mạo danh người khác, truy cập hồ sơ riêng tư của họ, tỷ lệ bỏ qua hoặc giới hạn hình ảnh, làm gián đoạn các dịch vụ bằng cách tự động hóa lạm dụng hoặc tấn công sản phẩm và các nhà cung cấp của nó. Việc sử dụng sai có thể dẫn đến hạn chế truy cập.",
               "Mã nguồn tiện ích dùng GPL-3.0-only; thành phần bên thứ ba giữ giấy phép riêng. Điều khoản dịch vụ trực tuyến không hạn chế quyền sử dụng, sửa đổi, phân phối lại theo GPL và không cấp quyền với truyện."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Lợi ích và đăng ký",
             "paragraphs": [
               membershipSummary,
-              "Đăng ký mới trả theo quý hoặc năm, không dùng thử bằng thẻ và tự gia hạn cùng chu kỳ. Mỗi kỳ gồm 3/12 cửa sổ hạn mức tháng theo mốc thanh toán UTC ban đầu. Trang chưa dùng không chuyển tiếp, không dùng trước hạn mức tương lai. Giá, thuế và quyền theo đơn hàng và tài khoản. Đăng ký cũ giữ giá và phiên bản quyền ban đầu; thử nghiệm và quà tặng cũ theo hồ sơ gốc.",
+              "Hội viên mới mua thẻ một tháng, ba tháng hoặc một năm bằng một lần thanh toán, không tự gia hạn hay dùng thử. Cửa sổ hạn mức tháng theo kỳ quyền lợi UTC ban đầu. Trang chưa dùng không chuyển tiếp, không dùng trước hạn mức tương lai. Giá, thuế và quyền theo đơn hàng và tài khoản. Đăng ký cũ giữ giá, phiên bản quyền và điều kiện gia hạn ban đầu; thử nghiệm và quà tặng cũ theo hồ sơ gốc.",
               "Mô hình miễn phí dùng trang miễn phí (gồm quà phù hợp), rồi trang đăng ký và đã mua. Mô hình trả phí chỉ dùng trang đăng ký hoặc đã mua. Mỗi phiên bản trang mới tạo thành công tính 1 trang. Cùng yêu cầu, dùng lại kết quả hợp lệ của mình và thử lại nội bộ không tính hai lần; bản dịch mới chủ động yêu cầu vẫn tính. Lỗi, hủy hoặc không có chữ để dịch giải phóng phần giữ theo quy tắc; kết quả chưa rõ được kiểm tra trước. Gói hiện tại không hết hạn và không tự gia hạn. Tác vụ thực sự trừ trang đã mua được áp dụng giới hạn tiếp nhận và ưu tiên xử lý cấp PLUS của gói; chỉ có số dư không nâng tác vụ dùng hạn mức miễn phí lên mức tiếp nhận trả phí. Khi dùng hết, gói không còn cung cấp các quyền lợi đó.",
               "Tốc độ tiếp nhận và số dư là riêng. Mặc định: 10 ảnh mới mỗi 60 giây trượt cho tài khoản thường, 100 cho hạng trả phí. Giới hạn giờ chỉ áp dụng khi quyền có cấu hình; theo giới hạn thực của tài khoản và dịch vụ. Cùng yêu cầu và dùng lại hợp lệ không tính hai lần; lỗi hoặc hủy sau tiếp nhận có thể chiếm cửa sổ tốc độ. Vẫn có giới hạn ảnh, đồng thời và năng lực, không bảo đảm tốc độ hoàn thành."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Đăng ký, hủy bỏ và hoàn tiền",
-        "description": "Đăng ký mới trả theo quý hoặc năm, không dùng thử bằng thẻ và tự gia hạn cùng chu kỳ.",
+        "title": "Mua thẻ hội viên và hoàn tiền",
+        "description": "Thẻ một tháng, ba tháng hoặc một năm thanh toán một lần, không tự gia hạn. Xem thời hạn, hạn mức, hoàn tiền và quản lý đăng ký hiện có.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Gói hiện tại và gia hạn",
+            "title": "Gói hiện tại và thời hạn",
             "paragraphs": [
               membershipSummary,
-              "Đăng ký mới trả theo quý hoặc năm, không dùng thử bằng thẻ và tự gia hạn cùng chu kỳ. Mỗi kỳ gồm 3/12 cửa sổ hạn mức tháng theo mốc thanh toán UTC ban đầu. Trang chưa dùng không chuyển tiếp, không dùng trước hạn mức tương lai. Giá, thuế và quyền theo đơn hàng và tài khoản. Đăng ký cũ giữ giá và phiên bản quyền ban đầu; thử nghiệm và quà tặng cũ theo hồ sơ gốc."
+              "Hội viên mới mua thẻ một tháng, ba tháng hoặc một năm bằng một lần thanh toán, không tự gia hạn hay dùng thử. Cửa sổ hạn mức tháng theo kỳ quyền lợi UTC ban đầu. Trang chưa dùng không chuyển tiếp, không dùng trước hạn mức tương lai. Giá, thuế và quyền theo đơn hàng và tài khoản. Đăng ký cũ giữ giá, phiên bản quyền và điều kiện gia hạn ban đầu; thử nghiệm và quà tặng cũ theo hồ sơ gốc."
             ]
           },
           {
-            "title": "Dừng gia hạn trong tương lai",
+            "title": "Quản lý đăng ký hiện có",
             "paragraphs": [
               "Đăng nhập vào tài khoản trang web của bạn hoặc sử dụng mục nhập tài khoản tiện ích mở rộng để quản lý đăng ký. Việc hủy sẽ dừng lần gia hạn tiếp theo và không tự động xóa các lợi ích đã có hiệu lực; dựa vào thời hạn sử dụng được hiển thị trong tài khoản của bạn.",
               "Hủy trên tài khoản website trước gia hạn. Với dùng thử cũ, hủy trước thời điểm kết thúc gốc để tránh thu phí. Gỡ tiện ích, đóng trình duyệt hay đăng xuất không hủy đăng ký. Đơn đã trả tiền giữ riêng, không tự gộp, tính chênh lệch hay hoàn tiền. Mua nhầm hoặc không truy cập được: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Làm thế nào để tôi hủy bỏ?",
-        "answer": "Sử dụng mục nhập tài khoản trang web hoặc tiện ích mở rộng để quản lý đăng ký. Hủy trước lần gia hạn tiếp theo hoặc hết hạn dùng thử; gỡ cài đặt không hủy. Các lợi ích hiện có sẽ tuân theo thời hạn sử dụng được hiển thị trong tài khoản của bạn. Để được trợ giúp thanh toán, hãy gửi email tới comics@nodelane.net.",
+        "question": "Tôi có cần hủy gia hạn không?",
+        "answer": "Đăng ký hiện có tiếp tục theo điều kiện ban đầu. Quản lý trong tài khoản trên website hoặc tiện ích và hủy trước lần gia hạn tiếp theo để dừng các khoản thu sau này. Gỡ tiện ích không hủy đăng ký. Quyền lợi đã trả tiền còn hiệu lực đến ngày hiển thị trong tài khoản. Hỗ trợ: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

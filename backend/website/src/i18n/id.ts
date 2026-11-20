@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/id';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Membaca lokal gratis. Paket Free dapat menerjemahkan 30 halaman per hari dengan model dasar. PLUS: 2.500 halaman per bulan, US$6,66 per triwulan atau US$23,99 per tahun. Pro: 4.000 halaman per bulan, US$9,99 per triwulan atau US$35,99 per tahun. Keduanya mencakup model dasar dan model tambahan. Lihat model yang tersedia dan pengali penggunaan kuota di layar terjemahan. Kuota diberikan bulanan tanpa akumulasi atau uji coba. Paket tanpa kedaluwarsa: 3.500 halaman US$5,99 atau 7.000 halaman US$9,99. Pajak dan total ditampilkan saat pembayaran.`;
+const membershipSummary = `Membaca lokal gratis. Paket Free dapat menerjemahkan 30 halaman per hari dengan model dasar. PLUS: 2.500 halaman per bulan, US$2,99 untuk satu bulan, US$6,66 untuk tiga bulan atau US$23,99 untuk satu tahun. Pro: 4.000 halaman per bulan, US$3,99 untuk satu bulan, US$9,99 untuk tiga bulan atau US$35,99 untuk satu tahun. Keduanya mencakup model dasar dan model tambahan. Lihat model yang tersedia dan pengali penggunaan kuota di layar terjemahan. Kuota diberikan bulanan tanpa akumulasi atau uji coba. Sekali bayar, tanpa perpanjangan otomatis. Paket tanpa kedaluwarsa: 3.500 halaman US$5,99 atau 7.000 halaman US$9,99. Pajak dan total ditampilkan saat pembayaran.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Catatan rilis",
     "privacy": "Kebijakan privasi",
     "terms": "Ketentuan layanan",
-    "refund": "Langganan dan pengembalian dana",
+    "refund": "Pembelian dan pengembalian dana",
     "home": "Beranda",
     "skip": "Langsung ke konten",
     "navigation": "Navigasi utama",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Serahkan terjemahannya ke NodeLane Comics. Simpan perhatian Anda untuk halaman berikutnya.",
     "ctaButton": "Mulailah perjalanan membaca Anda",
     "pricingTitle": "Baca secara gratis. Pilih paket terjemahan Anda.",
-    "pricingDescription": "PLUS / Pro dan paket halaman tanpa kedaluwarsa. Bayar triwulanan atau tahunan, halaman diberikan bulanan. Tanpa uji coba langganan.",
+    "pricingDescription": "PLUS / Pro untuk satu bulan, tiga bulan atau satu tahun dan paket halaman tanpa kedaluwarsa. Sekali bayar tanpa perpanjangan otomatis atau uji coba. Halaman diberikan bulanan.",
     "freePlan": "Gratis",
     "freePlanDescription": "Untuk sedikit membaca setiap hari",
     "free": "gratis",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Layanan dan akun",
             "paragraphs": [
-              "NodeLane Comics menyediakan layanan ekstensi, pembaca dan terjemahan. Baca ketentuan ini dan kebijakan privasi sebelum digunakan; berhenti menggunakan layanan ini jika Anda tidak setuju. Diperbarui 2026-10-17. Situs web ini menyediakan informasi produk, panduan, unduhan, dan manajemen akun, bukan katalog komik atau penjualan komik.",
+              "NodeLane Comics menyediakan layanan ekstensi, pembaca dan terjemahan. Baca ketentuan ini dan kebijakan privasi sebelum digunakan; berhenti menggunakan layanan ini jika Anda tidak setuju. Situs web ini menyediakan informasi produk, panduan, unduhan, dan manajemen akun, bukan katalog komik atau penjualan komik.",
               "Gunakan akun yang berhak Anda gunakan dan lindungi kredensial dan perangkat Anda. Manfaat dan akses diverifikasi di server. Jangan meniru identitas orang lain, mengakses catatan pribadi mereka, melewati batas kecepatan atau gambar, mengganggu layanan dengan otomatisasi yang menyesatkan, atau menyerang produk dan penyedianya. Penyalahgunaan dapat menyebabkan akses terbatas.",
               "Kode ekstensi berlisensi GPL-3.0-only; komponen pihak ketiga mempertahankan lisensinya. Ketentuan layanan daring tidak membatasi hak penggunaan, perubahan atau distribusi ulang GPL dan tidak memberi hak atas komik."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Manfaat dan langganan",
             "paragraphs": [
               membershipSummary,
-              "Langganan baru dibayar triwulanan atau tahunan, tanpa uji coba berkartu, dan diperpanjang otomatis. Setiap periode memiliki 3/12 jendela kuota bulanan berdasarkan tanggal tagihan UTC awal. Sisa halaman tidak dibawa dan kuota mendatang tidak dapat dipakai lebih awal. Harga, pajak dan hak mengikuti pesanan serta akun. Langganan lama mempertahankan harga dan versi hak awal; uji coba dan hadiah lama mengikuti catatan aslinya.",
+              "Keanggotaan baru untuk satu bulan, tiga bulan atau satu tahun dibayar sekali, tanpa perpanjangan otomatis atau uji coba. Jendela kuota bulanan mengikuti periode hak UTC awal. Sisa halaman tidak dibawa dan kuota mendatang tidak dapat dipakai lebih awal. Harga, pajak dan hak mengikuti pesanan serta akun. Langganan lama mempertahankan harga, versi hak dan ketentuan perpanjangan awal; uji coba dan hadiah lama mengikuti catatan aslinya.",
               "Model gratis memakai halaman gratis (termasuk hadiah yang berlaku), lalu langganan dan pembelian. Model berbayar hanya memakai langganan atau pembelian. Setiap versi halaman baru yang berhasil dibuat memakai 1 halaman. Permintaan sama, hasil valid milik sendiri dan percobaan internal tidak ditagih dua kali; versi terjemahan baru yang diminta tegas dihitung. Gagal, batal atau tanpa teks yang dapat diterjemahkan melepas reservasi sesuai aturan; hasil tidak pasti diperiksa dulu. Paket saat ini tidak kedaluwarsa dan tidak diperpanjang otomatis. Tugas yang benar-benar memakai halaman yang dibeli mendapat batas penerimaan dan prioritas pemrosesan tingkat PLUS dari paket tersebut; hanya memiliki saldo tidak menaikkan tugas yang memakai kuota gratis ke penerimaan berbayar. Setelah habis, paket tidak lagi memberikan manfaatnya.",
               "Laju penerimaan dan saldo terpisah. Default: 10 gambar baru per 60 detik bergulir bagi akun biasa, 100 bagi tingkat berbayar. Batas per jam hanya berlaku jika diatur dalam hak; batas nyata akun dan layanan berlaku. Permintaan sama dan penggunaan ulang valid tidak dihitung dua kali; kegagalan atau pembatalan yang diterima dapat mengisi jendela laju. Batas gambar, konkurensi dan kapasitas tetap berlaku, tanpa jaminan kecepatan."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Langganan, pembatalan, dan pengembalian uang",
-        "description": "Langganan baru dibayar triwulanan atau tahunan, tanpa uji coba berkartu, dan diperpanjang otomatis.",
+        "title": "Pembelian keanggotaan dan pengembalian dana",
+        "description": "Keanggotaan satu bulan, tiga bulan atau satu tahun dibayar sekali tanpa perpanjangan otomatis. Masa berlaku, kuota, pengembalian dana dan langganan lama.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Paket saat ini dan perpanjangan",
+            "title": "Paket saat ini dan masa berlaku",
             "paragraphs": [
               membershipSummary,
-              "Langganan baru dibayar triwulanan atau tahunan, tanpa uji coba berkartu, dan diperpanjang otomatis. Setiap periode memiliki 3/12 jendela kuota bulanan berdasarkan tanggal tagihan UTC awal. Sisa halaman tidak dibawa dan kuota mendatang tidak dapat dipakai lebih awal. Harga, pajak dan hak mengikuti pesanan serta akun. Langganan lama mempertahankan harga dan versi hak awal; uji coba dan hadiah lama mengikuti catatan aslinya."
+              "Keanggotaan baru untuk satu bulan, tiga bulan atau satu tahun dibayar sekali, tanpa perpanjangan otomatis atau uji coba. Jendela kuota bulanan mengikuti periode hak UTC awal. Sisa halaman tidak dibawa dan kuota mendatang tidak dapat dipakai lebih awal. Harga, pajak dan hak mengikuti pesanan serta akun. Langganan lama mempertahankan harga, versi hak dan ketentuan perpanjangan awal; uji coba dan hadiah lama mengikuti catatan aslinya."
             ]
           },
           {
-            "title": "Hentikan pembaruan di masa mendatang",
+            "title": "Kelola langganan yang sudah ada",
             "paragraphs": [
               "Masuk ke akun situs web Anda atau gunakan entri akun ekstensi untuk mengelola langganan. Pembatalan menghentikan perpanjangan berikutnya dan tidak secara otomatis menghapus manfaat yang sudah berlaku; bergantung pada masa berlaku yang ditunjukkan di akun Anda.",
               "Batalkan melalui akun situs sebelum perpanjangan. Untuk uji coba lama, batalkan sebelum akhir aslinya agar tidak ditagih. Menghapus ekstensi, menutup browser atau keluar tidak membatalkan langganan. Pesanan terbayar tetap terpisah tanpa penggabungan, prorata atau pengembalian otomatis. Salah beli atau masalah akses: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Bagaimana cara membatalkannya?",
-        "answer": "Gunakan entri akun situs web atau ekstensi untuk mengelola langganan. Membatalkan sebelum perpanjangan berikutnya atau masa uji coba berakhir; mencopot pemasangan tidak membatalkan. Benefit yang ada mengikuti kadaluwarsa yang tertera di akun Anda. Untuk bantuan penagihan, kirim email ke comics@nodelane.net.",
+        "question": "Apakah saya perlu membatalkan perpanjangan?",
+        "answer": "Langganan lama berlanjut dengan ketentuan awal. Kelola melalui akun situs atau ekstensi dan batalkan sebelum perpanjangan berikutnya untuk menghentikan tagihan mendatang. Menghapus ekstensi tidak membatalkan langganan. Hak yang sudah dibayar berlaku sampai tanggal yang ditampilkan di akun. Bantuan: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

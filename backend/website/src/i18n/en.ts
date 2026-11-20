@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/en';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Local reading is free. Free accounts get 30 pages of translation per day with the base models. PLUS includes 2,500 pages per month for US$6.66 per quarter or US$23.99 per year. Pro includes 4,000 pages per month for US$9.99 per quarter or US$35.99 per year. Both plans include the base models and additional choices. Check the translation interface for available models and their quota multipliers. Pages are granted monthly without rollover; no subscription trial. Non-expiring packs: 3,500 pages for US$5.99 or 7,000 for US$9.99. Taxes and final totals appear at checkout.`;
+const membershipSummary = `Local reading is free. Free accounts get 30 pages of translation per day with the base models. PLUS includes 2,500 pages per month: a monthly pass costs US$2.99, a 3-month pass US$6.66 or an annual pass US$23.99. Pro includes 4,000 pages per month: a monthly pass costs US$3.99, a 3-month pass US$9.99 or an annual pass US$35.99. Both plans include the base models and additional choices. Check the translation interface for available models and their quota multipliers. Pay once, without automatic renewal or a trial. Pages are granted monthly without rollover. Non-expiring packs: 3,500 pages for US$5.99 or 7,000 for US$9.99. Taxes and final totals appear at checkout.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Changelog",
     "privacy": "Privacy policy",
     "terms": "Terms of service",
-    "refund": "Subscriptions & refunds",
+    "refund": "Purchases & refunds",
     "home": "Home",
     "skip": "Skip to content",
     "navigation": "Main navigation",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Open a comic, connect your library, and translate the images you want to understand.",
     "ctaButton": "Start your reading journey",
     "pricingTitle": "Read for free. Choose your translation plan.",
-    "pricingDescription": "PLUS / Pro subscriptions and permanent page packs. Pay quarterly or yearly; pages renew monthly. No subscription trial.",
+    "pricingDescription": "PLUS / Pro monthly, 3-month and annual passes, plus permanent page packs. Pay once, without automatic renewal or a trial. Membership pages are granted monthly.",
     "freePlan": "Free",
     "freePlanDescription": "For a little reading every day",
     "free": "free",
@@ -136,7 +136,7 @@ export default {
     "changelogDescription": "Follow manga translator updates, new site support, browser compatibility and reading fixes. Chrome, Edge and Firefox store approvals may differ; check your installed version.",
     "rss": "Follow updates via RSS",
     "accountTitle": "My account",
-    "accountDescription": "Manage your account and membership. Website image translation and the extension share your account allowance.",
+    "accountDescription": "Check your membership dates and page balances, and renew when you need to. One account for the website and extension.",
     "callbackTitle": "Opening your reader pass.",
     "callbackDescription": "You will return to your account when sign-in is complete.",
     "noscript": "JavaScript is required for account sign-in. Product pages, pricing and guides work without it.",
@@ -482,13 +482,13 @@ export default {
       },
       "terms": {
         "title": "Terms of service",
-        "description": "Conditions for using NodeLane Comics, content rights, AI limitations and subscriptions.",
+        "description": "Terms for using NodeLane Comics, including content rights, AI limitations, membership passes and page packs.",
         "updated": "2026-10-17",
         "sections": [
           {
             "title": "Service and accounts",
             "paragraphs": [
-              "NodeLane Comics provides an extension, reader and translation services. Read these terms and the privacy policy before use; stop using the service if you disagree. Updated 2026-10-17. The website supplies product information, guides, downloads, account management and separate image translation, without a comic content library or comic sales.",
+              "NodeLane Comics provides an extension, reader and translation services. Read these terms and the privacy policy before use; stop using the service if you disagree. The website supplies product information, guides, downloads, account management and separate image translation, without a comic content library or comic sales.",
               "Use an account you are entitled to use and protect your credentials and device. Benefits and access are verified on the server. Do not impersonate others, access their private records, bypass rate or image limits, disrupt services with abusive automation, or attack the product and its providers. Misuse may lead to restricted access.",
               "Extension source code is licensed under GPL-3.0-only; third-party components retain their own licenses. These online-service terms do not restrict the use, modification or redistribution rights granted by the GPL, and grant no rights to comic content."
             ]
@@ -501,10 +501,10 @@ export default {
             ]
           },
           {
-            "title": "Benefits and subscriptions",
+            "title": "Memberships and page allowances",
             "paragraphs": [
               membershipSummary,
-              "New subscriptions currently bill quarterly or annually, without a card-required trial, and automatically renew at that interval. Quarterly/annual periods contain 3/12 monthly allowance windows anchored to the original UTC billing date. Unused monthly pages do not roll over and future allowances cannot be used early. The selected order and account records determine prices, taxes and benefits. Existing subscriptions retain their original price and benefit version; legacy trials and gifts follow their original records.",
+              "New memberships are monthly, 3-month or annual passes paid once, without automatic renewal or a trial. Monthly allowance windows are anchored to the original UTC entitlement period. Unused monthly pages do not roll over and future allowances cannot be used early. The selected order and account records determine prices, taxes and benefits. Existing subscriptions retain their original price, benefit version and renewal terms; legacy trials and gifts follow their original records.",
               "Free models use free allowance (including applicable gifts), then subscription pages, then purchased pages. Paid models use only subscription or purchased pages. Each successfully generated new page version uses 1 page. Replaying a request, reusing your valid result and internal retries do not charge twice; explicitly generating a new translation version is chargeable. Failure, cancellation or no translatable text releases reservations under the rules; unknown outcomes are verified first. Current non-expiring packs do not renew. Tasks that actually consume purchased pages receive the pack’s PLUS-tier admission limits and scheduling priority; merely holding a balance does not upgrade tasks that use free allowance to paid-tier admission. Once exhausted, the pack no longer grants its benefits.",
               "Admission rates and page balances are separate. Defaults are 10 new images per rolling 60 seconds for standard accounts and 100 for paid tiers. Hourly caps apply only when configured in the entitlement; actual account and service limits govern. The same request and valid-result reuse are not counted twice; accepted failures or cancellations may still occupy the rate window. Image, concurrency and capacity limits still apply; page allowances do not promise completion speed."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Subscriptions, cancellation and refunds",
-        "description": "New subscriptions currently bill quarterly or annually, without a card-required trial, and automatically renew at that interval.",
+        "title": "Membership purchases and refunds",
+        "description": "Monthly, 3-month and annual passes are paid once without automatic renewal. Read about validity, allowances, refunds and managing existing subscriptions.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Current plans and renewal",
+            "title": "Current plans and validity",
             "paragraphs": [
               membershipSummary,
-              "New subscriptions currently bill quarterly or annually, without a card-required trial, and automatically renew at that interval. Quarterly/annual periods contain 3/12 monthly allowance windows anchored to the original UTC billing date. Unused monthly pages do not roll over and future allowances cannot be used early. The selected order and account records determine prices, taxes and benefits. Existing subscriptions retain their original price and benefit version; legacy trials and gifts follow their original records."
+              "New memberships are monthly, 3-month or annual passes paid once, without automatic renewal or a trial. Monthly allowance windows are anchored to the original UTC entitlement period. Unused monthly pages do not roll over and future allowances cannot be used early. The selected order and account records determine prices, taxes and benefits. Existing subscriptions retain their original price, benefit version and renewal terms; legacy trials and gifts follow their original records."
             ]
           },
           {
-            "title": "Stop future renewal",
+            "title": "Manage an existing subscription",
             "paragraphs": [
               "Sign in to your website account or use the extension account entry to manage the subscription. Cancellation stops the next renewal and does not automatically erase benefits already valid; rely on the expiry shown in your account.",
               "Cancel through the website account page before the next renewal. For a legacy trial, cancel before its original end to avoid paid renewal. Uninstalling, closing the browser or signing out does not cancel a subscription. Multiple paid orders remain separate, without automatic merging, proration or refunds. For mistaken purchases or access problems, contact comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "How do I cancel?",
-        "answer": "Use the website or extension account entry to manage the subscription. Cancel before the next renewal or trial expiry; uninstalling does not cancel. Existing benefits follow the expiry displayed in your account. For billing help, email comics@nodelane.net.",
+        "question": "Do I need to cancel renewal?",
+        "answer": "Existing subscriptions continue under their original terms. Manage them from your website or extension account and cancel before the next renewal to stop future charges; uninstalling does not cancel. Paid benefits remain until the expiry shown in your account. For billing help, email comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {
@@ -953,7 +953,7 @@ export default {
     "在 Stripe 管理订阅": "Manage subscription in Stripe",
     "可在下次续费前取消，税费及应付金额以结账页为准。": "Cancel before the next renewal. Taxes and the final total are shown at checkout.",
     "我已阅读": "I have read ",
-    "订阅与退款说明": "Subscriptions & refunds",
+    "订阅与退款说明": "Purchases & refunds",
     "，了解自动续费规则。": " and understand automatic renewal.",
     "继续原结账": "Resume checkout",
     "前往安全结账": "Continue to secure checkout",

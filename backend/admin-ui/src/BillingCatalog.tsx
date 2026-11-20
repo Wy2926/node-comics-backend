@@ -48,8 +48,8 @@ export function BillingCatalogPage({onUnauthorized}: {onUnauthorized: (message: 
       <div className="billing-price-heading"><div><div className="provider-name"><h3>{intervalName(price.interval, price.billing_type)}</h3><BillingBadge status={price.status}/><span className="billing-environment">{environmentName(price.environment)}</span></div>
         <p className="billing-price-amount">{money(price.unit_amount, price.currency)} <small>{price.billing_type === 'onetime' ? '一次付清' : `/ ${price.interval === 'quarter' ? '季度' : price.interval === 'year' ? '年' : '月'}`}</small></p>
         <p className="muted">{billingTypeName(price.billing_type)} · {benefitsSummary(price)}{price.monthly_classic_pages !== null && ['quarter', 'year'].includes(price.interval) && ' · 按月发放，不累积'}{price.hourly_image_limit != null && ` · 每滚动小时最多 ${price.hourly_image_limit} 页`}{price.trial_days > 0 && ` · 首次试用 ${price.trial_days} 天${price.trial_classic_pages !== 0 ? ` / ${price.trial_classic_pages === null ? '不限量' : price.trial_classic_pages + ' 页'}` : ''}`}</p></div>
-        <div className="provider-actions"><Button className="secondary" disabled={blocked} onClick={() => edit({kind: 'price', product, copy: price})}>复制价格</Button>
-          <Button className="secondary" disabled={blocked || (price.status !== 'active' && !price.bindings.some(binding => binding.status === 'active'))} onClick={() => void changeStatus('prices', price.id, price.status === 'active')}>{pending === price.id ? '正在保存…' : price.status === 'active' ? '停售价格' : '发布价格'}</Button></div></div>
+         <div className="provider-actions">{price.billing_type==='onetime'&&<Button className="secondary" disabled={blocked} onClick={() => edit({kind: 'price', product, copy: price})}>复制价格</Button>}
+           {(price.billing_type==='onetime'||price.status==='active')&&<Button className="secondary" disabled={blocked || (price.status !== 'active' && !price.bindings.some(binding => binding.status === 'active'))} onClick={() => void changeStatus('prices', price.id, price.status === 'active')}>{pending === price.id ? '正在保存…' : price.status === 'active' ? '停售价格' : '发布价格'}</Button>}</div></div>
       <div className="billing-binding-heading"><h4>支付渠道</h4><Button className="text-link" disabled={blocked} onClick={() => edit({kind: 'binding', price})}>＋ 关联支付渠道</Button></div>
       {price.bindings.length ? <Table heads={['渠道', '平台产品与价格', '状态', '操作']}>{price.bindings.map(binding => <tr key={binding.id}>
         <td><b>{providerName(binding.provider)}</b><small>{environmentName(binding.environment)}</small></td>
@@ -60,7 +60,7 @@ export function BillingCatalogPage({onUnauthorized}: {onUnauthorized: (message: 
     </article>;
   }
   return <main id="main" tabIndex={-1} className="billing-catalog">
-    <div className="page-heading"><div><h1>产品与价格</h1><p className="muted">为会员和额度包设置价格与付款方式，再关联可购买的支付渠道。</p></div>
+    <div className="page-heading"><div><h1>产品与价格</h1><p className="muted">为会员卡和额度包设置一次性价格，再关联支付渠道。</p></div>
       <div className="provider-actions"><Button className="secondary" disabled={loading || !!pending} onClick={() => void refresh()}>{loading ? '正在刷新…' : '刷新列表'}</Button><Button className="primary" disabled={blocked || !data} onClick={() => edit({kind: 'product'})}>＋ 新建产品</Button></div></div>
     {notice && <p className="settings-notice" role="status">{notice}</p>}
     {(error || actionError) && <div className="error" role="alert">{error || actionError} {data && '当前列表可能已过时。'}请刷新核实最新状态后继续操作。</div>}
@@ -72,7 +72,7 @@ export function BillingCatalogPage({onUnauthorized}: {onUnauthorized: (message: 
       {selected && <section className="billing-product-detail" aria-label={`${selected.name} 产品详情`}><div className="panel billing-product-summary"><div className="billing-product-title"><div><h2>{selected.name}</h2><small>产品编号 {selected.id}</small></div><Button className="secondary" disabled={blocked || !latest} onClick={() => edit({kind: 'benefits', product: selected})}>更新权益</Button></div>
         {latest && <div className="billing-benefits"><span><strong>{benefitsSummary(latest)}</strong></span>{latest.hourly_image_limit != null && <span><strong>{latest.hourly_image_limit}</strong> 页 / 滚动小时</span>}{latest.quota_pages ? <span>不自动续费</span> : <span><strong>{latest.trial_days || '无'}</strong> {latest.trial_days ? `天首次试用${latest.trial_classic_pages !== 0 ? ` · ${latest.trial_classic_pages === null ? '不限量' : latest.trial_classic_pages + ' 页'}` : ''}` : '试用'}</span>}</div>}
         <p className="muted">更新权益用于后续创建的价格，已售会员与额度包保留购买时的权益和有效期。</p></div>
-        <div className="billing-prices-title"><h2>价格</h2><Button className="primary" disabled={blocked || !latest} onClick={() => edit({kind: 'price', product: selected})}>＋ 添加价格</Button></div>
+        <div className="billing-prices-title"><h2>价格</h2><Button className="primary" disabled={blocked || !latest || !!latest.trial_days} title={latest?.trial_days?'请先创建无试用权益版本':undefined} onClick={() => edit({kind: 'price', product: selected})}>＋ 添加价格</Button></div>
         {!selected.prices.length ? <section className="panel"><Empty>为此产品添加价格</Empty></section> : <div className="billing-prices">{selected.prices.map(price => priceCard(price, selected))}</div>}
       </section>}
     </div>}

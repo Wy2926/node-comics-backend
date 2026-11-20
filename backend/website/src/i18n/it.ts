@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/it';
 import type { Dictionary } from './types';
 
-const membershipSummary = `La lettura locale è gratuita. Free permette di tradurre 30 pagine al giorno con i modelli di base. PLUS: 2.500 pagine al mese, US$6,66 a trimestre o US$23,99 all’anno. Pro: 4.000 pagine al mese, US$9,99 a trimestre o US$35,99 all’anno. Entrambi i piani includono i modelli di base e quelli aggiuntivi. Consulta la schermata di traduzione per vedere i modelli disponibili e i moltiplicatori di consumo della quota. Credito mensile senza riporto né prova. Pacchetti senza scadenza: 3.500 pagine a US$5,99 o 7.000 a US$9,99. Imposte e totale al pagamento.`;
+const membershipSummary = `La lettura locale è gratuita. Free permette di tradurre 30 pagine al giorno con i modelli di base. PLUS: 2.500 pagine al mese, US$2,99 per un mese, US$6,66 per tre mesi o US$23,99 per un anno. Pro: 4.000 pagine al mese, US$3,99 per un mese, US$9,99 per tre mesi o US$35,99 per un anno. Entrambi i piani includono i modelli di base e quelli aggiuntivi. Consulta la schermata di traduzione per vedere i modelli disponibili e i moltiplicatori di consumo della quota. Credito mensile senza riporto né prova. Pagamento unico, senza rinnovo automatico. Pacchetti senza scadenza: 3.500 pagine a US$5,99 o 7.000 a US$9,99. Imposte e totale al pagamento.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Registro delle modifiche",
     "privacy": "Informativa sulla privacy",
     "terms": "Termini di servizio",
-    "refund": "Abbonamenti e rimborsi",
+    "refund": "Acquisti e rimborsi",
     "home": "Casa",
     "skip": "Vai al contenuto",
     "navigation": "Navigazione principale",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Apri una storia che hai il diritto di leggere. Traduci quando vuoi e tieni l’originale a portata di mano.",
     "ctaButton": "Inizia il tuo viaggio di lettura",
     "pricingTitle": "Leggi gratuitamente. Scegli il tuo piano di traduzione.",
-    "pricingDescription": "PLUS / Pro e pacchetti senza scadenza. Pagamento trimestrale o annuale, pagine mensili. Nessuna prova.",
+    "pricingDescription": "Pass PLUS / Pro da un mese, tre mesi o un anno e pacchetti senza scadenza. Pagamento unico senza rinnovo automatico né prova. Pagine assegnate ogni mese.",
     "freePlan": "Gratuito",
     "freePlanDescription": "Per una piccola lettura ogni giorno",
     "free": "gratuito",
@@ -136,7 +136,7 @@ export default {
     "changelogDescription": "Segui gli aggiornamenti del traduttore manga, il nuovo supporto del sito, la compatibilità del browser e le correzioni di lettura. Le approvazioni dei negozi Chrome, Edge e Firefox potrebbero differire; controlla la versione installata.",
     "rss": "Segui gli aggiornamenti tramite RSS",
     "accountTitle": "Il mio account",
-    "accountDescription": "Gestisci il tuo account e l’abbonamento. La traduzione di immagini sul sito e l’estensione condividono la quota del tuo account.",
+    "accountDescription": "Controlla validità e saldo delle pagine e rinnova quando serve. Un unico account per sito ed estensione.",
     "callbackTitle": "Apertura della tessera lettore.",
     "callbackDescription": "Tornerai al tuo account una volta completato l'accesso.",
     "noscript": "È richiesto JavaScript per l'accesso all'account. Le pagine dei prodotti, i prezzi e le guide funzionano senza di essa.",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Servizio e conti",
             "paragraphs": [
-              "NodeLane Comics fornisce servizi di estensione, lettore e traduzione. Leggere questi termini e l'informativa sulla privacy prima dell'uso; smetti di usare il servizio se non sei d'accordo. Aggiornato il 2026-10-17. Il sito Web fornisce informazioni sul prodotto, guide, download e gestione dell'account, non un catalogo di fumetti o vendite di fumetti.",
+              "NodeLane Comics fornisce servizi di estensione, lettore e traduzione. Leggi questi termini e l'informativa sulla privacy prima dell'uso; smetti di usare il servizio se non sei d'accordo. Il sito Web fornisce informazioni sul prodotto, guide, download e gestione dell'account, non un catalogo di fumetti o vendite di fumetti.",
               "Utilizza un account a cui sei autorizzato a utilizzare e proteggere le tue credenziali e il tuo dispositivo. I vantaggi e gli accessi vengono verificati sul server. Non impersonare altri, accedere ai loro dati privati, aggirare i limiti di velocità o di immagine, interrompere i servizi con automazione abusiva o attaccare il prodotto e i suoi fornitori. L'uso improprio può portare ad un accesso limitato.",
               "Il codice dell’estensione è sotto GPL-3.0-only; i componenti di terzi mantengono le proprie licenze. Questi termini del servizio online non limitano i diritti GPL di utilizzo, modifica o ridistribuzione e non concedono diritti sui fumetti."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Vantaggi e abbonamenti",
             "paragraphs": [
               membershipSummary,
-              "I nuovi abbonamenti sono trimestrali o annuali, senza prova con carta, e si rinnovano automaticamente. Ogni periodo contiene 3/12 finestre mensili ancorate alla data UTC originale di fatturazione. Le pagine inutilizzate non si accumulano e le quote future non si anticipano. Prezzi, imposte e benefici seguono ordine e account. Gli abbonamenti esistenti mantengono prezzo e versione dei benefici originari; prove e omaggi precedenti seguono i propri registri.",
+              "Le nuove adesioni sono pass da un mese, tre mesi o un anno con pagamento unico, senza rinnovo automatico né prova. Le finestre mensili sono ancorate al periodo UTC originale dei diritti. Le pagine inutilizzate non si accumulano e le quote future non si anticipano. Prezzi, imposte e benefici seguono ordine e account. Gli abbonamenti esistenti mantengono prezzo, versione dei benefici e condizioni di rinnovo originari; prove e omaggi precedenti seguono i propri registri.",
               "I modelli gratuiti usano pagine gratuite (omaggi applicabili inclusi), poi abbonamento e acquisti. Quelli a pagamento usano solo abbonamento o acquisti. Ogni nuova versione di pagina generata con successo consuma 1 pagina. Stessa richiesta, riuso del proprio risultato valido e tentativi interni non addebitano due volte; una nuova versione ritradotta esplicitamente conta. Fallimento, annullamento o assenza di testo traducibile liberano le prenotazioni secondo le regole; esiti incerti vengono verificati. I pacchetti attuali non scadono né si rinnovano. Le attività che consumano effettivamente pagine acquistate ricevono i limiti di ammissione e la priorità di esecuzione PLUS del pacchetto; il solo possesso di un saldo non dà ammissione a pagamento alle attività che usano la quota gratuita. Una volta esaurito, il pacchetto non concede più i suoi benefici.",
               "Velocità di ammissione e saldo sono distinti. Valori predefiniti: 10 immagini nuove ogni 60 secondi mobili per account standard, 100 per livelli a pagamento. I limiti orari valgono solo se configurati nei diritti; prevalgono i limiti effettivi di account e servizio. Stessa richiesta e riuso valido non contano due volte; fallimenti o annullamenti accettati possono occupare la finestra. Restano limiti di immagini, concorrenza e capacità, senza garanzie di velocità."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Abbonamenti, cancellazioni e rimborsi",
-        "description": "I nuovi abbonamenti sono trimestrali o annuali, senza prova con carta, e si rinnovano automaticamente.",
+        "title": "Acquisti di pass e rimborsi",
+        "description": "Pass da un mese, tre mesi o un anno con pagamento unico senza rinnovo automatico. Validità, quote, rimborsi e gestione degli abbonamenti esistenti.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Piani attuali e rinnovo",
+            "title": "Piani attuali e validità",
             "paragraphs": [
               membershipSummary,
-              "I nuovi abbonamenti sono trimestrali o annuali, senza prova con carta, e si rinnovano automaticamente. Ogni periodo contiene 3/12 finestre mensili ancorate alla data UTC originale di fatturazione. Le pagine inutilizzate non si accumulano e le quote future non si anticipano. Prezzi, imposte e benefici seguono ordine e account. Gli abbonamenti esistenti mantengono prezzo e versione dei benefici originari; prove e omaggi precedenti seguono i propri registri."
+              "Le nuove adesioni sono pass da un mese, tre mesi o un anno con pagamento unico, senza rinnovo automatico né prova. Le finestre mensili sono ancorate al periodo UTC originale dei diritti. Le pagine inutilizzate non si accumulano e le quote future non si anticipano. Prezzi, imposte e benefici seguono ordine e account. Gli abbonamenti esistenti mantengono prezzo, versione dei benefici e condizioni di rinnovo originari; prove e omaggi precedenti seguono i propri registri."
             ]
           },
           {
-            "title": "Interrompi futuri rinnovi",
+            "title": "Gestire un abbonamento esistente",
             "paragraphs": [
               "Accedi all'account del tuo sito web o utilizza la voce dell'account di estensione per gestire l'abbonamento. La disdetta interrompe il rinnovo successivo e non cancella automaticamente i benefici già validi; fai affidamento sulla scadenza indicata nel tuo account.",
               "Annulla nell’account del sito prima del rinnovo. Per prove precedenti, annulla prima della fine originale per evitare addebiti. Disinstallare, chiudere il browser o uscire non annulla l’abbonamento. Gli ordini pagati restano separati, senza fusione, conguaglio o rimborso automatico. Acquisto errato o problemi di accesso: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Come posso annullare?",
-        "answer": "Utilizza il sito web o la voce dell'account di estensione per gestire l'abbonamento. Annulla prima del prossimo rinnovo o scadenza della prova; la disinstallazione non si annulla. I vantaggi esistenti seguono la scadenza visualizzata nel tuo account. Per assistenza sulla fatturazione, inviare un'e-mail a comics@nodelane.net.",
+        "question": "Devo annullare il rinnovo?",
+        "answer": "Gli abbonamenti esistenti continuano alle condizioni originali. Gestiscili dall’account del sito o dell’estensione e annulla prima del prossimo rinnovo per interrompere gli addebiti futuri. Disinstallare non annulla l’abbonamento. I benefici pagati restano validi fino alla scadenza indicata nell’account. Assistenza: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {
@@ -898,7 +898,7 @@ export default {
     "会员有效期至": "Iscrizione valida fino al ",
     "阅读、翻译和用量查看，请前往浏览器插件。": "Per la lettura continua e i dettagli di utilizzo dell’estensione, apri l’estensione. La traduzione di immagini sul sito usa anche la quota di questo account.",
     "下载插件": "Scarica l'estensione",
-    "会员订阅": "Appartenenza",
+    "会员订阅": "Stato dell’adesione",
     "刷新": "Aggiorna",
     "订阅状态": "Stato dell'abbonamento",
     "下次计费": "Prossimo pagamento",

@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from . import stripe_client as stripe
-from .billing_models import BillingInvoice, BillingPlanRevision, BillingPrice, BillingTerm, BillingPriceBinding
+from .billing_models import MEMBERSHIP_MONTHS, BillingInvoice, BillingPlanRevision, BillingPrice, BillingTerm, BillingPriceBinding
 from .entitlement_models import QuotaPeriod
 from .entitlements import MONTHLY, month_boundary
 from .providers import digest
@@ -35,7 +35,7 @@ def grant_term(db, user, sub, price, kind, start, end, invoice_id=None, *, billi
         billing_order_id=billing_order_id, invoice_id=invoice_id, kind=kind, starts_at=start, ends_at=end)
     db.add(term)
     db.flush()
-    count = {'month': 1, 'quarter': 3, 'year': 12}[price.interval] if kind == 'paid' else 1
+    count = MEMBERSHIP_MONTHS[price.interval] if kind == 'paid' else 1
     pages = revision.trial_classic_pages if kind == 'trial' else revision.monthly_classic_pages
     if pages is None or pages == 0:
         return term  # Unlimited access and zero-page terms do not need a quota bucket.

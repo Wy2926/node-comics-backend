@@ -11,7 +11,9 @@ import { appCopy } from '../src/i18n/apps';
 import { appRelease } from '../src/data/app';
 import { homeCopy } from '../src/i18n/home';
 import { sitesCopy } from '../src/i18n/sites';
-import { publishedAmount } from '../src/components/PublishedPlanPricing';
+import { publishedSubscriptions } from '../src/data/published-plans';
+import { amount } from '../src/lib/billing';
+import { membershipIntervals, membershipPricing } from '../src/lib/billing-cycle';
 import { comparisonRows } from '../src/lib/pricing-comparison';
 import { dictionaries, locales, localeFromPath, basePath, localPath, publicPaths } from '../src/i18n';
 const root = resolve('dist');
@@ -343,13 +345,16 @@ for (const file of htmlFiles) {
   }
   if (basePath(route) === '/pricing/') {
     const published = $('.published-plan-pricing');
-    if (published.length !== 2 || published.attr('data-billing-interval') !== 'quarter' || published.first().find('.price .price-value').text() !== publishedAmount('quarter',locale)) errors.push(`${label}: initial static pricing must show the actual published quarterly total`);
-    if ($('.pricing-comparison .billing-cycle input[type=radio]').length !== 2) errors.push(`${label}: quarterly/yearly preview must be available without an API quote`);
+    const {plans,display}=membershipPricing(publishedSubscriptions,'month');
+    if (published.length !== plans.length || published.toArray().some((node,index)=>$(node).attr('data-billing-interval') !== plans[index].interval || $(node).find('.price .price-value').text() !== amount(plans[index],locale))) errors.push(`${label}: initial static pricing must show actual catalog totals`);
+    const cycles = $('.pricing-comparison .billing-cycle input[type=radio]').toArray().map(node => $(node).attr('value'));
+    if (cycles.join(',') !== membershipIntervals(display).join(',')) errors.push(`${label}: preview cycles must match the catalog`);
+    if ($('.billing-payment-type').length || $('.subscription-card.paid:not([data-billing-type="onetime"])').length) errors.push(`${label}: new memberships must be prepaid without a payment-type selector`);
     const comparison = $('.pricing-comparison');
     const cards = comparison.find('.subscription-card');
-    if (comparison.length !== 1 || cards.length !== 3) errors.push(`${label}: expected Free and preview subscription cards`);
+    if (comparison.length !== 1 || cards.length !== plans.length+1) errors.push(`${label}: expected Free and preview subscription cards`);
     const expectedRows = comparisonRows(locale, 0);
-    for (const [index, tier] of ['free', 'lite', 'lite'].entries()) {
+    for (const [index, tier] of ['free', ...plans.map(()=>'lite')].entries()) {
       const card = cards.eq(index);
       if (card.find('.subscription-allowance').length !== 1) errors.push(`${label}: missing prominent page allowance`);
       for (const feature of expectedRows.filter(row => row.key === 'model' || row.key === 'rate' || row.key === 'priority')) {
@@ -359,15 +364,15 @@ for (const file of htmlFiles) {
     }
     const table = comparison.find('.plan-comparison');
     const keys = table.find('tbody tr').toArray().map(node => $(node).attr('data-feature'));
-    if (table.find('thead th').length !== 4 || JSON.stringify(keys) !== JSON.stringify(expectedRows.map(row => row.key))) errors.push(`${label}: incorrect Free/PLUS/Pro comparison rows`);
+    if (table.find('thead th').length !== plans.length+2 || JSON.stringify(keys) !== JSON.stringify(expectedRows.map(row => row.key))) errors.push(`${label}: incorrect catalog comparison rows`);
     if (!comparison.find('[data-plan="pro"] .plan-difference').text().includes((1500).toLocaleString(locale))) errors.push(`${label}: missing catalog-driven paid quota difference`);
     for (const feature of expectedRows.filter(row => row.detail)) {
       const row = table.find(`[data-feature="${feature.key}"]`), trigger = row.find('.feature-info-trigger'), tip = row.find('[role="tooltip"]');
       if (trigger.length !== 1 || trigger.attr('aria-label') !== feature.label || trigger.attr('aria-describedby') !== tip.attr('id') || tip.text() !== feature.detail || !tip.is('[hidden]')) errors.push(`${label}: missing accessible localized feature tip ${feature.key}`);
     }
-    if (comparison.find('.price .price-currency').length !== 3 || comparison.find('.billing-cycle-saving .annual-badge').length !== 1) errors.push(`${label}: pricing needs currency typography and annual discount`);
+    if (comparison.find('.price .price-currency').length !== plans.length+1 || comparison.find('.billing-cycle-saving .annual-badge').length !== 1) errors.push(`${label}: pricing needs currency typography and annual discount`);
     if (comparison.find('.comparison-note').length < 2) errors.push(`${label}: missing quota consumption and renewal disclosures`);
-    if (comparison.find('.billing-availability button[disabled]').length !== 2 || $('.billing-availability[data-state="loading"]').length !== 2) errors.push(`${label}: static pricing must explain purchase availability with a disabled action`);
+    if (comparison.find('.billing-availability button[disabled]').length !== plans.length || $('.billing-availability[data-state="loading"]').length !== plans.length) errors.push(`${label}: static pricing must explain purchase availability with a disabled action`);
     if ($('a[href*="price="]').length || $('[data-billing-catalog="live"]').length) errors.push(`${label}: static pricing must not fabricate a purchasable API offer`);
   }
   $('img').each((_,node) => {

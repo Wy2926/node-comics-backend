@@ -159,7 +159,7 @@ def test_membership_term_replay_still_rejects_changed_period(prepaid):
         assert db.scalar(select(func.count()).select_from(QuotaPeriod).where(QuotaPeriod.source == 'subscription')) == 3
 
 
-@pytest.mark.parametrize('prepaid', ['quarter', 'year'], indirect=True)
+@pytest.mark.parametrize('prepaid', ['month', 'quarter', 'year'], indirect=True)
 @pytest.mark.parametrize('year,february_days', [(2023, 28), (2024, 29)])
 def test_prepaid_uses_same_membership_and_calendar_month_buckets(prepaid, year, february_days):
     from app.billing_access import first_subscription
@@ -175,16 +175,18 @@ def test_prepaid_uses_same_membership_and_calendar_month_buckets(prepaid, year, 
         db.commit()
     paid(state)
     orders, terms, buckets = membership_records()
-    count = 3 if state['interval'] == 'quarter' else 12
-    end = datetime(year, 4, 30, 12, 34, 56) if count == 3 else datetime(year + 1, 1, 31, 12, 34, 56)
+    count = {'month': 1, 'quarter': 3, 'year': 12}[state['interval']]
+    end = {1: datetime(year, 2, february_days, 12, 34, 56),
+        3: datetime(year, 4, 30, 12, 34, 56), 12: datetime(year + 1, 1, 31, 12, 34, 56)}[count]
     assert len(orders) == len(terms) == 1 and len(buckets) == count
     term = terms[0]
     assert term.kind == 'paid' and term.subscription_id is None and term.invoice_id is None
     assert term.billing_order_id == orders[0].id and term.price_id == 'purchase-price'
     assert term.starts_at == orders[0].paid_at == state['at'] and term.ends_at == end
     assert buckets[0].starts_at == state['at']
-    assert buckets[0].ends_at == buckets[1].starts_at == datetime(year, 2, february_days, 12, 34, 56)
-    assert buckets[1].ends_at == buckets[2].starts_at == datetime(year, 3, 31, 12, 34, 56)
+    assert buckets[0].ends_at == datetime(year, 2, february_days, 12, 34, 56)
+    if count > 1:
+        assert buckets[1].ends_at == buckets[2].starts_at == datetime(year, 3, 31, 12, 34, 56)
     assert buckets[-1].ends_at == end
     assert all(bucket.granted == 300 and bucket.billing_term_id == term.id for bucket in buckets)
     assert all(bucket.source == 'subscription' and bucket.billing_order_id is None for bucket in buckets)
@@ -199,7 +201,8 @@ def test_prepaid_uses_same_membership_and_calendar_month_buckets(prepaid, year, 
         assert db.scalar(select(func.count()).select_from(QuotaPeriod).where(QuotaPeriod.source == 'purchase')) == 0
         assert db.scalar(select(func.count()).select_from(Ledger).where(Ledger.kind == 'purchase')) == 0
         assert first_subscription(db, state['owner'], state['at'])[0].id == buckets[0].id
-        assert first_subscription(db, state['owner'], buckets[1].starts_at)[0].id == buckets[1].id
+        if count > 1:
+            assert first_subscription(db, state['owner'], buckets[1].starts_at)[0].id == buckets[1].id
         assert first_subscription(db, state['owner'], end) is None
     for bucket in buckets:
         rights = entitlement_at(state, bucket.starts_at)
@@ -254,7 +257,6 @@ def test_prepaid_stable_intent_and_status_do_not_create_subscription(prepaid):
         assert 'subscription_data' not in state['posts'][0]
 
 
-@pytest.mark.parametrize('prepaid', ['quarter', 'year'], indirect=True)
 @pytest.mark.parametrize('distinct_keys', [False, True], ids=['same-key', 'different-tabs'])
 def test_prepaid_concurrent_same_intent_and_notification_replay_grant_once(prepaid, distinct_keys):
     from app.billing_checkout import start_checkout
@@ -283,7 +285,7 @@ def test_prepaid_concurrent_same_intent_and_notification_replay_grant_once(prepa
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda _: sync_session(session['id'], provider=state['provider']), range(8)))
     orders, terms, buckets = membership_records()
-    assert len(orders) == len(terms) == 1 and len(buckets) == (3 if state['interval'] == 'quarter' else 12)
+    assert len(orders) == len(terms) == 1 and len(buckets) == {'month': 1, 'quarter': 3, 'year': 12}[state['interval']]
     assert all(bucket.used == bucket.reserved == 0 for bucket in buckets)
     assert all(buy(state, key).json()['fulfilled'] is True for key in keys)
     assert len(state['sessions']) == 1
@@ -353,6 +355,7 @@ def test_prepaid_requires_verified_payment_time(prepaid):
     assert membership_records()[1][0].starts_at == state['at']
 
 
+@pytest.mark.parametrize('prepaid', ['month', 'quarter'], indirect=True)
 @pytest.mark.parametrize('kind,amount', [('refund', 399), ('refund', 99), ('dispute', 399)])
 def test_prepaid_reversal_preserves_usage_and_never_restores(prepaid, kind, amount):
     from app.billing_access import first_subscription
@@ -403,6 +406,7 @@ def test_prepaid_reversal_before_payment_notification_never_grants(prepaid, kind
     assert buy(state).json()['fulfilled'] is True
 
 
+@pytest.mark.parametrize('prepaid', ['month', 'quarter'], indirect=True)
 def test_prepaid_manual_renewal_extends_without_duplicate_months(prepaid):
     state = prepaid
     assert buy(state).status_code == 200
@@ -411,7 +415,7 @@ def test_prepaid_manual_renewal_extends_without_duplicate_months(prepaid):
     assert buy(state, 'manual-renewal').status_code == 200
     paid(state)
     orders, terms, buckets = membership_records()
-    assert len(orders) == len(terms) == 2 and len(buckets) == 6
+    assert len(orders) == len(terms) == 2 and len(buckets) == 2 * {'month': 1, 'quarter': 3}[state['interval']]
     assert terms[0].id == first.id and terms[0].starts_at == first.starts_at and terms[0].ends_at == first.ends_at
     assert terms[1].starts_at == first.ends_at
     status = state['client'].get('/v1/billing/status', headers=state['auth']).json()['prepaid_membership']
@@ -585,6 +589,40 @@ def test_pending_membership_blocks_other_payment_type_until_verified_closed(memb
     changed = buy_membership_type(state, other_type, 'other-payment-type')
     assert changed.status_code == 200, changed.text
     assert len(state['posts']) == 3 and not membership_records()[1]
+
+
+def test_recurring_cutover_blocks_new_buyers_but_preserves_original_checkout(membership_payment_choices, monkeypatch):
+    from app import billing_catalog
+    from app.billing_catalog import PriceState, publish_price, initialize_catalog
+    from app.billing_models import BillingPrice, BillingPriceBinding
+    from app.db import session_factory
+    from app.models import User
+    state = membership_payment_choices
+    original = buy_membership_type(state, 'recurring', 'before-retirement')
+    assert original.status_code == 200, original.text
+    # Apply the shipping policy to a storefront with an actual outstanding legacy intent.
+    monkeypatch.setattr(billing_catalog, 'NEW_SALE_TYPES', ('onetime',))
+    newcomer = login(state['client'], 'after-retirement')
+    for price in state['client'].get('/v1/billing/status', headers=newcomer).json()['offers']:
+        assert price['billing_type'] == 'onetime'
+    def reject_new():
+        response = state['client'].post('/v1/billing/checkouts', headers=newcomer,
+            json={'provider': state['provider'], 'price_id': 'plus-month-v1'})
+        assert response.status_code == 409 and response.json()['error']['code'] == 'BILLING_PLAN_UNAVAILABLE'
+    reject_new()  # The cutover must already hold before an operator archives the price.
+    with session_factory()() as db:
+        actor = db.get(User, state['owner'])
+        publish_price('plus-month-v1', PriceState(status='archived'), db, actor)
+        initialize_catalog(db)
+        db.commit()
+        assert db.get(BillingPrice, 'plus-month-v1').status == 'archived'
+        assert db.get(BillingPriceBinding, 'plus-month-v1-binding').status == 'active'
+    assert buy_membership_type(state, 'recurring', 'before-retirement').json() == original.json()
+    assert len(state['posts']) == 1
+    catalog = state['client'].get('/v1/billing/catalog').json()
+    assert all(offer['billing_type'] == 'onetime' for offer in catalog['offers'])
+    reject_new()
+    assert len(state['posts']) == 1
 
 
 def test_concurrent_membership_payment_types_cannot_create_two_payable_intents(membership_payment_choices):

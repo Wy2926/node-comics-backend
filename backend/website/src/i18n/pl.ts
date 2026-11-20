@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/pl';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Czytanie lokalne jest bezpłatne. Free pozwala tłumaczyć 30 stron dziennie za pomocą modeli podstawowych. PLUS: 2500 stron miesięcznie za 6,66 USD kwartalnie lub 23,99 USD rocznie. Pro: 4000 stron miesięcznie za 9,99 USD kwartalnie lub 35,99 USD rocznie. Oba plany obejmują modele podstawowe i dodatkowe. Dostępne modele i mnożniki zużycia limitu znajdziesz na ekranie tłumaczenia. Miesięczne limity bez przenoszenia i okresu próbnego. Bezterminowe pakiety: 3500 stron za 5,99 USD lub 7000 za 9,99 USD. Podatki i suma przy płatności.`;
+const membershipSummary = `Czytanie lokalne jest bezpłatne. Free pozwala tłumaczyć 30 stron dziennie za pomocą modeli podstawowych. PLUS: 2500 stron miesięcznie za 2,99 USD na miesiąc, 6,66 USD na trzy miesiące lub 23,99 USD na rok. Pro: 4000 stron miesięcznie za 3,99 USD na miesiąc, 9,99 USD na trzy miesiące lub 35,99 USD na rok. Oba plany obejmują modele podstawowe i dodatkowe. Dostępne modele i mnożniki zużycia limitu znajdziesz na ekranie tłumaczenia. Miesięczne limity bez przenoszenia i okresu próbnego. Jednorazowa płatność bez automatycznego odnawiania. Bezterminowe pakiety: 3500 stron za 5,99 USD lub 7000 za 9,99 USD. Podatki i suma przy płatności.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Dziennik zmian",
     "privacy": "Polityka prywatności",
     "terms": "Warunki usługi",
-    "refund": "Subskrypcje i zwroty pieniędzy",
+    "refund": "Zakupy i zwroty pieniędzy",
     "home": "Strona główna",
     "skip": "Przejdź do treści",
     "navigation": "Główna nawigacja",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Zostaw tłumaczenie NodeLane Comics. Zachowaj swoją uwagę na następną stronę.",
     "ctaButton": "Rozpocznij swoją podróż czytelniczą",
     "pricingTitle": "Czytaj za darmo. Wybierz swój plan tłumaczeń.",
-    "pricingDescription": "PLUS / Pro i pakiety bez terminu ważności. Płatność kwartalna lub roczna, strony co miesiąc. Bez okresu próbnego.",
+    "pricingDescription": "Karnety PLUS / Pro na miesiąc, trzy miesiące lub rok i bezterminowe pakiety stron. Jednorazowa płatność bez automatycznego odnawiania i próby. Strony co miesiąc.",
     "freePlan": "Bezpłatny",
     "freePlanDescription": "Do codziennej lektury",
     "free": "bezpłatny",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Serwis i konta",
             "paragraphs": [
-              "NodeLane Comics zapewnia usługi rozszerzenia, czytnika i tłumaczenia. Przed użyciem przeczytaj niniejsze warunki i politykę prywatności; przestań korzystać z usługi, jeśli się z tym nie zgadzasz. Zaktualizowano 2026-10-17 r. Witryna zawiera informacje o produktach, przewodniki, pliki do pobrania i zarządzanie kontem, a nie katalog komiksów ani sprzedaż komiksów.",
+              "NodeLane Comics zapewnia usługi rozszerzenia, czytnika i tłumaczenia. Przed użyciem przeczytaj niniejsze warunki i politykę prywatności; przestań korzystać z usługi, jeśli się z tym nie zgadzasz. Witryna zawiera informacje o produktach, przewodniki, pliki do pobrania i zarządzanie kontem, a nie katalog komiksów ani sprzedaż komiksów.",
               "Korzystaj z konta, do którego masz prawo, i chroń swoje dane uwierzytelniające oraz urządzenie. Korzyści i dostęp weryfikowane są na serwerze. Nie podszywaj się pod inne osoby, nie uzyskuj dostępu do ich prywatnych rejestrów, nie omijaj limitów szybkości lub obrazu, nie zakłócaj usług poprzez nadużycie automatyzacji ani nie atakuj produktu i jego dostawców. Niewłaściwe użycie może prowadzić do ograniczonego dostępu.",
               "Kod rozszerzenia jest na GPL-3.0-only; składniki zewnętrzne zachowują własne licencje. Warunki usługi online nie ograniczają praw GPL do używania, modyfikowania i rozpowszechniania ani nie nadają praw do komiksów."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Korzyści i subskrypcje",
             "paragraphs": [
               membershipSummary,
-              "Nowe subskrypcje są kwartalne lub roczne, bez próby wymagającej karty, i odnawiają się automatycznie. Okres obejmuje 3/12 miesięcznych okien limitu według pierwotnej daty rozliczenia UTC. Niewykorzystane strony nie przechodzą dalej, przyszłych nie można użyć wcześniej. Ceny, podatki i korzyści wynikają z zamówienia i konta. Istniejące subskrypcje zachowują pierwotną cenę i wersję uprawnień; dawne próby i prezenty podlegają swoim zapisom.",
+              "Nowe karnety na miesiąc, trzy miesiące lub rok opłaca się jednorazowo, bez automatycznego odnawiania i próby. Miesięczne okna limitu wynikają z pierwotnego okresu uprawnień UTC. Niewykorzystane strony nie przechodzą dalej, przyszłych nie można użyć wcześniej. Ceny, podatki i korzyści wynikają z zamówienia i konta. Istniejące subskrypcje zachowują pierwotną cenę, wersję uprawnień i zasady odnawiania; dawne próby i prezenty podlegają swoim zapisom.",
               "Modele bezpłatne zużywają strony bezpłatne (z właściwymi prezentami), potem subskrypcję i zakupy. Płatne modele tylko subskrypcję lub zakupy. Każda pomyślnie wygenerowana nowa wersja strony kosztuje 1 stronę. Ten sam wniosek, własny ważny wynik i wewnętrzne ponowienia nie są naliczane dwukrotnie; świadomie zlecona nowa wersja tłumaczenia jest naliczana. Błąd, anulowanie lub brak tekstu do tłumaczenia zwalniają rezerwacje zgodnie z zasadami; niepewne wyniki są sprawdzane. Obecne pakiety nie wygasają ani nie odnawiają się automatycznie. Zadania faktycznie zużywające zakupione strony otrzymują limity przyjmowania i priorytet wykonania PLUS danego pakietu; samo posiadanie salda nie daje płatnego trybu przyjmowania zadaniom korzystającym z bezpłatnego limitu. Po wyczerpaniu pakiet nie zapewnia już swoich korzyści.",
               "Tempo przyjmowania i saldo są oddzielne. Domyślnie: 10 nowych obrazów na ruchome 60 sekund dla zwykłych kont, 100 dla płatnych poziomów. Limit godzinowy obowiązuje tylko, gdy zapisano go w uprawnieniach; stosuje się rzeczywiste limity konta i usługi. Ten sam wniosek i ważne ponowne użycie nie liczą się dwa razy; przyjęte błędy lub anulowania mogą zajmować okno. Limity obrazu, współbieżności i wydajności nadal obowiązują, bez gwarancji szybkości."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Subskrypcje, anulowanie i zwroty pieniędzy",
-        "description": "Nowe subskrypcje są kwartalne lub roczne, bez próby wymagającej karty, i odnawiają się automatycznie.",
+        "title": "Zakup karnetów i zwroty pieniędzy",
+        "description": "Karnety na miesiąc, trzy miesiące lub rok opłacane jednorazowo bez automatycznego odnawiania. Ważność, limity, zwroty i istniejące subskrypcje.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Obecne plany i odnowienie",
+            "title": "Obecne plany i ważność",
             "paragraphs": [
               membershipSummary,
-              "Nowe subskrypcje są kwartalne lub roczne, bez próby wymagającej karty, i odnawiają się automatycznie. Okres obejmuje 3/12 miesięcznych okien limitu według pierwotnej daty rozliczenia UTC. Niewykorzystane strony nie przechodzą dalej, przyszłych nie można użyć wcześniej. Ceny, podatki i korzyści wynikają z zamówienia i konta. Istniejące subskrypcje zachowują pierwotną cenę i wersję uprawnień; dawne próby i prezenty podlegają swoim zapisom."
+              "Nowe karnety na miesiąc, trzy miesiące lub rok opłaca się jednorazowo, bez automatycznego odnawiania i próby. Miesięczne okna limitu wynikają z pierwotnego okresu uprawnień UTC. Niewykorzystane strony nie przechodzą dalej, przyszłych nie można użyć wcześniej. Ceny, podatki i korzyści wynikają z zamówienia i konta. Istniejące subskrypcje zachowują pierwotną cenę, wersję uprawnień i zasady odnawiania; dawne próby i prezenty podlegają swoim zapisom."
             ]
           },
           {
-            "title": "Zatrzymaj przyszłą odnowę",
+            "title": "Zarządzanie istniejącą subskrypcją",
             "paragraphs": [
               "Zaloguj się na swoje konto w witrynie lub użyj wpisu konta rozszerzenia, aby zarządzać subskrypcją. Anulowanie wstrzymuje kolejne odnowienie i nie powoduje automatycznego usunięcia już ważnych korzyści; polegać na wygaśnięciu wskazanym na Twoim koncie.",
               "Anuluj na koncie witryny przed odnowieniem. Dawną próbę anuluj przed pierwotnym końcem, by uniknąć opłaty. Odinstalowanie, zamknięcie przeglądarki lub wylogowanie nie anuluje subskrypcji. Opłacone zamówienia pozostają oddzielne, bez automatycznego łączenia, proporcjonalnych rozliczeń lub zwrotów. Pomyłka albo brak dostępu: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Jak anulować?",
-        "answer": "Użyj strony internetowej lub wpisu konta rozszerzenia, aby zarządzać subskrypcją. Anuluj przed kolejnym odnowieniem lub wygaśnięciem okresu próbnego; odinstalowanie nie powoduje anulowania. Istniejące korzyści wygasają po wygaśnięciu wyświetlanym na Twoim koncie. Aby uzyskać pomoc dotyczącą rozliczeń, wyślij e-mail na adres comics@nodelane.net.",
+        "question": "Czy muszę anulować odnawianie?",
+        "answer": "Istniejące subskrypcje działają na pierwotnych zasadach. Zarządzaj nimi z konta na stronie lub w rozszerzeniu i anuluj przed kolejnym odnowieniem, aby zatrzymać przyszłe opłaty. Odinstalowanie nie anuluje subskrypcji. Opłacone uprawnienia pozostają ważne do terminu wskazanego na koncie. Pomoc: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

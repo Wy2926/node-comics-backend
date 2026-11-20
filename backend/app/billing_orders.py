@@ -1,6 +1,7 @@
 """Payment ledger and append-only state changes, under the owner's billing lock."""
 from sqlalchemy import select
 from .billing_models import BillingCheckout, BillingOrder, BillingOrderTransition, BillingPrice, BillingTerm
+from .billing_providers import require
 from .models import now, uid
 
 
@@ -47,6 +48,9 @@ def payment_order(db, sub, external_id, total, status, source, *, event_id=None,
             db.add(order)
             db.flush()
         order.external_id = external_id
+    require(order.owner_id == sub.owner_id and order.checkout_id == sub.checkout_id
+        and order.price_id == sub.price_id and order.binding_id == sub.binding_id
+        and order.subscription_id in (None, sub.id), 'BILLING_PURCHASE_CONFLICT')
     order.subscription_id, order.total = sub.id, total
     order.subtotal = subtotal
     # Invoices remain paid after their charge is refunded or disputed. Ordinary

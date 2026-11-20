@@ -5,8 +5,9 @@ import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
 export type BillingProvider='stripe'|'creem';
 export type BillingType='recurring'|'onetime';
+export interface BillingCatalog {offers:BillingOffer[];quota_offers:BillingOffer[]}
 export interface BillingChannel {provider:BillingProvider;binding_id:string;trial_days:number;trial_classic_pages:number|null}
-export interface BillingPrice {id:string;name:string;currency:string;unit_amount:number;interval:'month'|'quarter'|'year'|'once';billing_type?:BillingType;service_plan_id?:string;quota_pages?:number;quota_validity_days?:number|null;monthly_classic_pages:number|null;trial_days:number;trial_classic_pages:number|null;plan_id?:string;hourly_image_limit?:number|null}
+export interface BillingPrice {id:string;name:string;currency:string;unit_amount:number;interval:'month'|'quarter'|'year'|'once';billing_type?:BillingType;service_plan_id?:string;service_plan_name?:string;quota_pages?:number;quota_validity_days?:number|null;monthly_classic_pages:number|null;trial_days:number;trial_classic_pages:number|null;plan_id?:string;hourly_image_limit?:number|null}
 export interface BillingOffer extends BillingPrice {plan_id:string;plan_revision_id:string;channels:BillingChannel[]}
 export interface MembershipGift {starts_at:string|null;ends_at:string|null;days:number;state:'pending'|'scheduled'|'active'|'expired'}
 export interface PurchaseQuota {granted:number;used:number;reserved:number;available:number;next_expiry_at:string|null}
@@ -20,7 +21,6 @@ export interface Billing {
   prepaid_membership?:{price:BillingPrice;starts_at:string;ends_at:string;paid_through?:string}|null;
   subscription:{provider:BillingProvider;price:BillingPrice;status:string;next_billed_at:string|null;cancel_at:string|null;paid_ends_at:string|null;trial_ends_at:string|null;auto_renew:boolean;can_cancel:boolean;renewal_state:'normal'|'deferring'|'deferred'|'resuming'|'canceling'|'canceled'|'attention';resume_at:string|null}|null;
 }
-export const providerLabel=(provider:BillingProvider)=>provider==='creem'?'Creem':'Stripe';
 export const manageLabel=(locale:string)=>commerceCopy(locale)?.manage??({'zh-CN':'管理订阅','zh-TW':'管理訂閱',en:'Manage subscription',ja:'購読を管理',ko:'구독 관리'}[locale]??'Manage subscription');
 export function findPendingCheckout(billing:Billing,priceId:string){
   return [billing.pending_checkout,billing.subscription_checkout].find(checkout=>checkout?.price.id===priceId)??null;
@@ -37,12 +37,14 @@ export function hasManagedSubscription(status:string|undefined,entitlementExpire
 }
 export const isOneTimePrice=(price:Pick<BillingPrice,'interval'|'billing_type'>)=>price.billing_type==='onetime'||price.interval==='once';
 export const hasPrepaidMembership=(billing:Billing,now=Date.now())=>!!billing.prepaid_membership&&Date.parse(billing.prepaid_membership.paid_through??billing.prepaid_membership.ends_at)>now;
-export function membershipCheckoutBlocked(billing:Billing,price:BillingPrice){
-  if(price.interval==='once')return false;
+export function hasCurrentSubscription(billing:Billing){
   const subscription=billing.subscription;
   // Aggregate entitlement may belong to prepaid time, not a historical subscription.
   const subscriptionEnd=billing.prepaid_membership?subscription?.paid_ends_at??subscription?.trial_ends_at:billing.entitlement_expires_at;
-  return hasManagedSubscription(subscription?.status,subscriptionEnd)||(!!billing.gift&&billing.gift.state!=='expired')||(!isOneTimePrice(price)&&hasPrepaidMembership(billing));
+  return hasManagedSubscription(subscription?.status,subscriptionEnd);
+}
+export function membershipCheckoutBlocked(billing:Billing,price:BillingPrice){
+  return price.interval!=='once'&&(hasCurrentSubscription(billing)||(!!billing.gift&&billing.gift.state!=='expired')||(!isOneTimePrice(price)&&hasPrepaidMembership(billing)));
 }
 export function subscriptionStatusLabel(status:string,locale:string){
   const index:Record<string,number>={active:0,trialing:1,past_due:2,unpaid:2,incomplete:2,paused:3,scheduled_cancel:4,canceled:5,expired:6,incomplete_expired:6};
@@ -100,9 +102,11 @@ export const offerLabel=(offer:BillingPrice,locale:string)=>`${offer.name} · ${
 // Compare published quotes only when they buy the same benefits in the same currency.
 export function annualSavings(offer:BillingOffer,offers:BillingOffer[]){
   if(offer.interval!=='year')return null;
-  const monthly=offers.filter(p=>(p.interval==='month'||p.interval==='quarter')&&isOneTimePrice(p)===isOneTimePrice(offer)&&p.plan_id===offer.plan_id&&p.plan_revision_id===offer.plan_revision_id&&p.currency===offer.currency&&p.unit_amount>0);
-  if(!monthly.length)return null;
-  return annualSavingsForAmounts(Math.min(...monthly.map(p=>p.unit_amount/(p.interval==='quarter'?3:1))),offer.unit_amount);
+  const comparable=offers.filter(p=>isOneTimePrice(p)===isOneTimePrice(offer)&&p.plan_id===offer.plan_id&&p.plan_revision_id===offer.plan_revision_id&&p.currency===offer.currency&&p.unit_amount>0);
+  const monthly=comparable.filter(p=>p.interval==='month');
+  const baseline=monthly.length?monthly:comparable.filter(p=>p.interval==='quarter');
+  if(!baseline.length)return null;
+  return annualSavingsForAmounts(Math.min(...baseline.map(p=>p.unit_amount/(p.interval==='quarter'?3:1))),offer.unit_amount);
 }
 export function annualSavingsForAmounts(monthly:number,yearly:number){
   const regular=monthly*12,saved=regular-yearly;

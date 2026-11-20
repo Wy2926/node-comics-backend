@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/fr';
 import type { Dictionary } from './types';
 
-const membershipSummary = `La lecture locale est gratuite. Free permet de traduire 30 pages par jour avec les modèles de base. PLUS : 2 500 pages par mois, 6,66 USD par trimestre ou 23,99 USD par an. Pro : 4 000 pages par mois, 9,99 USD par trimestre ou 35,99 USD par an. Les deux forfaits incluent les modèles de base et des modèles supplémentaires. Consultez l’écran de traduction pour connaître les modèles disponibles et leurs coefficients de consommation du quota. Crédit mensuel sans report ni essai. Packs sans expiration : 3 500 pages à 5,99 USD, 7 000 à 9,99 USD. Taxes et total au paiement.`;
+const membershipSummary = `La lecture locale est gratuite. Free permet de traduire 30 pages par jour avec les modèles de base. PLUS : 2 500 pages par mois, 2,99 USD pour un mois, 6,66 USD pour trois mois ou 23,99 USD pour un an. Pro : 4 000 pages par mois, 3,99 USD pour un mois, 9,99 USD pour trois mois ou 35,99 USD pour un an. Les deux forfaits incluent les modèles de base et des modèles supplémentaires. Consultez l’écran de traduction pour connaître les modèles disponibles et leurs coefficients de consommation du quota. Crédit mensuel sans report ni essai. Paiement unique, sans renouvellement automatique. Packs sans expiration : 3 500 pages à 5,99 USD, 7 000 à 9,99 USD. Taxes et total au paiement.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Journal des modifications",
     "privacy": "Politique de confidentialité",
     "terms": "Conditions d'utilisation",
-    "refund": "Abonnements et remboursements",
+    "refund": "Achats et remboursements",
     "home": "Accueil",
     "skip": "Passer au contenu",
     "navigation": "Navigation principale",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Ouvrez une histoire que vous avez le droit de lire. Traduisez quand vous le souhaitez et gardez l’original à portée de main.",
     "ctaButton": "Commencez votre voyage de lecture",
     "pricingTitle": "Lisez gratuitement. Choisissez votre plan de traduction.",
-    "pricingDescription": "Abonnements PLUS / Pro et packs sans expiration. Paiement trimestriel ou annuel, pages créditées chaque mois. Sans essai.",
+    "pricingDescription": "Pass PLUS / Pro d’un mois, de trois mois ou d’un an et packs sans expiration. Paiement unique, sans renouvellement automatique ni essai. Pages créditées chaque mois.",
     "freePlan": "Gratuit",
     "freePlanDescription": "Pour un peu de lecture chaque jour",
     "free": "gratuit",
@@ -136,7 +136,7 @@ export default {
     "changelogDescription": "Suivez les mises à jour du traducteur de manga, la prise en charge du nouveau site, la compatibilité du navigateur et les correctifs de lecture. Les approbations des magasins Chrome, Edge et Firefox peuvent différer ; vérifiez votre version installée.",
     "rss": "Suivez les mises à jour via RSS",
     "accountTitle": "Mon compte",
-    "accountDescription": "Gérez votre compte et votre abonnement. La traduction d’images du site et l’extension partagent votre quota de compte.",
+    "accountDescription": "Consultez la validité de votre adhésion et vos pages disponibles, puis renouvelez selon vos besoins. Un compte pour le site et l’extension.",
     "callbackTitle": "Ouverture de votre pass lecteur.",
     "callbackDescription": "Vous reviendrez à votre compte une fois la connexion terminée.",
     "noscript": "JavaScript est requis pour la connexion au compte. Les pages de produits, les prix et les guides fonctionnent sans cela.",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Service et comptes",
             "paragraphs": [
-              "NodeLane Comics fournit des services d'extension, de lecture et de traduction. Lisez ces conditions et la politique de confidentialité avant utilisation ; arrêtez d'utiliser le service si vous n'êtes pas d'accord. Mis à jour le 2026-10-17. Le site Web fournit des informations sur les produits, des guides, des téléchargements et une gestion de compte, et non un catalogue de bandes dessinées ou des ventes de bandes dessinées.",
+              "NodeLane Comics fournit des services d'extension, de lecture et de traduction. Lisez ces conditions et la politique de confidentialité avant utilisation ; arrêtez d'utiliser le service si vous n'êtes pas d'accord. Le site Web fournit des informations sur les produits, des guides, des téléchargements et une gestion de compte, et non un catalogue de bandes dessinées ou des ventes de bandes dessinées.",
               "Utilisez un compte que vous êtes autorisé à utiliser et protégez vos informations d'identification et votre appareil. Les avantages et l'accès sont vérifiés sur le serveur. N'usurpez pas l'identité d'autrui, n'accédez pas à leurs dossiers privés, ne contournez pas les limites de débit ou d'image, ne perturbez pas les services avec une automatisation abusive ou n'attaquez pas le produit et ses fournisseurs. Une mauvaise utilisation peut conduire à un accès restreint.",
               "Le code source de l’extension est sous GPL-3.0-only ; les composants tiers gardent leurs licences. Ces conditions du service en ligne ne restreignent pas les droits d’utilisation, modification ou redistribution accordés par la GPL et n’accordent aucun droit sur les mangas."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Avantages et abonnements",
             "paragraphs": [
               membershipSummary,
-              "Les nouveaux abonnements sont trimestriels ou annuels, sans essai avec carte, et se renouvellent automatiquement. Chaque période comprend 3/12 fenêtres mensuelles ancrées sur la date de facturation UTC initiale, sans report ni avance de pages. Prix, taxes et droits suivent la commande et le compte. Les abonnements existants gardent leur prix et version de droits ; les anciens essais et cadeaux suivent leurs conditions enregistrées.",
+              "Les nouveaux pass d’un mois, de trois mois ou d’un an se paient une fois, sans renouvellement automatique ni essai. Les fenêtres mensuelles sont ancrées sur la période de droits UTC initiale, sans report ni avance de pages. Prix, taxes et droits suivent la commande et le compte. Les abonnements existants gardent leur prix, version de droits et conditions de renouvellement ; les anciens essais et cadeaux suivent leurs conditions enregistrées.",
               "Les modèles gratuits utilisent les pages gratuites (cadeaux applicables inclus), puis celles de l’abonnement et des lots. Les modèles payants utilisent seulement abonnement ou lots. Chaque nouvelle version de page réussie coûte 1 page. Même requête, résultat personnel valide réutilisé et reprises internes ne sont pas facturés deux fois ; une nouvelle version expressément retraduite est décomptée. Échec, annulation ou absence de texte traduisible libèrent les réservations selon les règles ; un résultat incertain est vérifié. Les lots actuels n’expirent pas et ne se renouvellent pas. Les tâches qui consomment réellement des pages achetées bénéficient des limites d’admission et de la priorité d’exécution PLUS du lot ; détenir un solde ne fait pas passer les tâches utilisant le quota gratuit à l’admission payante. Une fois épuisé, le lot ne donne plus ses avantages.",
               "Débit d’admission et solde sont distincts. Par défaut : 10 nouvelles images par 60 secondes glissantes pour un compte standard, 100 pour un niveau payant. Un plafond horaire ne s’applique que s’il est configuré dans les droits ; les limites réelles du compte et du service prévalent. Même requête et réutilisation valide ne comptent pas deux fois ; un échec ou une annulation après admission peut occuper la fenêtre. Les limites d’images, de concurrence et de capacité restent applicables, sans garantie de vitesse."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Abonnements, annulations et remboursements",
-        "description": "Les nouveaux abonnements sont trimestriels ou annuels, sans essai avec carte, et se renouvellent automatiquement.",
+        "title": "Achats de pass et remboursements",
+        "description": "Pass d’un mois, de trois mois ou d’un an à paiement unique, sans renouvellement automatique. Validité, quotas, remboursements et gestion des abonnements existants.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Offres actuelles et renouvellement",
+            "title": "Offres actuelles et validité",
             "paragraphs": [
               membershipSummary,
-              "Les nouveaux abonnements sont trimestriels ou annuels, sans essai avec carte, et se renouvellent automatiquement. Chaque période comprend 3/12 fenêtres mensuelles ancrées sur la date de facturation UTC initiale, sans report ni avance de pages. Prix, taxes et droits suivent la commande et le compte. Les abonnements existants gardent leur prix et version de droits ; les anciens essais et cadeaux suivent leurs conditions enregistrées."
+              "Les nouveaux pass d’un mois, de trois mois ou d’un an se paient une fois, sans renouvellement automatique ni essai. Les fenêtres mensuelles sont ancrées sur la période de droits UTC initiale, sans report ni avance de pages. Prix, taxes et droits suivent la commande et le compte. Les abonnements existants gardent leur prix, version de droits et conditions de renouvellement ; les anciens essais et cadeaux suivent leurs conditions enregistrées."
             ]
           },
           {
-            "title": "Arrêtez le renouvellement futur",
+            "title": "Gérer un abonnement existant",
             "paragraphs": [
               "Connectez-vous à votre compte de site Web ou utilisez l'entrée de compte d'extension pour gérer l'abonnement. L'annulation arrête le prochain renouvellement et n'efface pas automatiquement les prestations déjà valables ; comptez sur l'expiration indiquée sur votre compte.",
               "Annulez dans le compte du site avant le renouvellement. Pour un ancien essai, annulez avant sa fin initiale pour éviter la facturation. Désinstaller, fermer le navigateur ou se déconnecter n’annule pas l’abonnement. Plusieurs commandes payées restent distinctes, sans fusion, prorata ni remboursement automatique. Erreur d’achat ou accès impossible : comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Comment puis-je annuler ?",
-        "answer": "Utilisez le site Web ou l’entrée du compte d’extension pour gérer l’abonnement. Annuler avant le prochain renouvellement ou l’expiration de l’essai ; la désinstallation ne s'annule pas. Les avantages existants suivent l'expiration affichée dans votre compte. Pour obtenir de l'aide sur la facturation, envoyez un e-mail à comics@nodelane.net.",
+        "question": "Dois-je annuler le renouvellement ?",
+        "answer": "Les abonnements existants continuent selon leurs conditions initiales. Gérez-les depuis votre compte sur le site ou dans l’extension et annulez avant le prochain renouvellement pour arrêter les futurs prélèvements. Désinstaller l’extension n’annule pas l’abonnement. Les droits payés restent valables jusqu’à la date affichée. Aide : comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

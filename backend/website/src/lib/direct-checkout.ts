@@ -27,6 +27,7 @@ export function checkoutSelection(billing: Billing, priceId: string) {
   const offer = findCheckoutOffer(billing, priceId);
   if (!offer) throw Error("CHECKOUT_UNAVAILABLE");
   const pending = findPendingCheckout(billing,priceId);
+  if (!isOneTimePrice(offer) && !pending) throw Error("CHECKOUT_UNAVAILABLE");
   if (membershipCheckoutBlocked(billing,offer)) return null;
   const channel = selectedChannel(offer, pending?.provider);
   if (!channel) throw Error("CHECKOUT_UNAVAILABLE");

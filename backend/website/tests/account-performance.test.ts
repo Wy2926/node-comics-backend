@@ -17,12 +17,12 @@ const compiled=ts.transpileModule(readFileSync(new URL('../src/components/Accoun
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX},
 }).outputText;
 const identity:AuthIdentity={id:'login-a',subject:'reader-a'};
-const entitlement=(available=100)=>({plan:'lite',service_plan:'lite',plus_expires_at:null,
+const entitlement=(available=100)=>({plan:'lite',plan_name:'Lite',service_plan:'lite',plus_expires_at:null,
   purchase_quota:{granted:100,used:100-available,reserved:0,available,next_expiry_at:null}});
 const account=(name='Reader A',available=100)=>({user:{id:name,name},entitlements:entitlement(available)});
 const price:billingModule.BillingOffer={id:'month',name:'Lite',plan_id:'lite',plan_revision_id:'v1',currency:'usd',
   unit_amount:599,interval:'month',monthly_classic_pages:0,trial_days:0,trial_classic_pages:0,channels:[]};
-const billing:billingModule.Billing={enabled:true,providers:[],provider:'creem',environment:'test',trial_eligible:false,
+const billing:billingModule.Billing={enabled:true,providers:[{id:'creem',label:'Creem',environment:'test'}],provider:'creem',environment:'test',trial_eligible:false,
   subscription_checkout:null,offers:[],gift:null,entitlement_expires_at:null,
   subscription:{provider:'creem',status:'active',price,paid_ends_at:null,auto_renew:true,cancel_at:null,trial_ends_at:null,
     renewal_state:'normal',can_cancel:true,next_billed_at:null,resume_at:null}};
@@ -88,6 +88,32 @@ test('account and billing snapshots start in parallel; account appears without w
   assert.equal(view.byClass('account-subscription')?.props['aria-busy'],false);view.unmount();
 });
 
+test('account shows three independent balances including reserved pages before billing loads',async()=>{
+  const view=mount();await view.flush();
+  view.response('/v1/me').resolve({...account(),entitlements:{...entitlement(100),
+    free_quota:{available:28,reserved:2,next_expiry_at:null},
+    subscription_quota:{available:2400,reserved:4,unlimited:false,next_expiry_at:'2099-01-01T00:00:00Z'}}});
+  await view.flush();
+  const balances=view.all().filter(node=>node.props.className==='account-balance').map(content);
+  assert.equal(balances.length,3);
+  assert.match(balances[0],/28 页.*处理中 2 页/);
+  assert.match(balances[1],/2,400 页.*处理中 4 页.*2099/);
+  assert.match(balances[2],/100 页.*不过期/);
+  assert.equal(view.byClass('account-subscription')?.props['aria-busy'],true);
+  view.unmount();
+});
+
+test('account uses the entitlement name for Pro and new plans before billing loads',async()=>{
+  for(const [plan,plan_name] of [['pro','Pro'],['studio','Studio Reader']]){
+    const view=mount();await view.flush();
+    view.response('/v1/me').resolve({...account(),entitlements:{...entitlement(),plan,plan_name}});
+    await view.flush();
+    assert.equal(content(view.byClass('account-plan')),plan_name);
+    assert.equal(view.byClass('account-subscription')?.props['aria-busy'],true);
+    view.unmount();
+  }
+});
+
 test('failed initial billing is local, and its retry only reads billing status',async()=>{
   const view=mount();await view.flush();view.response('/v1/me').resolve(account());
   view.response('/v1/billing/status').reject(new TypeError('offline'));await view.flush();
@@ -134,6 +160,15 @@ test('refresh keeps account visible, ignores repeated clicks, and locks billing 
   assert.equal(view.calls.filter(call=>call.method==='POST').length,1);
   view.response('/v1/billing/sync').resolve({billing,entitlements:entitlement(90)});await view.flush();
   assert.match(view.text(),/90/);assert.equal(view.byClass('account-refresh')?.props.disabled,false);
+});
+
+test('a queued pass never hides cancellation of a still-renewing subscription',async()=>{
+  const view=mount();await view.flush();view.response('/v1/me').resolve(account());
+  view.response('/v1/billing/status').resolve({...billing,prepaid_membership:{
+    price:{...price,billing_type:'onetime'},starts_at:'2098-01-01T00:00:00Z',ends_at:'2099-01-01T00:00:00Z'}});
+  await view.flush();
+  assert.ok(view.byClass('prepaid-membership'));click(view.button('取消自动续费'));await view.flush();
+  assert.ok(view.button('确认取消续费'));assert.equal(view.calls.filter(call=>call.method==='POST').length,0);
 });
 
 test('provider sync failure preserves balance and subscription; retry never repeats sync',async()=>{

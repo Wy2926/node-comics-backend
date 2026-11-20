@@ -1,8 +1,9 @@
 """Refund/dispute observations under the owning account lock; no money-moving APIs."""
 import re
-from sqlalchemy import select
-from .billing_models import BillingRefund, BillingDispute, BillingOrderTransition
-from .billing_providers import require
+from sqlalchemy import func, literal_column, select
+from .billing_models import BillingEvent, BillingRefund, BillingDispute, BillingOrderTransition
+from .billing_orders import transition
+from .billing_providers import provider_environment, require
 from .models import now
 
 
@@ -40,3 +41,30 @@ def record_reversal(db, order, kind, external_id, *, amount, currency, status, o
 def reversal_json(row):
     return {key: getattr(row, key) for key in ('id', 'order_id', 'provider', 'environment', 'external_id',
         'transaction_id', 'amount', 'currency', 'status', 'event_id', 'occurred_at', 'observed_at', 'synced_at')}
+
+
+def creem_transaction_events(transaction_id):
+    return select(BillingEvent).where(BillingEvent.provider == 'creem',
+        BillingEvent.environment == provider_environment('creem'),
+        BillingEvent.payload.op('->>')(literal_column("'transaction_id'")) == transaction_id)
+
+
+def apply_creem_reversals(db, order):
+    # Signed reversals can precede settlement or a stale payment API snapshot.
+    events = db.scalars(creem_transaction_events(order.external_id).where(
+        BillingEvent.event_type.in_(['refund.created', 'dispute.created'])).order_by(BillingEvent.occurred_at))
+    for event in events:
+        snapshot = event.payload.get('reversal') or {}
+        record_reversal(db, order, event.event_type.split('.')[0], event.resource_id,
+            amount=snapshot.get('amount'), currency=snapshot.get('currency'), status=snapshot.get('status') or 'unknown',
+            occurred_at=event.occurred_at, observed_at=event.occurred_at, event_id=event.id)
+        if event.event_type == 'dispute.created':
+            transition(db, order, 'disputed', 'purchase_reversal', event.id)
+    db.flush()
+    total = db.scalar(select(func.coalesce(func.sum(BillingRefund.amount), 0)).where(
+        BillingRefund.order_id == order.id, BillingRefund.status == 'succeeded', BillingRefund.currency == order.currency))
+    order.refunded_total = max(order.refunded_total or 0, total)
+    if order.status not in ('refunded', 'disputed') and order.refunded_total:
+        # A partial-refund snapshot may report net payment; it alone cannot prove a full refund.
+        amount_due = max(order.total, order.subtotal or 0) if order.status == 'partially_refunded' else order.total
+        transition(db, order, 'refunded' if amount_due and order.refunded_total >= amount_due else 'partially_refunded', 'purchase_reversal')

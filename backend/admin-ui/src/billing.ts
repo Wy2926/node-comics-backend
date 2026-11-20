@@ -28,7 +28,7 @@ export type BillingOrderDetail = {order: BillingOrder; price: BillingPrice | nul
 
 export const providerName = (value: string) => ({stripe: 'Stripe', creem: 'Creem'}[value] ?? value);
 export const environmentName = (value: string) => value === 'live' ? '正式环境' : '测试环境';
-export const intervalName = (value: string | null, billingType?: BillingType | null) => value === 'once' ? '一次性购买' : value === 'quarter' ? billingType === 'onetime' ? '季卡' : '季付' : value === 'year' ? billingType === 'onetime' ? '年卡' : '年付' : value === 'month' ? '月付' : '—';
+export const intervalName = (value: string | null, billingType?: BillingType | null) => value === 'once' ? '一次性购买' : value === 'quarter' ? billingType === 'onetime' ? '季卡' : '季付' : value === 'year' ? billingType === 'onetime' ? '年卡' : '年付' : value === 'month' ? billingType === 'onetime' ? '月卡' : '月付' : '—';
 export const billingTypeName = (value: BillingType) => value === 'onetime' ? '一次付清，不自动续订' : '自动续订';
 export const quotaValidity = (days: number | null | undefined) => days == null ? '不过期' : `到账后 ${days} 天有效`;
 export const benefitsSummary = (value: BillingRevision) => (value.quota_pages ?? 0) > 0
@@ -38,12 +38,13 @@ const statusLabels: Record<string, string> = {draft: '草稿', active: '在售',
 export const billingStatus = (value: string | null | undefined) => value ? statusLabels[value] ?? value : '—';
 export const orderKind = (value: string, interval?: string | null, billingType?: BillingType | null) => interval === 'once' ? '额度购买' : billingType === 'onetime' ? '会员卡购买' : ({checkout: '首次订阅', initial: '首次订阅', subscription: '订阅付款', renewal: '订阅续费', payment: '付款', refund: '退款', trial: '试用订阅'}[value] ?? value);
 export function currencyDigits(currency: string) {return new Intl.NumberFormat('en', {style: 'currency', currency: currency.toUpperCase()}).resolvedOptions().maximumFractionDigits ?? 2;}
+const chargeDigits = (currency:string) => ['isk','ugx'].includes(currency.toLowerCase()) ? 2 : currencyDigits(currency);
 export function money(amount: number | null | undefined, currency: string | null | undefined) {
   if (amount == null || !currency) return '—';
-  try {return new Intl.NumberFormat('zh-CN', {style: 'currency', currency: currency.toUpperCase(), currencyDisplay: 'code'}).format(amount / 10 ** currencyDigits(currency));}
+  try {return new Intl.NumberFormat('zh-CN', {style: 'currency', currency: currency.toUpperCase(), currencyDisplay: 'code'}).format(amount / 10 ** chargeDigits(currency));}
   catch {return `${currency.toUpperCase()} ${amount}`;}
 }
-export function priceAmount(amount: number, currency: string) {return (amount / 10 ** currencyDigits(currency)).toFixed(currencyDigits(currency));}
+export function priceAmount(amount: number, currency: string) {return (amount / 10 ** chargeDigits(currency)).toFixed(currencyDigits(currency));}
 export function billingDate(value: string) {return new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`);}
 export const billingTime = (value: string | null | undefined) => value ? billingDate(value).toLocaleString('zh-CN', {hour12: false}) : '—';
 export function minorAmount(value: string, currency: string) {
@@ -51,7 +52,7 @@ export function minorAmount(value: string, currency: string) {
   if (!/^\d+(\.\d+)?$/.test(normalized)) throw Error('请输入有效的价格金额。');
   const [whole, fraction = ''] = normalized.split('.');
   if (fraction.length > digits) throw Error(`${currency.toUpperCase()} 最多支持 ${digits} 位小数。`);
-  const amount = Number(whole) * 10 ** digits + Number(fraction.padEnd(digits, '0'));
+  const amount = Number(whole + fraction.padEnd(chargeDigits(currency), '0'));
   if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100000000) throw Error('价格金额超出允许范围。');
   return amount;
 }

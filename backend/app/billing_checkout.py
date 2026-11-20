@@ -3,9 +3,9 @@ from datetime import timedelta, timezone
 from urllib.parse import urljoin
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
-from . import stripe_client as stripe, creem_client as creem
+from . import stripe_client as stripe, creem_client as creem, billing_catalog
 from .billing_providers import BillingError, require, provider_enabled, provider_environment, provider_config_json, resource_key, remote_id, stripe_quote
-from .billing_models import BillingAccount, BillingCustomer, BillingCheckout, BillingCheckoutAlias, BillingSubscription, BillingPrice, BillingPlanRevision, BillingPriceBinding, BillingOrder, BillingTerm
+from .billing_models import MEMBERSHIP_MONTHS, BillingAccount, BillingCustomer, BillingCheckout, BillingCheckoutAlias, BillingSubscription, BillingPrice, BillingPlanRevision, BillingPriceBinding, BillingOrder, BillingTerm
 from .entitlement_models import QuotaPeriod
 from .billing_access import ongoing_subscription, access_dates
 from .billing_catalog import offers, price_json, default_provider
@@ -352,7 +352,9 @@ def start_checkout(owner_id, price_id, provider, idempotency_key=None):
                 gift = gift_json(user)
                 require(not gift or gift['state'] == 'expired', 'BILLING_GIFT_ACTIVE')
             require(provider == default_provider(db), 'BILLING_CHANNEL_UNAVAILABLE')
-            require(price.environment == provider_environment(provider) and price.status == 'active', 'BILLING_PLAN_UNAVAILABLE')
+            require(db.scalar(select(BillingPrice.id).where(BillingPrice.id == price_id,
+                BillingPrice.environment == provider_environment(provider), BillingPrice.status == 'active',
+                BillingPrice.billing_type.in_(billing_catalog.NEW_SALE_TYPES)).with_for_update(read=True)), 'BILLING_PLAN_UNAVAILABLE')
             binding = db.scalar(select(BillingPriceBinding).where(BillingPriceBinding.price_id == price_id,
                 BillingPriceBinding.provider == provider, BillingPriceBinding.environment == price.environment,
                 BillingPriceBinding.status == 'active'))
@@ -362,7 +364,7 @@ def start_checkout(owner_id, price_id, provider, idempotency_key=None):
                 require(revision.quota_pages > 0 and revision.service_plan_id and not revision.trial_days
                     and revision.trial_classic_pages == 0 and revision.monthly_classic_pages == 0, 'BILLING_PLAN_UNAVAILABLE')
             elif price.billing_type == 'onetime':
-                require(price.interval in ('quarter', 'year') and revision.quota_pages == 0
+                require(price.interval in MEMBERSHIP_MONTHS and revision.quota_pages == 0
                     and not revision.trial_days and revision.trial_classic_pages == 0, 'BILLING_PLAN_UNAVAILABLE')
             trial = price.billing_type == 'recurring' and account.trial_used_at is None and revision.trial_days > 0
             if trial:

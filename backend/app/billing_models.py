@@ -5,6 +5,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
 
+MEMBERSHIP_MONTHS = {'month': 1, 'quarter': 3, 'year': 12}
+
 
 class BillingSettings(Base):
     """Exactly one site-wide provider for new purchases; existing intents stay bound."""
@@ -71,8 +73,8 @@ class BillingPrice(Base):
             ['billing_plan_revisions.id', 'billing_plan_revisions.plan_id']),
         CheckConstraint("environment IN ('test', 'live')"),
         CheckConstraint("interval IN ('month', 'quarter', 'year', 'once')", name='ck_billing_price_interval'),
-        CheckConstraint("(billing_type = 'recurring' AND interval IN ('month', 'quarter', 'year')) OR "
-            "(billing_type = 'onetime' AND interval IN ('quarter', 'year', 'once'))", name='ck_billing_price_type'),
+        CheckConstraint("billing_type IN ('recurring', 'onetime') AND "
+            "(interval != 'once' OR billing_type = 'onetime')", name='ck_billing_price_type'),
         CheckConstraint("status IN ('draft', 'active', 'archived')"), CheckConstraint('unit_amount > 0'),
         Index('uq_billing_active_offer', 'plan_id', 'environment', 'currency', 'interval', 'billing_type', unique=True,
             sqlite_where=text("status = 'active'"), postgresql_where=text("status = 'active'")))

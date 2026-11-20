@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { checkoutIntentKey, rememberCheckout, takeCheckout,PurchaseRetryAllowed } from '../lib/checkout-intent';
 import { ApiError } from '../lib/auth-session';
 
-export interface CheckoutCopy { busy: string; error: string; before: string; refund: string; renewal: string;retry?:string;retryHint?:string;resume?:string;uncertain?:string;conflict?:string;pending?:string }
+export interface CheckoutCopy { busy: string; error: string; before: string; refund: string;retry?:string;retryHint?:string;resume?:string;uncertain?:string;conflict?:string;pending?:string }
 export default function CheckoutButton({ priceId, accountHref, label, copy,disabled=false,showDisclosure=true,continueAfterLogin=true }: {
   priceId: string; accountHref: string; label: string; copy: CheckoutCopy;disabled?:boolean;showDisclosure?:boolean;continueAfterLogin?:boolean;
 }) {
@@ -72,6 +72,6 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,disab
         event.preventDefault(); void start(priceId, true);
       }}>{busy ? copy.busy : restartPurchase?copy.retry??label:label}<span className="ui-icon icon-arrow" aria-hidden="true"/></a>
     {error && <p className="billing-status" role="alert">{error}</p>}
-    {showDisclosure&&<p className="trial-note">{copy.before}<a className="text-link" href={accountHref.replace(/account\/$/, 'refund/')}>{copy.refund}</a>{copy.renewal}</p>}
+    {showDisclosure&&<p className="trial-note">{copy.before}<a className="text-link" href={accountHref.replace(/account\/$/, 'refund/')}>{copy.refund}</a></p>}
   </>;
 }

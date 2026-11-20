@@ -7,6 +7,7 @@ from .billing_models import BillingAccount, BillingCheckout, BillingSubscription
 from .billing_checkout import bind_session, bind_checkout_customer
 from .billing_grants import grant_term
 from .billing_orders import checkout_order, payment_order, transition, revoke_invoice, record_subscription_state
+from .billing_reversals import apply_creem_reversals
 from .config import settings
 from .db import session_factory
 from .entitlements import locked_user
@@ -89,16 +90,10 @@ def apply_transaction(db, user, sub, value, event_id=None):
     if reported is not None:
         order.refunded_total = max(order.refunded_total or 0, reported)
     event = db.get(BillingEvent, event_id) if event_id else None
-    if event and event.event_type in ('refund.created', 'dispute.created'):
-        require(event.provider == order.provider and event.environment == order.environment
-            and event.payload.get('transaction_id') == order.external_id, 'BILLING_REVERSAL_CONFLICT')
-        from .billing_reversals import record_reversal
-        snapshot = event.payload.get('reversal') or {}
-        record_reversal(db, order, event.event_type.split('.')[0], event.resource_id,
-            amount=snapshot.get('amount'), currency=snapshot.get('currency'), status=snapshot.get('status') or 'unknown',
-            occurred_at=event.occurred_at, observed_at=event.occurred_at, event_id=event.id)
     key = resource_key('creem', value['id'])
     receipt = db.get(BillingInvoice, key)
+    if not receipt or reported or (event and event.event_type in ('refund.created', 'dispute.created')):
+        apply_creem_reversals(db, order)
     # A reversal can be observed before its paid receipt. The order retains
     # that verified state even if a later API snapshot still reports paid.
     if order.status in ('refunded', 'disputed'):

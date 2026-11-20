@@ -21,8 +21,7 @@ def test_current_catalog_is_finite_no_trial_and_packs_never_expire(client):
     with session_factory()() as db:
         initialize_catalog(db)
         assert {(p.id, p.unit_amount) for p in db.scalars(select(BillingPrice))} == {
-            ('plus-quarter-v1', 666), ('plus-year-v1', 2399),
-            ('pro-quarter-v1', 999), ('pro-year-v1', 3599),
+            ('plus-month-prepaid-v1', 299), ('pro-month-prepaid-v1', 399),
             ('plus-quarter-prepaid-v1', 666), ('plus-year-prepaid-v1', 2399),
             ('pro-quarter-prepaid-v1', 999), ('pro-year-prepaid-v1', 3599),
             ('pages-3500-once-v1', 599), ('pages-7000-once-v1', 999)}
@@ -35,7 +34,20 @@ def test_current_catalog_is_finite_no_trial_and_packs_never_expire(client):
             assert (revision.quota_pages, revision.quota_validity_days, revision.service_plan_id) == (pages, None, 'plus')
         for price in db.scalars(select(BillingPrice)):
             assert price.status == 'draft'
-            assert price.billing_type == ('onetime' if price.interval == 'once' or '-prepaid-' in price.id else 'recurring')
+            assert price.billing_type == 'onetime'
+
+
+def test_catalog_has_no_payment_preference_and_service_labels_remain_dynamic(client):
+    from app.billing_catalog import price_json
+    from app.billing_models import BillingPlan
+    catalog = client.get('/v1/billing/catalog').json()
+    auth = login(client, 'catalog-default-reader')
+    status = client.get('/v1/billing/status', headers=auth).json()
+    assert 'checkout_defaults' not in catalog and 'checkout_defaults' not in status
+    with session_factory()() as db:
+        db.get(BillingPlan, 'plus').name = 'Renamed membership'
+        quote = price_json(db, db.get(BillingPrice, 'pages-3500-once-v1'))
+        assert quote['service_plan_name'] == 'Renamed membership'
 
 
 @pytest.mark.parametrize('document_case', ['unsubscribed'], indirect=True)
@@ -94,7 +106,8 @@ def test_existing_page_pack_serves_images_and_books_from_its_original_quote(docu
 
 
 @pytest.mark.parametrize('plan,pages', [('plus', 2500), ('pro', 4000)])
-@pytest.mark.parametrize('interval,count,end', [('quarter', 3, datetime(2026, 4, 30)), ('year', 12, datetime(2027, 1, 31))])
+@pytest.mark.parametrize('interval,count,end', [('month', 1, datetime(2026, 2, 28)),
+    ('quarter', 3, datetime(2026, 4, 30)), ('year', 12, datetime(2027, 1, 31))])
 def test_paid_periods_grant_monthly_without_early_access_or_duplicates(client, plan, pages, interval, count, end):
     from app.billing_grants import grant_term
     from app.billing_access import first_subscription
@@ -102,7 +115,12 @@ def test_paid_periods_grant_monthly_without_early_access_or_duplicates(client, p
     owner = client.get('/v1/me', headers=auth).json()['user']['id']
     start = datetime(2026, 1, 31)
     with session_factory()() as db:
-        price = db.get(BillingPrice, f'{plan}-{interval}-v1')
+        current = db.get(BillingPrice, f'{plan}-{interval}-prepaid-v1')
+        price = BillingPrice(id='legacy-price', plan_id=plan, plan_revision_id=current.plan_revision_id,
+            environment='test', currency=current.currency, unit_amount=current.unit_amount,
+            interval=interval, billing_type='recurring', status='archived')
+        db.add(price)
+        db.flush()
         binding = BillingPriceBinding(id='grant-binding', price_id=price.id, provider='stripe',
             environment='test', product_id='prod_fixture', provider_price_id='price_fixture', status='draft')
         db.add(binding)
@@ -122,13 +140,16 @@ def test_paid_periods_grant_monthly_without_early_access_or_duplicates(client, p
             QuotaPeriod.source == 'subscription').order_by(QuotaPeriod.starts_at)))
         assert len(buckets) == count
         assert all(bucket.granted == pages for bucket in buckets)
-        assert [bucket.starts_at.day for bucket in buckets[:3]] == [31, 28, 31]
+        assert [bucket.starts_at.day for bucket in buckets[:3]] == [31, 28, 31][:count]
         assert buckets[-1].ends_at == end
         assert first_subscription(db, owner, start)[0].id == buckets[0].id
         buckets[0].used = pages
         db.flush()
         assert first_subscription(db, owner, start) is None
-        assert first_subscription(db, owner, datetime(2026, 2, 28))[0].id == buckets[1].id
+        if count > 1:
+            assert first_subscription(db, owner, datetime(2026, 2, 28))[0].id == buckets[1].id
+        else:
+            assert first_subscription(db, owner, end) is None
 
 
 def test_models_are_restricted_to_the_confirmed_tiers(client):
@@ -149,8 +170,8 @@ def test_models_are_restricted_to_the_confirmed_tiers(client):
 
 
 @pytest.mark.parametrize('provider', ['stripe', 'creem'])
-@pytest.mark.parametrize('plan', ['plus', 'pro'])
-def test_new_quarterly_checkout_never_requests_a_trial(client, monkeypatch, provider, plan):
+@pytest.mark.parametrize('plan,interval', [('plus', 'month'), ('pro', 'quarter')])
+def test_new_checkout_never_requests_a_trial(client, monkeypatch, provider, plan, interval):
     from app import stripe_client, creem_client
     from app.config import settings
     from app.billing_models import BillingCheckout
@@ -160,10 +181,12 @@ def test_new_quarterly_checkout_never_requests_a_trial(client, monkeypatch, prov
             'CREEM_API_KEY': 'creem_test_fixture', 'CREEM_WEBHOOK_SECRET': 'creem_fixture'}.items():
         monkeypatch.setenv(key, value)
     settings.cache_clear()
-    price_id, amount = f'{plan}-quarter-v1', 666 if plan == 'plus' else 999
+    price_id = f'{plan}-{interval}-prepaid-v1'
     with session_factory()() as db:
         db.get(BillingSettings, 1).default_provider = provider
-        db.get(BillingPrice, price_id).status = 'active'
+        price = db.get(BillingPrice, price_id)
+        price.status = 'active'
+        amount = price.unit_amount
         db.add(BillingPriceBinding(id='checkout-binding', price_id=price_id, provider=provider,
             environment='test', product_id='prod_fixture', provider_price_id='price_fixture' if provider == 'stripe' else None,
             trial_product_id=None, status='active'))
@@ -172,19 +195,19 @@ def test_new_quarterly_checkout_never_requests_a_trial(client, monkeypatch, prov
     def stripe_call(resource, action, *args, **kwargs):
         if resource == 'prices':
             return {'id': 'price_fixture', 'product': 'prod_fixture', 'livemode': False, 'active': True,
-                'currency': 'usd', 'unit_amount': amount, 'recurring': {'interval': 'month', 'interval_count': 3, 'usage_type': 'licensed'}}
+                'currency': 'usd', 'unit_amount': amount, 'type': 'one_time', 'recurring': None}
         assert (resource, action) == ('checkout.sessions', 'create')
         params = kwargs['params']
-        assert 'trial_period_days' not in params['subscription_data']
+        assert params['mode'] == 'payment' and 'subscription_data' not in params
         dispatched.append(params)
-        return {'id': 'cs_test_fixture', 'livemode': False, 'mode': 'subscription', 'status': 'open',
+        return {'id': 'cs_test_fixture', 'livemode': False, 'mode': 'payment', 'status': 'open',
             'metadata': params['metadata'], 'client_reference_id': params['client_reference_id'],
             'url': 'https://checkout.stripe.com/c/pay/cs_test_fixture'}
     def creem_call(method, path, **kwargs):
         if method == 'GET':
             assert path == '/products/prod_fixture'
             return {'id': 'prod_fixture', 'mode': 'test', 'status': 'active', 'currency': 'USD',
-                'price': amount, 'billing_type': 'recurring', 'billing_period': 'every-three-months', 'trial_period_days': 0}
+                'price': amount, 'billing_type': 'onetime', 'billing_period': 'once', 'trial_period_days': 0}
         params = kwargs['body']
         assert params['product_id'] == 'prod_fixture'
         dispatched.append(params)
@@ -194,7 +217,8 @@ def test_new_quarterly_checkout_never_requests_a_trial(client, monkeypatch, prov
     monkeypatch.setattr(stripe_client, 'call', stripe_call)
     monkeypatch.setattr(creem_client, 'call', creem_call)
     auth = login(client, 'new-buyer')
-    response = client.post('/v1/billing/checkouts', headers=auth, json={'price_id': price_id, 'provider': provider})
+    response = client.post('/v1/billing/checkouts', headers={**auth, 'Idempotency-Key': 'new-prepaid'},
+        json={'price_id': price_id, 'provider': provider})
     assert response.status_code == 200, response.text
     assert len(dispatched) == 1
     with session_factory()() as db:
@@ -202,7 +226,7 @@ def test_new_quarterly_checkout_never_requests_a_trial(client, monkeypatch, prov
 
 
 @pytest.mark.parametrize('count', [1, 2, 4, 12])
-def test_stripe_quarter_rejects_wrong_month_count(client, monkeypatch, count):
+def test_stripe_quarter_rejects_wrong_month_count(monkeypatch, count):
     from app.stripe_client import approved_price
     from app.billing_providers import BillingError
     from app.config import settings
@@ -212,5 +236,5 @@ def test_stripe_quarter_rejects_wrong_month_count(client, monkeypatch, count):
         stripe_product_id='prod_fixture', currency='usd', unit_amount=666)
     with pytest.raises(BillingError):
         approved_price({'livemode': False, 'id': 'price_fixture', 'product': 'prod_fixture',
-            'currency': 'usd', 'unit_amount': 666,
+            'currency': 'usd', 'unit_amount': 666, 'type': 'recurring',
             'recurring': {'interval': 'month', 'interval_count': count, 'usage_type': 'licensed'}}, quote)

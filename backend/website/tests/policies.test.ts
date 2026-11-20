@@ -19,7 +19,7 @@ test('all policies have an explicit revision and preserve separate data-processi
   for (const locale of locales) {
     const {policies} = dictionaries[locale].documents;
     for (const [key, policy] of Object.entries(policies))
-      assert.equal(policy.updated, key === 'privacy' ? '2026-10-30' : '2026-10-17', locale);
+      assert.equal(policy.updated, key === 'privacy' ? '2026-10-30' : '2026-11-19', locale);
     const privacy = policies.privacy.sections.flatMap(section => section.paragraphs).join('\n');
     for (const required of ['localStorage', 'sessionStorage', 'IndexedDB', 'Cloudflare R2', 'PDF', 'ZIP', 'CBZ', 'Google Analytics 4', '14']) {
       assert.ok(privacy.includes(required), `${locale}: missing privacy disclosure ${required}`);
@@ -74,7 +74,7 @@ test('terms and refund share the catalog summary with FAQ, including every price
       const pages = offer.interval === 'once' ? offer.quota_pages : offer.monthly_classic_pages;
       assert.ok(pages && numbers.includes(String(pages)), `${locale}: pages ${offer.id}`);
       assert.equal(offer.currency, 'usd');
-      assert.ok(['quarter', 'year', 'once'].includes(offer.interval));
+      assert.ok(['month', 'quarter', 'year', 'once'].includes(offer.interval));
       assert.equal(offer.trial_days, 0);
     }
   }

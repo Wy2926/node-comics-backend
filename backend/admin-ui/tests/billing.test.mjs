@@ -30,6 +30,12 @@ test('money parsing respects currency minor units and rejects fractional truncat
   assert.equal(minorAmount('10.1', 'usd'), 1010);
   assert.throws(() => minorAmount('1.001', 'usd'), /最多支持/);
   assert.throws(() => minorAmount('100.1', 'jpy'), /最多支持/);
+  for(const currency of ['ISK','ugx']){
+    assert.equal(minorAmount('120',currency),12000);
+    assert.equal(priceAmount(12000,currency),'120');
+    assert.match(money(12000,currency),/120$/);
+    assert.throws(()=>minorAmount('120.50',currency));
+  }
   for (const invalid of ['0', '-1', '1e2', 'Infinity', 'not-a-price', '1000000000000000']) assert.throws(() => minorAmount(invalid, 'usd'));
 });
 
@@ -59,6 +65,8 @@ test('purchased pages never display unlimited membership, monthly quotas or rene
 });
 
 test('prepaid membership keeps monthly benefits and clearly distinguishes renewal', () => {
+  assert.equal(intervalName('month', 'onetime'), '月卡');
+  assert.equal(intervalName('month', 'recurring'), '月付');
   assert.equal(intervalName('quarter', 'onetime'), '季卡');
   assert.equal(intervalName('year', 'onetime'), '年卡');
   assert.equal(intervalName('quarter', 'recurring'), '季付');

@@ -36,8 +36,8 @@ export const dictionaries = Object.fromEntries(Object.entries(baseDictionaries).
     documents: {
       ...dictionary.documents,
       policies:{...dictionary.documents.policies,
-        terms:{...dictionary.documents.policies.terms,sections:[prepaidPolicy,...dictionary.documents.policies.terms.sections]},
-        refund:{...dictionary.documents.policies.refund,sections:[prepaidPolicy,...dictionary.documents.policies.refund.sections,{title:quotaPurchase[locale].title,paragraphs:[quotaPurchasePolicy[locale],quotaPurchase[locale].once,quotaPurchase[locale].subscription]}]}},
+        terms:{...dictionary.documents.policies.terms,updated:'2026-11-19',sections:[prepaidPolicy,...dictionary.documents.policies.terms.sections]},
+        refund:{...dictionary.documents.policies.refund,updated:'2026-11-19',sections:[prepaidPolicy,...dictionary.documents.policies.refund.sections,{title:quotaPurchase[locale].title,paragraphs:[quotaPurchasePolicy[locale],quotaPurchase[locale].once,quotaPurchase[locale].subscription]}]}},
       guides: [...dictionary.documents.guides.map(guide => guide.slug === 'local-comics'
         ? { ...guide, updated: '2026-10-10', sections: guide.sections.map((section, index) => index === 0 ? { ...section, steps: localImportSteps[locale] } : section) }
         : guide), findMangaGuide(locale, dictionary.ui.guides), builtinTranslationGuide(locale, dictionary.ui.guides), ...mobileGuides(locale, dictionary.ui), androidAppGuide(locale)],

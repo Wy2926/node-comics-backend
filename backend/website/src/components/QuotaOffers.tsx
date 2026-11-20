@@ -25,11 +25,11 @@ export default function QuotaOffers({locale,offers,blocked=false,preview=false,a
       <div className="quota-offer-quantity">{beforePages&&<span>{beforePages}</span>}<strong>{(offer.quota_pages??0).toLocaleString(locale)}</strong><span>{afterPages}</span></div>
       <div className="quota-offer-price"><bdi><PriceAmount parts={amountParts(offer,locale)}/></bdi><span className="quota-purchase-kind">{copy.oneTime}</span></div>
       <ul className="quota-offer-features">
-        {offer.service_plan_id&&<li className="quota-tier"><QuotaIcon kind="tier"/><span>{copy.service.replace('{0}',offer.service_plan_id==='lite'?'Lite':offer.service_plan_id==='plus'?'PLUS':offer.service_plan_id==='pro'?'Pro':offer.service_plan_id)}</span></li>}
+        {offer.service_plan_id&&<li className="quota-tier"><QuotaIcon kind="tier"/><span>{copy.service.replace('{0}',offer.service_plan_name??offer.service_plan_id)}</span></li>}
         <li><QuotaIcon kind="clock"/><span>{offer.quota_validity_days==null?copy.noExpiry:copy.validity.replace('{0}',offer.quota_validity_days.toLocaleString(locale))}</span></li>
         {offer.hourly_image_limit!=null&&<li><QuotaIcon kind="bolt"/><span>{copy.hourly.replace('{0}',offer.hourly_image_limit.toLocaleString(locale))}</span></li>}
       </ul>
-      <div className="quota-offer-action">{offer.channels.length?<CheckoutButton priceId={offer.id} accountHref={accountHref} disabled={blocked} showDisclosure={false} label={copy.action} copy={{...checkoutCopy,renewal:copy.terms,retry:copy.retry,retryHint:copy.retryHint}}/>:<button className="button" disabled>{copy.action}</button>}</div>
+      <div className="quota-offer-action">{offer.channels.length?<CheckoutButton priceId={offer.id} accountHref={accountHref} disabled={blocked} showDisclosure={false} label={copy.action} copy={checkoutCopy}/>:<button className="button" disabled>{copy.action}</button>}</div>
     </article>)}</div>
     <div className="quota-offer-policy">
       <ul className="quota-offer-notes">{[copy.usage,copy.subscription,copy.validityStart].map(note=><li key={note}><span className="ui-icon icon-check" aria-hidden="true"/><span>{note}</span></li>)}</ul>

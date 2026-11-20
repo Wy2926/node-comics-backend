@@ -13,8 +13,7 @@ import { rememberCheckout, takeCheckout, checkoutIntentKey,PurchaseRetryAllowed,
 import { accountReturnPath } from '../src/lib/auth-config';
 import {ApiError,type api} from '../src/lib/auth';
 import { locales, localPath } from '../src/i18n/locales';
-import type { Billing, BillingOffer, PendingCheckout, BillingProvider } from '../src/lib/billing';
-import { publishedSubscriptions } from '../src/data/published-plans';
+import {type Billing,type BillingOffer,type PendingCheckout,type BillingProvider} from '../src/lib/billing';
 const month: BillingOffer = { id:'lite-month',name:'Lite',plan_id:'lite',plan_revision_id:'v1',currency:'usd',unit_amount:599,interval:'month',monthly_classic_pages:0,trial_days:7,trial_classic_pages:0,channels:[{provider:'creem',binding_id:'binding',trial_days:7,trial_classic_pages:0}] };
 const year: BillingOffer = {...month,id:'lite-year',unit_amount:5999,interval:'year'};
 const pack:BillingOffer={...month,id:'pack',plan_id:'pages',interval:'once',quota_pages:100,quota_validity_days:null,service_plan_id:'lite',trial_days:0};
@@ -27,17 +26,17 @@ function memoryStorage(){
 }
 
 test('direct checkout uses exact quote and pending channel, never another interval', () => {
-  assert.deepEqual(checkoutSelection(billing,'lite-year'),{price_id:'lite-year',provider:'creem'});
+  assert.throws(()=>checkoutSelection(billing,'lite-year'),/CHECKOUT_UNAVAILABLE/);
   assert.throws(()=>checkoutSelection({...billing,offers:[month]},'lite-year'));
   assert.throws(()=>checkoutSelection({...billing,enabled:false},'lite-year'));
   const original=pendingCheckout({...year,channels:[{...year.channels[0],provider:'stripe'}]},'stripe');
   const pending = {...billing,subscription_checkout:original,offers:[month]};
   assert.deepEqual(checkoutSelection(pending,'lite-year'),{price_id:'lite-year',provider:'stripe'});
-  assert.deepEqual(checkoutSelection(pending,'lite-month'),{price_id:'lite-month',provider:'creem'});
+  assert.throws(()=>checkoutSelection(pending,'lite-month'),/CHECKOUT_UNAVAILABLE/);
   assert.throws(()=>checkoutSelection({...pending,subscription_checkout:{...original,provider:'creem'}},'lite-year'));
   assert.throws(()=>checkoutSelection(pending,'unavailable-price'));
-  assert.equal(checkoutSelection({...billing,gift:{state:'active',starts_at:null,ends_at:null,days:30}},'lite-year'),null);
-  assert.equal(checkoutSelection({...billing,subscription:{status:'active'} as Billing['subscription']},'lite-year'),null);
+  assert.equal(checkoutSelection({...pending,gift:{state:'active',starts_at:null,ends_at:null,days:30}},'lite-year'),null);
+  assert.equal(checkoutSelection({...pending,subscription:{status:'active'} as Billing['subscription']},'lite-year'),null);
 });
 
 test('checkout sends one POST, validates destination/provider, and never retries uncertain writes', async () => {
@@ -45,7 +44,7 @@ test('checkout sends one POST, validates destination/provider, and never retries
     const calls: string[] = [];
     const request = (async (path: string, method?: string, body?: unknown) => {
       calls.push(path);
-      if (path.startsWith('/v1/billing/status')) return billing;
+      if (path.startsWith('/v1/billing/status')) return {...billing,subscription_checkout:pendingCheckout(year)};
       assert.equal(method,'POST');
       assert.deepEqual(body,{price_id:'lite-year',provider:'creem'});
       if (scenario === 'network') throw new TypeError('Network failure');
@@ -57,49 +56,16 @@ test('checkout sends one POST, validates destination/provider, and never retries
   }
 });
 
-for (const published of publishedSubscriptions) {
-  const offer: BillingOffer = {
-    ...published,
-    id: `fixture-${published.plan_id}-${published.interval}`,
-    channels: [{provider:'creem',binding_id:'fixture-binding',trial_days:0,trial_classic_pages:0}],
-  };
-
-  test(`${offer.plan_id} ${offer.interval} checkout follows the active quote, including after an expired gift`, async () => {
-    for (const gift of [null, {state:'expired' as const,starts_at:null,ends_at:null,days:6}]) {
-      const status: Billing = {...billing,offers:[offer],gift};
-      const calls: string[] = [];
-      const request = (async (path: string, method?: string, body?: unknown) => {
-        calls.push(path);
-        if (path.startsWith('/v1/billing/status')) {
-          assert.equal(method,'GET');
-          return status;
-        }
-        assert.equal(path,'/v1/billing/checkouts');
-        assert.equal(method,'POST');
-        assert.deepEqual(body,{price_id:offer.id,provider:'creem'});
-        return {provider:'creem',checkout_url:'https://creem.io/checkout/fixture'};
-      }) as typeof api;
-      assert.equal(await directCheckout(offer.id,request),'https://creem.io/checkout/fixture');
-      assert.deepEqual(calls.map(path=>path.split('?')[0]),['/v1/billing/status','/v1/billing/checkouts']);
-    }
-  });
-
-  test(`${offer.plan_id} ${offer.interval} never bypasses quote, channel or existing membership checks`, () => {
-    const status: Billing = {...billing,offers:[offer]};
-    assert.throws(()=>checkoutSelection({...status,enabled:false},offer.id),/CHECKOUT_UNAVAILABLE/);
-    assert.throws(()=>checkoutSelection({...status,offers:[]},offer.id),/CHECKOUT_UNAVAILABLE/);
-    assert.throws(()=>checkoutSelection({...status,offers:[{...offer,channels:[]}]},offer.id),/CHECKOUT_UNAVAILABLE/);
-    assert.throws(()=>checkoutSelection({...status,offers:[published]},published.id),/CHECKOUT_UNAVAILABLE/);
-    for (const state of ['pending','scheduled','active'] as const) {
-      assert.equal(checkoutSelection({...status,gift:{state,starts_at:null,ends_at:null,days:30}},offer.id),null);
-    }
-    assert.equal(checkoutSelection({...status,subscription:{status:'active'} as Billing['subscription']},offer.id),null);
-    const original = pendingCheckout({...offer,id:'retired-price',channels:[{...offer.channels[0],provider:'stripe'}]},'stripe');
-    const pending = {...status,subscription_checkout:original};
-    assert.deepEqual(checkoutSelection(pending,offer.id),{price_id:offer.id,provider:'creem'});
-    assert.deepEqual(checkoutSelection(pending,original.price.id),{price_id:original.price.id,provider:'stripe'});
-  });
-}
+test('a pass needs a sellable quote and becomes available when a gift expires',()=>{
+  const status={...billing,offers:[prepaid]};
+  for(const override of [{enabled:false},{offers:[]},{offers:[{...prepaid,channels:[]}]}]){
+    assert.throws(()=>checkoutSelection({...status,...override},prepaid.id),/CHECKOUT_UNAVAILABLE/);
+  }
+  for(const state of ['pending','scheduled','active','expired'] as const){
+    const selection=checkoutSelection({...status,gift:{state,starts_at:null,ends_at:null,days:30}},prepaid.id);
+    assert.deepEqual(selection,state==='expired'?{price_id:prepaid.id,provider:'creem'}:null);
+  }
+});
 
 test('all page packs remain available to members, gifts and pending subscriptions',()=>{
   for(const extra of [{},{subscription:{status:'active'} as Billing['subscription']},{gift:{state:'active' as const,starts_at:null,ends_at:null,days:30}},{subscription_checkout:pendingCheckout(year)}]){
@@ -109,7 +75,7 @@ test('all page packs remain available to members, gifts and pending subscription
 
 test('prepaid renewal is allowed without permitting automatic billing or bypassing a real subscription or gift',()=>{
   const prepaid_membership={price:prepaid,starts_at:'2026-01-01T00:00:00Z',ends_at:'2099-01-01T00:00:00Z'};
-  const status={...billing,offers:[prepaid,year],prepaid_membership,entitlement_expires_at:prepaid_membership.ends_at};
+  const status={...billing,offers:[prepaid,year],subscription_checkout:pendingCheckout(year),prepaid_membership,entitlement_expires_at:prepaid_membership.ends_at};
   assert.deepEqual(checkoutSelection(status,prepaid.id),{price_id:prepaid.id,provider:'creem'});
   assert.equal(checkoutSelection(status,year.id),null);
   const ended={status:'canceled',paid_ends_at:'2000-01-01T00:00:00Z',trial_ends_at:null} as Billing['subscription'];
@@ -120,8 +86,8 @@ test('prepaid renewal is allowed without permitting automatic billing or bypassi
   assert.deepEqual(checkoutSelection({...status,prepaid_membership:{...prepaid_membership,ends_at:'2000-01-01T00:00:00Z'}},year.id),{price_id:year.id,provider:'creem'});
 });
 
-test('prepaid quarter and year reuse the exact account-scoped purchase key after response loss and retirement',async()=>{
-  for(const interval of ['quarter','year'] as const){
+test('prepaid terms reuse the exact account-scoped purchase key after response loss and retirement',async()=>{
+  for(const interval of ['month','quarter','year'] as const){
     const storage=memoryStorage(),quote={...prepaid,interval},writes:{price_id:string;provider:string;key:string}[]=[];
     let retired=false,fulfilled=false;
     const request=(async(path:string,_method?:string,body?:{price_id:string;provider:string},headers?:Record<string,string>)=>{
@@ -165,31 +131,28 @@ test('a later subscription can recover fulfilled prepaid intent but server rejec
   assert.equal(readPurchaseIntent(storage,'buyer',prepaid.id),null);
 });
 
-test('a different subscription quote creates its own checkout instead of redirecting to the old price',async()=>{
+test('a stale renewable link without its exact pending order never sends a checkout POST',async()=>{
   const calls:string[]=[];
-  const request=(async(path:string,method?:string,body?:unknown)=>{
+  const request=(async(path:string,method?:string)=>{
     calls.push(path);
     if(method==='GET')return {...billing,subscription_checkout:pendingCheckout(year)};
-    assert.deepEqual(body,{price_id:month.id,provider:'creem'});
-    return {provider:'creem',checkout_url:'https://creem.io/test/checkout/new-month'};
+    assert.fail('must not create or substitute a recurring order');
   }) as typeof api;
-  assert.equal(await directCheckout(month.id,request),'https://creem.io/test/checkout/new-month');
-  assert.deepEqual(calls,['/v1/billing/status?price_id=lite-month','/v1/billing/checkouts']);
+  await assert.rejects(directCheckout(month.id,request),/CHECKOUT_UNAVAILABLE/);
+  assert.deepEqual(calls,['/v1/billing/status?price_id=lite-month']);
 });
 
-test('an unpaid subscription does not block new quota orders and quota intents do not block subscribing',async()=>{
+test('an unpaid subscription and an independent page pack each retain their original checkout',async()=>{
   const storage=memoryStorage(),writes:{body:unknown;headers?:Record<string,string>}[]=[];
   purchaseIntent(storage,'buyer',pack.id,'creem');
-  let pending=true;
   const request=(async(path:string,_method?:string,body?:unknown,headers?:Record<string,string>)=>{
-    if(path.startsWith('/v1/billing/status'))return {...billing,quota_offers:[pack],subscription_checkout:pending?pendingCheckout(year):null};
+    if(path.startsWith('/v1/billing/status'))return {...billing,quota_offers:[pack],subscription_checkout:pendingCheckout(year)};
     if(path==='/v1/me')return {user:{id:'buyer'}};
     writes.push({body,headers});return {provider:'creem',checkout_url:'https://creem.io/test/checkout/new-kind'};
   }) as typeof api;
   assert.equal(await directCheckout(pack.id,request,storage),'https://creem.io/test/checkout/new-kind');
-  pending=false;
-  assert.equal(await directCheckout(month.id,request,storage),'https://creem.io/test/checkout/new-kind');
-  assert.deepEqual(writes.map(write=>write.body),[{price_id:pack.id,provider:'creem'},{price_id:month.id,provider:'creem'}]);
+  assert.equal(await directCheckout(year.id,request,storage),'https://creem.io/test/checkout/new-kind');
+  assert.deepEqual(writes.map(write=>write.body),[{price_id:pack.id,provider:'creem'},{price_id:year.id,provider:'creem'}]);
   assert.ok(writes[0].headers?.['Idempotency-Key']);assert.equal(writes[1].headers,undefined);
 });
 
@@ -411,7 +374,7 @@ function text(value:ReactNode):string{
 }
 const source=readFileSync(new URL('../src/components/CheckoutButton.tsx',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-const base:CheckoutCopy={busy:'busy',error:'safe fallback',before:'before',refund:'refund',renewal:'renewal',retry:'new purchase',retryHint:'verified unpaid'};
+const base:CheckoutCopy={busy:'busy',error:'safe fallback',before:'before',refund:'refund',retry:'new purchase',retryHint:'verified unpaid'};
 
 // Run the real button's catch/interaction path without a browser or live payment.
 function button(copy:CheckoutCopy,checkout:()=>Promise<unknown>,signedIn=true,options:{search?:string;loginIntent?:boolean;continueAfterLogin?:boolean;session?:()=>Promise<unknown>}={}){
@@ -552,11 +515,4 @@ test('returning during session preflight prevents the stale button action from s
   view.click();await view.flush();assert.equal(view.requests.length,0);
   view.returnFromCheckout();resolve({});await view.flush();assert.equal(view.requests.length,0);
   view.click();await view.flush();assert.deepEqual(view.requests,['original-quote']);
-});
-
-test('pricing passes the same localized error copy to subscription and quota checkout buttons',()=>{
-  const pricing=readFileSync(new URL('../src/components/BillingOffers.tsx',import.meta.url),'utf8');
-  assert.match(pricing,/buttonCopy=\{\.\.\.checkoutCopy,\.\.\.checkoutStatusCopy\(locale\)\}/);
-  assert.match(pricing,/<CheckoutButton[^>]*copy=\{oneTime\?prepaidButtonCopy:buttonCopy\}/);
-  assert.match(pricing,/<QuotaOffers[^>]*checkoutCopy=\{buttonCopy\}/);
 });

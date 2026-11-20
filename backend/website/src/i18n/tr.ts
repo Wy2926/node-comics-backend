@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/tr';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Yerel okuma ücretsizdir. Free planında temel modellerle günde 30 sayfa çevirebilirsiniz. PLUS: ayda 2.500 sayfa, üç ay için US$6,66 veya yıl için US$23,99. Pro: ayda 4.000 sayfa, üç ay için US$9,99 veya yıl için US$35,99. Her iki plan da temel modellerin yanı sıra ek modeller sunar. Kullanılabilir modeller ve kota tüketim çarpanları çeviri ekranında gösterilir. Sayfalar her ay verilir, devretmez; deneme yoktur. Süresiz paketler: 3.500 sayfa US$5,99, 7.000 sayfa US$9,99. Vergiler ve toplam ödeme sırasında gösterilir.`;
+const membershipSummary = `Yerel okuma ücretsizdir. Free planında temel modellerle günde 30 sayfa çevirebilirsiniz. PLUS: ayda 2.500 sayfa, ay için US$2,99, üç ay için US$6,66 veya yıl için US$23,99. Pro: ayda 4.000 sayfa, ay için US$3,99, üç ay için US$9,99 veya yıl için US$35,99. Her iki plan da temel modellerin yanı sıra ek modeller sunar. Kullanılabilir modeller ve kota tüketim çarpanları çeviri ekranında gösterilir. Sayfalar her ay verilir, devretmez; deneme yoktur. Tek ödeme yapılır, otomatik yenileme yoktur. Süresiz paketler: 3.500 sayfa US$5,99, 7.000 sayfa US$9,99. Vergiler ve toplam ödeme sırasında gösterilir.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Sürüm notları",
     "privacy": "Gizlilik politikası",
     "terms": "Hizmet koşulları",
-    "refund": "Abonelikler ve iadeler",
+    "refund": "Satın alma ve iadeler",
     "home": "Ana sayfa",
     "skip": "İçeriğe geç",
     "navigation": "Ana gezinme",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Çeviriyi NodeLane Comics'a bırakın. Dikkatinizi bir sonraki sayfaya saklayın.",
     "ctaButton": "Okuma yolculuğunuza başlayın",
     "pricingTitle": "Ücretsiz okuyun. Çeviri planınızı seçin.",
-    "pricingDescription": "PLUS / Pro ve süresiz sayfa paketleri. Üç aylık veya yıllık ödeme, aylık sayfa kotası. Abonelik denemesi yok.",
+    "pricingDescription": "Bir aylık, üç aylık veya yıllık PLUS / Pro üyelikleri ve süresiz sayfa paketleri. Tek ödeme; otomatik yenileme ve deneme yok. Sayfalar aylık verilir.",
     "freePlan": "Ücretsiz",
     "freePlanDescription": "Her gün biraz okumak için",
     "free": "ücretsiz",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Hizmet ve hesaplar",
             "paragraphs": [
-              "NodeLane Comics uzantı, okuyucu ve çeviri hizmetleri sağlar. Kullanmadan önce bu şartları ve gizlilik politikasını okuyun; katılmıyorsanız hizmeti kullanmayı bırakın. 2026-10-17'da güncellendi. Web sitesi, çizgi roman kataloğu veya çizgi roman satışları değil, ürün bilgileri, kılavuzlar, indirmeler ve hesap yönetimi sağlar.",
+              "NodeLane Comics uzantı, okuyucu ve çeviri hizmetleri sağlar. Kullanmadan önce bu şartları ve gizlilik politikasını okuyun; katılmıyorsanız hizmeti kullanmayı bırakın. Web sitesi, çizgi roman kataloğu veya çizgi roman satışları değil, ürün bilgileri, kılavuzlar, indirmeler ve hesap yönetimi sağlar.",
               "Kullanma hakkına sahip olduğunuz bir hesap kullanın ve kimlik bilgilerinizi ve cihazınızı koruyun. Avantajlar ve erişim sunucuda doğrulanır. Başkalarının kimliğine bürünmeyin, onların özel kayıtlarına erişmeyin, hız veya görüntü sınırlarını atlamayın, kötü amaçlı otomasyonla hizmetleri kesintiye uğratmayın veya ürüne ve sağlayıcılarına saldırmayın. Yanlış kullanım erişimin kısıtlanmasına neden olabilir.",
               "Uzantı kaynak kodu GPL-3.0-only kapsamındadır; üçüncü taraf bileşenler kendi lisanslarını korur. Çevrimiçi hizmet koşulları GPL kullanım, değişiklik veya yeniden dağıtım haklarını kısıtlamaz ve çizgi roman hakları vermez."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Avantajlar ve abonelikler",
             "paragraphs": [
               membershipSummary,
-              "Yeni abonelikler üç aylık veya yıllıktır, kartlı deneme yoktur ve aynı aralıkta otomatik yenilenir. Dönem, ilk UTC faturalandırma tarihine bağlı 3/12 aylık kota penceresi içerir. Kullanılmayan sayfalar devretmez, gelecek kotalar erken kullanılamaz. Fiyat, vergi ve haklar sipariş ve hesaba bağlıdır. Mevcut abonelikler eski fiyat ve hak sürümünü korur; eski deneme ve hediyeler ilk kayıtlarını izler.",
+              "Yeni üyelikler bir ay, üç ay veya bir yıl için tek ödemelidir; otomatik yenileme ve deneme yoktur. Aylık kota pencereleri ilk UTC hak dönemine bağlıdır. Kullanılmayan sayfalar devretmez, gelecek kotalar erken kullanılamaz. Fiyat, vergi ve haklar sipariş ve hesaba bağlıdır. Mevcut abonelikler eski fiyat, hak sürümü ve yenileme koşullarını korur; eski deneme ve hediyeler ilk kayıtlarını izler.",
               "Ücretsiz modeller önce ücretsiz sayfaları (uygun hediyeler dahil), sonra abonelik ve satın alınan sayfaları kullanır. Ücretli modeller yalnızca abonelik veya satın alınanı kullanır. Başarıyla oluşturulan her yeni sayfa sürümü 1 sayfadır. Aynı istek, geçerli kendi sonucunu yeniden kullanma ve iç yeniden denemeler çift düşmez; açıkça istenen yeni çeviri sürümü sayılır. Hata, iptal veya çevrilebilir metin olmaması rezervasyonu kurallara göre serbest bırakır; belirsiz sonuç önce doğrulanır. Güncel paketlerin süresi dolmaz ve otomatik yenilenmezler. Satın alınan sayfaları gerçekten tüketen görevler, paketin PLUS düzeyindeki kabul sınırlarından ve yürütme önceliğinden yararlanır; yalnızca bakiye bulundurmak, ücretsiz kotayı kullanan görevleri ücretli kabul düzeyine yükseltmez. Tükendiğinde paket artık kendi avantajlarını sağlamaz.",
               "Kabul hızı ile bakiye ayrıdır. Varsayılan: kayan 60 saniyede standart hesaplara 10, ücretli düzeylere 100 yeni görsel. Saatlik sınır yalnızca haklarda yapılandırılmışsa geçerlidir; gerçek hesap ve hizmet sınırları uygulanır. Aynı istek ve geçerli yeniden kullanım çift sayılmaz; kabul edilmiş hata veya iptal hız penceresini doldurabilir. Görsel, eşzamanlılık ve kapasite sınırları sürer; hız garantisi yoktur."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Abonelikler, iptaller ve geri ödemeler",
-        "description": "Yeni abonelikler üç aylık veya yıllıktır, kartlı deneme yoktur ve aynı aralıkta otomatik yenilenir.",
+        "title": "Üyelik satın alma ve iadeler",
+        "description": "Bir aylık, üç aylık veya yıllık üyelikler tek ödemelidir ve otomatik yenilenmez. Geçerlilik, kotalar, iadeler ve mevcut abonelik yönetimi.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Güncel planlar ve yenileme",
+            "title": "Güncel planlar ve geçerlilik",
             "paragraphs": [
               membershipSummary,
-              "Yeni abonelikler üç aylık veya yıllıktır, kartlı deneme yoktur ve aynı aralıkta otomatik yenilenir. Dönem, ilk UTC faturalandırma tarihine bağlı 3/12 aylık kota penceresi içerir. Kullanılmayan sayfalar devretmez, gelecek kotalar erken kullanılamaz. Fiyat, vergi ve haklar sipariş ve hesaba bağlıdır. Mevcut abonelikler eski fiyat ve hak sürümünü korur; eski deneme ve hediyeler ilk kayıtlarını izler."
+              "Yeni üyelikler bir ay, üç ay veya bir yıl için tek ödemelidir; otomatik yenileme ve deneme yoktur. Aylık kota pencereleri ilk UTC hak dönemine bağlıdır. Kullanılmayan sayfalar devretmez, gelecek kotalar erken kullanılamaz. Fiyat, vergi ve haklar sipariş ve hesaba bağlıdır. Mevcut abonelikler eski fiyat, hak sürümü ve yenileme koşullarını korur; eski deneme ve hediyeler ilk kayıtlarını izler."
             ]
           },
           {
-            "title": "Gelecekteki yenilemeyi durdur",
+            "title": "Mevcut aboneliği yönetme",
             "paragraphs": [
               "Aboneliği yönetmek için web sitesi hesabınızda oturum açın veya uzantı hesabı girişini kullanın. İptal, bir sonraki yenilemeyi durdurur ve halihazırda geçerli olan avantajları otomatik olarak silmez; hesabınızda gösterilen süre sonuna güvenin.",
               "Yenilemeden önce site hesabından iptal edin. Eski denemeyi ücretlenmemek için ilk bitişinden önce iptal edin. Kaldırma, tarayıcıyı kapatma veya çıkış aboneliği iptal etmez. Ödenmiş siparişler ayrı kalır; otomatik birleştirme, orantılı hesaplama veya iade yapılmaz. Hatalı alım veya erişim sorunu: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Nasıl iptal edebilirim?",
-        "answer": "Aboneliği yönetmek için web sitesi veya uzantı hesabı girişini kullanın. Bir sonraki yenileme veya deneme süresi sona ermeden önce iptal edin; kaldırma işlemi iptal etmez. Mevcut avantajlar, hesabınızda gösterilen sürenin sona ermesinden sonra gelir. Faturalandırma yardımı için comics@nodelane.net adresine e-posta gönderin.",
+        "question": "Yenilemeyi iptal etmem gerekir mi?",
+        "answer": "Mevcut abonelikler ilk koşullarıyla devam eder. Site veya uzantı hesabınızdan yönetin ve gelecekteki tahsilatları durdurmak için bir sonraki yenilemeden önce iptal edin. Uzantıyı kaldırmak aboneliği iptal etmez. Ödenmiş haklar hesapta belirtilen tarihe kadar geçerlidir. Yardım: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

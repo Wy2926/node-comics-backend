@@ -7,15 +7,16 @@ const plusAnnual:BillingOffer={...plusMonth,id:'old-plus-year',unit_amount:9999,
 const month:BillingOffer={...plusMonth,id:'fixture-month',name:'Lite',plan_id:'lite',plan_revision_id:'lite-v1',unit_amount:599,monthly_classic_pages:null,hourly_image_limit:1200,trial_classic_pages:null,channels:plusMonth.channels.map(channel=>({...channel,trial_classic_pages:null}))};
 const annual:BillingOffer={...month,id:'fixture-year',unit_amount:5999,interval:'year'};
 const pack:BillingOffer={...month,id:'fixture-pack',name:'Lite 100 页',plan_id:'pages',service_plan_id:'lite',interval:'once',billing_type:'onetime',quota_pages:100,quota_validity_days:null,monthly_classic_pages:0,trial_days:0,trial_classic_pages:0,channels:month.channels.map(channel=>({...channel,trial_days:0,trial_classic_pages:0}))};
-const entitlements={plan:'free',plus_expires_at:null,image_rate_limit:{limit:10},modes:{classic:{unlimited:false,allowed:true,quota:{available:30,granted:30,reserved:0}}}};
+const emptyQuota={available:0,granted:0,used:0,reserved:0,next_expiry_at:null};
+const entitlements={plan:'free',plan_name:'Free',plus_expires_at:null,free_quota:{...emptyQuota,available:28,granted:30,reserved:2},subscription_quota:{...emptyQuota,unlimited:false},purchase_quota:{...emptyQuota},image_rate_limit:{limit:10},modes:{classic:{unlimited:false,allowed:true,quota:{available:30,granted:30,reserved:0}}}};
 const parameters=new URLSearchParams(location.search);
 const scenario=parameters.get('scenario');
 const pending=parameters.has('pending')||scenario==='subscription-pending';
 const subscriptionProvider='creem';
 const billing:Billing={enabled:true,providers:[{id:'stripe',label:'Stripe',environment:'test'},{id:'creem',label:'Creem',environment:'test'}],provider:null,environment:'test',trial_eligible:true,gift:null,entitlement_expires_at:null,
   subscription_checkout:pending?{id:'fixture-subscription-checkout',provider:subscriptionProvider,price:{...annual,channels:annual.channels.filter(channel=>channel.provider===subscriptionProvider)},idempotency_key:null,error:null}:null,
-  offers:publishedSubscriptions.flatMap(offer=>(['recurring','onetime'] as const).map(billing_type=>({...offer,billing_type,id:`fixture-${offer.plan_id}-${offer.interval}${billing_type==='onetime'?'-prepaid':''}`,
-    channels:[{provider:'creem' as const,binding_id:'creem-fixture',trial_days:0,trial_classic_pages:0}]}))),subscription:null};
+  offers:publishedSubscriptions.map(offer=>({...offer,id:`fixture-${offer.plan_id}-${offer.interval}${offer.billing_type==='onetime'?'-prepaid':''}`,
+    channels:[{provider:'creem' as const,binding_id:'creem-fixture',trial_days:0,trial_classic_pages:0}]})),subscription:null};
 billing.pending_checkout=billing.subscription_checkout;
 if(scenario==='prepaid-pending'||scenario==='prepaid-retired'||scenario==='prepaid-pending-unknown'){
   const current=billing.offers.find(offer=>offer.id==='fixture-plus-year-prepaid')!;
@@ -23,11 +24,11 @@ if(scenario==='prepaid-pending'||scenario==='prepaid-retired'||scenario==='prepa
   billing.pending_checkout={id:'fixture-prepaid-checkout',provider:'creem',price,idempotency_key:'fixture-original-prepaid',error:scenario==='prepaid-pending-unknown'?'CREEM_CHECKOUT_UNCERTAIN':null};
 }
 if(scenario==='prepaid-unavailable')billing.offers=billing.offers.filter(offer=>offer.billing_type!=='onetime');
-if(scenario==='prepaid-active'||scenario==='prepaid-queued'){
-  const price=billing.offers.find(offer=>offer.id==='fixture-plus-quarter-prepaid')!;
+if(scenario==='prepaid-active'||scenario==='prepaid-queued'||scenario==='pro'){
+  const price=billing.offers.find(offer=>offer.id===`fixture-${scenario==='pro'?'pro':'plus'}-month-prepaid`)!;
   billing.prepaid_membership={price,starts_at:'2026-01-01T00:00:00Z',ends_at:'2099-01-01T00:00:00Z',paid_through:scenario==='prepaid-queued'?'2099-04-01T00:00:00Z':'2099-01-01T00:00:00Z'};
   billing.entitlement_expires_at=billing.prepaid_membership.paid_through!;
-  Object.assign(entitlements,{plan:'plus',plus_expires_at:billing.entitlement_expires_at,subscription_quota:{available:2400,granted:2500,used:100,reserved:0,unlimited:false,next_expiry_at:null}});
+  Object.assign(entitlements,{plan:price.plan_id,plan_name:price.name,plus_expires_at:billing.entitlement_expires_at,subscription_quota:{available:price.monthly_classic_pages!-104,granted:price.monthly_classic_pages,used:100,reserved:4,unlimited:false,next_expiry_at:'2099-01-01T00:00:00Z'},purchase_quota:{...emptyQuota,granted:3500,available:3100,used:400}});
 }
 const performanceCheck=parameters.has('perf');
 const fixtureStarted=performance.now();
@@ -63,7 +64,7 @@ if(scenario==='expired'||scenario==='revoked'){
 }
 if(scenario==='active'||scenario==='canceling'){
   entitlements.plan='plus';
-  Object.assign(entitlements,{plus_expires_at:'2099-01-01T00:00:00Z'});
+  Object.assign(entitlements,{plan_name:'PLUS',plus_expires_at:'2099-01-01T00:00:00Z',subscription_quota:{...emptyQuota,available:275,granted:300,used:25,unlimited:false}});
   billing.entitlement_expires_at='2099-01-01T00:00:00Z';
   billing.subscription={provider:'stripe',price:plusAnnual,status:scenario==='active'?'active':'scheduled_cancel',next_billed_at:scenario==='active'?'2099-01-01T00:00:00Z':null,cancel_at:scenario==='canceling'?'2099-01-01T00:00:00Z':null,trial_ends_at:null,auto_renew:true,can_cancel:true,renewal_state:'normal',resume_at:null,paid_ends_at:'2099-01-01T00:00:00Z'};
 }

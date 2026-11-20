@@ -817,7 +817,7 @@ def test_transaction_event_lookup_uses_exact_expression_index(purchase):
     if purchase['provider'] != 'creem':
         pytest.skip('Creem transaction event lookup')
     from app.billing_models import BillingEvent
-    from app.billing_purchases import creem_purchase_events
+    from app.billing_reversals import creem_transaction_events
     from app.db import session_factory
     with session_factory()() as db:
         db.add_all([BillingEvent(id=f'creem:test:evt_history{index}', provider='creem', environment='test',
@@ -825,7 +825,7 @@ def test_transaction_event_lookup_uses_exact_expression_index(purchase):
             payload={'transaction_id': f'tran_history{index}'}, occurred_at=purchase['at']) for index in range(2000)])
         db.flush()
         db.connection().exec_driver_sql('ANALYZE billing_events')
-        statement = creem_purchase_events(db, 'tran_history1999').where(BillingEvent.event_type == 'checkout.completed')
+        statement = creem_transaction_events('tran_history1999').where(BillingEvent.event_type == 'checkout.completed')
         compiled = statement.compile(dialect=db.bind.dialect, compile_kwargs={'literal_binds': True})
         plan = db.connection().exec_driver_sql('EXPLAIN ' + str(compiled)).all()
         assert any('ix_billing_events_transaction' in str(row) for row in plan), plan

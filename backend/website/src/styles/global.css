@@ -16,39 +16,47 @@
 .billing-plan-card {display:flex;flex-direction:column;text-align:left;gap:8px;padding:18px}
 .billing-plan-card span {font-size:.82rem}.annual-badge{display:inline-block;border:var(--comic-badge-border);border-radius:var(--comic-badge-radius);padding:3px 8px;background:var(--accent-soft);color:var(--accent);font-size:.7rem;font-weight:750;line-height:1.5;letter-spacing:0}.billing-total{font-size:.77rem;color:var(--muted);line-height:1.8}.annual-saving{display:grid;gap:3px;margin-top:12px;font-size:.76rem;color:var(--muted)}.annual-saving strong{color:var(--success);font-weight:650}
 
-/* The website account is for identity and subscription management. */
-.website-account {max-width:760px;margin-inline:auto}
-.account-summary,.account-subscription {padding:28px;border:var(--comic-border);border-radius:var(--comic-panel-radius);box-shadow:var(--comic-shadow);background:var(--surface)}
-.account-summary {background:linear-gradient(125deg,var(--accent-soft),var(--surface) 85%)}
-.account-identity {display:flex;align-items:center;gap:14px;min-width:0}
-.account-avatar {display:grid;place-items:center;flex-shrink:0;width:48px;height:48px;border:var(--comic-badge-border);border-radius:var(--comic-control-radius);box-shadow:var(--comic-shadow-small);background:var(--surface);color:var(--accent);font-size:22px;font-weight:750}
-.account-identity>div {min-width:0}
-.account-identity h2 {font-size:1.25rem;overflow-wrap:anywhere}
-.account-plan {display:inline-block;margin-top:7px;padding:2px 8px;border:var(--comic-badge-border);border-radius:var(--comic-badge-radius);background:var(--surface-soft);color:var(--muted);font-size:.7rem;font-weight:650}
-.account-plan[data-plus=true] {background:var(--accent);color:var(--accent-on)}
+/* Account panels use the same surfaces and controls as the public site. */
+.website-account {display:grid;gap:20px;min-width:0;margin-inline:auto}
+.account-summary,.account-subscription,.account-shortcuts,.account-balance {padding:var(--comic-panel-padding);border:var(--comic-border);border-radius:var(--comic-panel-radius);background:var(--surface);min-width:0}
+.account-identity {display:flex;align-items:center;flex-wrap:wrap;gap:16px;min-width:0}
+.account-avatar {display:grid;place-items:center;flex-shrink:0;width:52px;height:52px;border:var(--comic-border);border-radius:var(--comic-card-radius);background:var(--accent-soft);color:var(--accent);font-size:1.4rem;font-weight:650}
+.account-identity>div {min-width:0;flex:1}
+.account-identity h2 {font-size:1.35rem;overflow-wrap:anywhere;letter-spacing:0}
+.account-caption,.account-meta,.account-quota-note,.account-session-note {color:var(--muted);font-size:.8rem}
+.account-plan {padding:4px 10px;border:var(--comic-border);border-radius:var(--comic-control-radius);background:var(--surface-soft);color:var(--muted);font-size:.78rem;font-weight:650}
+.account-plan[data-plus=true] {background:var(--accent-soft);color:var(--accent)}
 .account-signout,.account-refresh {white-space:nowrap}
-.account-signout {margin-left:auto;align-self:flex-start}
-.account-expiry {margin-top:18px;color:var(--muted);font-size:.78rem}
-.account-gift {margin-top:18px;padding:14px 16px;border:var(--comic-border);border-radius:var(--comic-card-radius);box-shadow:var(--comic-shadow-small);background:var(--comic-warning-paper);font-size:.82rem}
-.account-gift p {margin-top:5px;color:var(--muted)}
-.account-reading-note {display:flex;justify-content:space-between;align-items:center;gap:18px;border-top:1px solid var(--line);margin-top:22px;padding-top:18px;font-size:.79rem;color:var(--muted)}
-.account-reading-note a {flex-shrink:0}
-.account-subscription {margin-top:20px}
-.account-section-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
-.account-section-heading h3 {font-size:1rem}
-.account-subscription p {font-size:.84rem;color:var(--muted);margin:10px 0}
-.account-subscription .subscription-price {color:var(--ink);font-weight:650}
+.account-meta {display:flex;flex-wrap:wrap;gap:8px 24px}
+.account-meta:not(:empty) {border-top:1px solid var(--line);margin-top:20px;padding-top:16px}
+.account-balances {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px}
+.account-balance h3 {font-size:.82rem;font-weight:500;color:var(--muted);letter-spacing:0}
+.account-balance p {font-size:.75rem;color:var(--muted)}
+.account-balance .account-balance-value {font-size:clamp(1.6rem,3vw,2rem);line-height:1.4;font-weight:650;color:var(--ink);margin-block:12px;font-variant-numeric:tabular-nums}
+.account-quota-note {padding-inline:4px}
+.account-details {display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;align-items:start}
+.account-section-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.account-section-heading h3,.account-shortcuts h3 {font-size:1rem;letter-spacing:0}
+.account-subscription p,.account-shortcuts p {font-size:.84rem;color:var(--muted);margin-block:10px}
+.account-subscription .subscription-price {font-size:1.1rem;color:var(--ink);font-weight:650}
 .subscription-facts {margin:18px 0;display:grid;gap:12px;font-size:.82rem}
 .subscription-facts>div {display:flex;justify-content:space-between;gap:20px}
 .subscription-facts dt {color:var(--muted);flex-shrink:0}
-.subscription-facts dd {margin:0;text-align:right}
-.account-subscription .button {margin-top:14px;margin-right:10px}
-.account-upgrade {margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
-.account-upgrade>summary {display:list-item;width:fit-content}
-.account-upgrade>label {display:flex;align-items:flex-start;gap:9px;font-size:.8rem;margin-top:20px}
-.account-upgrade>label input {margin-top:5px;accent-color:var(--accent)}
-.account-session-note {margin-top:18px;font-size:.72rem;color:var(--muted);line-height:1.8}
-@media(max-width:600px){.account-summary,.account-subscription{padding:20px}.account-identity{gap:10px}.account-avatar{width:40px;height:40px}.account-reading-note{align-items:flex-start;flex-direction:column;gap:10px}.subscription-facts>div{flex-direction:column;gap:4px}.subscription-facts dd{text-align:left}.account-identity h2{font-size:1.1rem}}
+.subscription-facts dd {margin:0;text-align:end;overflow-wrap:anywhere}
+.account-subscription .button {margin-block-start:14px;margin-inline-end:10px;white-space:normal}
+.account-gift {margin-top:20px;padding:16px;border:var(--comic-border);border-radius:var(--comic-card-radius);background:var(--surface-soft);font-size:.82rem}
+.account-reading-note {border-top:1px solid var(--line);margin-top:24px;padding-top:14px}
+.account-shortcuts .button {width:100%;margin-top:10px;white-space:normal}
+.account-session-note {border-top:1px solid var(--line);padding-top:20px;line-height:1.8}
+.website-account .login-passport {grid-template-columns:1fr 1fr;border:var(--comic-border);border-radius:var(--comic-panel-radius);box-shadow:none}
+.account-login-summary,.account-login-form {padding:clamp(24px,4vw,40px)}
+.account-login-summary {background:var(--surface-soft);border-inline-end:1px solid var(--line)}
+.account-login-summary h2 {font-size:1.7rem;margin-block:24px 12px}
+.account-login-summary p,.account-login-form p,.account-login-form small {color:var(--muted);font-size:.86rem}
+.account-login-form {display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:20px}
+.account-login-form h3 {font-size:1.25rem}
+.account-login-form small {font-size:.75rem}
+@media(max-width:640px){.account-details,.website-account .login-passport{grid-template-columns:1fr}.account-identity{gap:12px}.account-identity>div{flex-basis:calc(100% - 68px)}.account-signout{margin-inline-start:auto}.account-login-summary{border-inline-end:0;border-bottom:1px solid var(--line)}.account-login-summary h2{font-size:1.4rem}.subscription-facts>div{flex-wrap:wrap}}
 
 /* Keep the whole example visible and reserve its layout during image decoding. */
 .compare-toolbar{flex-direction:column;align-items:flex-start;gap:10px}

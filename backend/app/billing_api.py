@@ -49,8 +49,8 @@ CREEM_EVENTS = {'checkout.completed', 'subscription.active', 'subscription.paid'
 
 def billing_error(exc):
     messages = {'BILLING_SUBSCRIPTION_EXISTS': '已有订阅，请管理当前订阅',
-        'BILLING_PREPAID_ACTIVE': '季卡或年卡尚未到期，可手动续购，到期后再开通自动续订',
-        'BILLING_GIFT_ACTIVE': '赠送会员期间不会扣款，请在赠送结束后开通订阅',
+        'BILLING_PREPAID_ACTIVE': '会员卡尚未到期，可以手动续购',
+        'BILLING_GIFT_ACTIVE': '赠送会员期间不会扣款，请在赠送结束后购买会员卡',
         'SUBSCRIPTION_NOT_FOUND': '没有可管理的订阅',
         'BILLING_CHECKOUT_UNCERTAIN': '正在核实原结账结果，请稍后刷新',
         'CREEM_CHECKOUT_UNCERTAIN': '此笔结账请求结果待核实，不会重复下单，请联系支持恢复原订单',
@@ -61,10 +61,10 @@ def billing_error(exc):
         'BILLING_PURCHASE_RETRY_ALLOWED': '原购买已确认结束且未付款，可以手动重新购买',
         'BILLING_CHECKOUT_COMPLETED': '结账已完成，请刷新会员权益',
         'BILLING_CHECKOUT_PRICE_CONFLICT': '此购买意图已有待核实结账，请继续原价格与支付渠道',
-        'BILLING_CHECKOUT_PENDING': '请先完成或核实另一种付款方式的待付款订单，再切换',
+        'BILLING_CHECKOUT_PENDING': '请先完成或核实已有待付款会员订单，再发起新购买',
         'BILLING_PLAN_UNAVAILABLE': '此价格尚未发布或已停售，请刷新套餐列表',
         'BILLING_CHANNEL_UNAVAILABLE': '此支付渠道暂不可用，请刷新套餐列表',
-        'BILLING_CHECKOUT_EXPIRED': '结账链接已过期，请重新打开', 'BILLING_DISABLED': '订阅暂未开放'}
+        'BILLING_CHECKOUT_EXPIRED': '结账链接已过期，请重新打开', 'BILLING_DISABLED': '支付渠道暂不可用'}
     problem(exc.code, messages.get(exc.code, '支付服务暂时不可用，请稍后重试'), 503 if exc.uncertain else 409)
 
 

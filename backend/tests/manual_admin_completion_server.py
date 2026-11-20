@@ -19,7 +19,7 @@ from app.assets import create_asset
 from app.reader_api import Feedback
 from app.billing_catalog import initialize_catalog
 from app.billing_models import (BillingAccount, BillingCustomer, BillingCheckout, BillingSubscription, BillingInvoice,
-    BillingTerm, BillingPriceBinding, BillingOrder, BillingEvent, BillingRefund, BillingDispute)
+    BillingTerm, BillingPrice, BillingPriceBinding, BillingOrder, BillingEvent, BillingRefund, BillingDispute)
 from app.entitlement_models import QuotaPeriod
 from app.health_models import ServiceHeartbeat
 from app.upload_models import UploadReservation
@@ -89,6 +89,9 @@ with session_factory()() as db:
         last_success_at=at, consecutive_failures=0, failure_count=0))
     db.add(BillingAccount(owner_id=reader.id, trial_used_at=at - timedelta(days=10)))
     db.add(BillingCustomer(id='fixture-customer', owner_id=reader.id, provider='creem', environment='test', customer_id='cust_fixture'))
+    db.add(BillingPrice(id='plus-quarter-v1', plan_id='plus', plan_revision_id='plus-v1',
+        environment='test', currency='usd', unit_amount=666, interval='quarter', billing_type='recurring', status='archived'))
+    db.flush()
     binding = BillingPriceBinding(id='fixture-binding', price_id='plus-quarter-v1', provider='creem', environment='test', product_id='prod_fixture')
     db.add(binding)
     db.flush()

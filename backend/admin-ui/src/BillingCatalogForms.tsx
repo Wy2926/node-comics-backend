@@ -1,7 +1,7 @@
 import {Button} from './ui';
 import {useRef, useState} from 'react';
 import {authError, errorText, request} from './api';
-import {benefitsSummary, billingEndpoint, billingTypeName, environmentName, intervalName, minorAmount, pageAllowance, money, priceAmount, providerName, type BillingChannel, type BillingEnvironment, type BillingPrice, type BillingProduct, type BillingProvider, type BillingType} from './billing';
+import {benefitsSummary, billingEndpoint, billingTypeName, environmentName, intervalName, minorAmount, pageAllowance, money, priceAmount, providerName, type BillingChannel, type BillingEnvironment, type BillingPrice, type BillingProduct, type BillingProvider} from './billing';
 import {BillingDialog} from './BillingShared';
 
 export type CatalogEditor = {kind: 'product'} | {kind: 'benefits'; product: BillingProduct} | {kind: 'price'; product: BillingProduct; copy?: BillingPrice} | {kind: 'binding'; price: BillingPrice};
@@ -12,8 +12,8 @@ export function BillingCatalogForm({editor, channels, products, onClose, onSaved
   const [recordId] = useState(() => crypto.randomUUID());
   const [productId, setProductId] = useState('');
   const [isPack, setIsPack] = useState((latest?.quota_pages ?? 0) > 0);
-  const [benefits, setBenefits] = useState({name: latest?.name ?? '', monthly_classic_pages: latest ? latest.monthly_classic_pages : null as number | null, trial_days: latest?.trial_days ?? 7, trial_classic_pages: latest ? latest.trial_classic_pages : 30 as number | null, hourly_image_limit: latest?.hourly_image_limit ?? null as number | null, service_plan_id: latest?.service_plan_id ?? null as string | null, quota_pages: latest?.quota_pages ?? 0, quota_validity_days: latest?.quota_validity_days ?? null as number | null});
-  const [price, setPrice] = useState({plan_revision_id: copied?.plan_revision_id ?? latest?.id ?? '', currency: copied?.currency ?? 'usd', amount: copied ? priceAmount(copied.unit_amount, copied.currency) : '', interval: copied?.interval ?? (isPack ? 'once' : 'month'), billing_type: copied?.billing_type ?? (isPack ? 'onetime' : 'recurring') as BillingType, environment: copied?.environment ?? channels.find(channel => channel.enabled)?.environment ?? 'test'});
+  const [benefits, setBenefits] = useState({name: latest?.name ?? '', monthly_classic_pages: latest ? latest.monthly_classic_pages : null as number | null, trial_days: 0, trial_classic_pages: 0, hourly_image_limit: latest?.hourly_image_limit ?? null as number | null, service_plan_id: latest?.service_plan_id ?? null as string | null, quota_pages: latest?.quota_pages ?? 0, quota_validity_days: latest?.quota_validity_days ?? null as number | null});
+  const [price, setPrice] = useState({plan_revision_id: copied?.plan_revision_id ?? latest?.id ?? '', currency: copied?.currency ?? 'usd', amount: copied ? priceAmount(copied.unit_amount, copied.currency) : '', interval: copied?.interval ?? (isPack ? 'once' : 'month'), environment: copied?.environment ?? channels.find(channel => channel.enabled)?.environment ?? 'test'});
   const servicePlans = products.filter(value => value.revisions.some(revision => !revision.quota_pages));
   const priceIsPack = (product?.revisions.find(value => value.id === price.plan_revision_id)?.quota_pages ?? 0) > 0;
   const [binding, setBinding] = useState({provider: (channels.find(channel => channel.enabled)?.provider ?? 'creem') as BillingProvider, product_id: '', provider_price_id: '', trial_product_id: ''});
@@ -28,7 +28,7 @@ export function BillingCatalogForm({editor, channels, products, onClose, onSaved
       let path: string, body: unknown;
       if (editor.kind === 'product') {path = '/products'; body = {...benefits, id: productId, revision_id: recordId};}
       else if (editor.kind === 'benefits') {path = `/products/${encodeURIComponent(editor.product.id)}/revisions`; body = {...benefits, id: recordId};}
-      else if (editor.kind === 'price') {path = '/prices'; body = {id: recordId, plan_revision_id: price.plan_revision_id, currency: price.currency, unit_amount: minorAmount(price.amount, price.currency), interval: price.interval, billing_type: price.billing_type, environment: price.environment};}
+      else if (editor.kind === 'price') {path = '/prices'; body = {id: recordId, plan_revision_id: price.plan_revision_id, currency: price.currency, unit_amount: minorAmount(price.amount, price.currency), interval: price.interval, billing_type: 'onetime', environment: price.environment};}
       else {path = `/prices/${encodeURIComponent(editor.price.id)}/bindings`; body = {id: recordId, provider: binding.provider, environment: editor.price.environment, product_id: binding.product_id.trim(), provider_price_id: binding.provider === 'stripe' ? binding.provider_price_id.trim() : null, trial_product_id: binding.provider === 'creem' && editor.price.trial_days > 0 ? binding.trial_product_id.trim() : null};}
       await request(billingEndpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
       await onSaved(editor.kind === 'product' ? productId : product?.id);
@@ -38,13 +38,13 @@ export function BillingCatalogForm({editor, channels, products, onClose, onSaved
   }
   return <BillingDialog title={title} busy={busy} onClose={onClose}><form className="billing-form" onSubmit={event => {event.preventDefault(); void submit();}}>
     <fieldset className="config-body" disabled={busy}>
-      {(editor.kind === 'product' || editor.kind === 'benefits') && <><p className="muted">订阅支持每月有限页数或不限量；年付仍逐月发放，未用不结转。免费模型先扣免费额度，用完后扣订阅、购买额度；高级模型不使用免费额度。</p><div className="billing-form-grid">
+      {(editor.kind === 'product' || editor.kind === 'benefits') && <><p className="muted">新购会员卡一次付清，不含试用；额度逐月发放，未用不结转。免费模型先扣免费额度，再扣会员、购买额度；高级模型不使用免费额度。</p><div className="billing-form-grid">
         <label>产品类型<select value={isPack ? 'once' : 'subscription'} onChange={event => {
           const pack = event.target.value === 'once';
           setIsPack(pack);
           setBenefits({...benefits, service_plan_id: null, quota_pages: 0, quota_validity_days: null,
-            monthly_classic_pages: pack ? 0 : null, trial_days: 0, trial_classic_pages: 0, hourly_image_limit: null});
-        }}><option value="subscription">会员（订阅或季卡／年卡）</option><option value="once">一次性常规额度包</option></select></label>
+            monthly_classic_pages: pack ? 0 : null, hourly_image_limit: null});
+        }}><option value="subscription">一次性会员卡</option><option value="once">一次性常规额度包</option></select></label>
         {editor.kind === 'product' && <label>产品编号<input required autoFocus pattern="[a-z][a-z0-9_-]*" maxLength={64} value={productId} placeholder="例如 plus" onChange={event => setProductId(event.target.value)}/><small>小写字母开头，可包含数字、短横线和下划线。</small></label>}
         <label>产品名称<input required maxLength={100} value={benefits.name} placeholder="例如 PLUS" onChange={event => setBenefits({...benefits, name: event.target.value})}/></label>
         {isPack ? <>
@@ -56,22 +56,16 @@ export function BillingCatalogForm({editor, channels, products, onClose, onSaved
           }}><option value="">选择已有会员套餐</option>{servicePlans.map(value => <option key={value.id} value={value.id}>{value.name}</option>)}</select><small>仅购买额度享受该档的模型、分钟准入与调度；不会将免费日额度升级或赠送会员月额度。</small></label>
         </> : <label>每月翻译页数<input type="number" min={0} max={1000000} step={1} placeholder="留空表示不限量" value={benefits.monthly_classic_pages ?? ''} onChange={event => setBenefits({...benefits, monthly_classic_pages: pageAllowance(event.target.value)})}/></label>}
         <label>每小时新受理页数<input type="number" min={1} max={1000000} step={1} value={benefits.hourly_image_limit ?? ''} onChange={event => setBenefits({...benefits, hourly_image_limit: event.target.value === '' ? null : Number(event.target.value)})}/><small>全账户滚动 60 分钟内的新翻译页数；留空表示不设小时限额。分钟保护仍生效。</small></label>
-        {!isPack && <><label>首次试用天数<input required type="number" min={0} max={30} step={1} value={benefits.trial_days} onChange={event => setBenefits({...benefits, trial_days: Number(event.target.value), trial_classic_pages: event.target.value === '' ? null : Number(event.target.value) === 0 ? 0 : benefits.trial_classic_pages})}/></label>
-        <label>试用翻译页数<input type="number" min={0} max={1000000} step={1} disabled={!benefits.trial_days} placeholder="留空表示不限量" value={benefits.trial_classic_pages ?? ''} onChange={event => setBenefits({...benefits, trial_classic_pages: pageAllowance(event.target.value)})}/></label></>}
       </div>{editor.kind === 'benefits' && <p className="provider-warning">保存后请添加采用新权益的价格。现有价格、订阅和已购额度继续保留原权益。</p>}</>}
-      {editor.kind === 'price' && <><p className="muted">价格先保存为草稿，关联并验证支付渠道后发布。发布同一产品、环境、币种、周期和续订方式的新价格，会自动停售原价格；会员卡与自动续订可同时在售。</p><div className="billing-form-grid">
-        {!priceIsPack && <label>续订方式<select value={price.billing_type} onChange={event => {
-          const billing_type = event.target.value as BillingType;
-          setPrice({...price, billing_type, interval: billing_type === 'onetime' && price.interval === 'month' ? 'quarter' : price.interval});
-        }}><option value="recurring">自动续订</option><option value="onetime">一次付清的季卡／年卡</option></select><small>会员卡复用此产品权益，逐月发放额度，不含试用。</small></label>}
-        <label>{price.billing_type === 'onetime' && !priceIsPack ? '会员期限' : '付款周期'}<select value={price.interval} onChange={event => setPrice({...price, interval: event.target.value as BillingPrice['interval']})}>{priceIsPack ? <option value="once">一次性购买（不自动续费）</option> : <>{price.billing_type === 'recurring' && <option value="month">月付</option>}<option value="quarter">{price.billing_type === 'onetime' ? '季卡（三个月）' : '季付（每三个月）'}</option><option value="year">{price.billing_type === 'onetime' ? '年卡（一年）' : '年付'}</option></>}</select></label>
+      {editor.kind === 'price' && <><p className="muted">新报价均为一次性购买。关联并验证渠道后发布，同产品、环境、币种和期限的旧一次性报价会自动停售。</p><div className="billing-form-grid">
+        <label>{priceIsPack ? '付款周期' : '会员期限'}<select value={price.interval} onChange={event => setPrice({...price, interval: event.target.value as BillingPrice['interval']})}>{priceIsPack ? <option value="once">一次性购买</option> : (['month', 'quarter', 'year'] as const).map(interval => <option key={interval} value={interval}>{intervalName(interval, 'onetime')}</option>)}</select></label>
         <label>币种<input required pattern="[a-zA-Z]{3}" maxLength={3} value={price.currency} onChange={event => setPrice({...price, currency: event.target.value.toLowerCase()})}/></label>
         <label>价格金额（{price.currency.toUpperCase()}）<input required inputMode="decimal" pattern="[0-9]+(\.[0-9]+)?" value={price.amount} onChange={event => setPrice({...price, amount: event.target.value})}/><small>填写实际金额，例如 9.99。</small></label>
         <label>支付环境<select value={price.environment} onChange={event => setPrice({...price, environment: event.target.value as BillingEnvironment})}><option value="test">测试环境</option><option value="live">正式环境</option></select></label>
         <label className="billing-form-wide">采用的产品权益<select required value={price.plan_revision_id} onChange={event => {
           const selected = editor.product.revisions.find(value => value.id === event.target.value);
-          setPrice({...price, plan_revision_id: event.target.value, interval: selected?.quota_pages ? 'once' : price.interval === 'once' ? 'quarter' : price.interval, billing_type: selected?.quota_pages ? 'onetime' : price.billing_type});
-        }}>{editor.product.revisions.map(revision => <option key={revision.id} value={revision.id}>{revision.name} · {benefitsSummary(revision)}{revision.hourly_image_limit != null && ` · 每滚动小时最多 ${revision.hourly_image_limit} 页`}{revision.id === latest?.id ? '（当前权益）' : '（历史权益）'}</option>)}</select></label>
+          setPrice({...price, plan_revision_id: event.target.value, interval: selected?.quota_pages ? 'once' : price.interval === 'once' ? 'month' : price.interval});
+        }}>{editor.product.revisions.filter(revision=>!revision.trial_days).map(revision => <option key={revision.id} value={revision.id}>{revision.name} · {benefitsSummary(revision)}{revision.hourly_image_limit != null && ` · 每滚动小时最多 ${revision.hourly_image_limit} 页`}{revision.id === latest?.id ? '（当前权益）' : '（历史权益）'}</option>)}</select></label>
       </div></>}
       {editor.kind === 'binding' && <><div className="billing-form-context"><strong>{editor.price.name} · {intervalName(editor.price.interval, editor.price.billing_type)} · {money(editor.price.unit_amount, editor.price.currency)}</strong><small>{environmentName(editor.price.environment)} · {billingTypeName(editor.price.billing_type)} · 首次试用 {editor.price.trial_days} 天</small></div><div className="billing-form-grid">
         <label className="billing-form-wide">支付渠道<select value={binding.provider} onChange={event => setBinding({...binding, provider: event.target.value as BillingProvider, product_id: '', provider_price_id: '', trial_product_id: ''})}>{channels.map(value => <option key={value.provider} value={value.provider}>{providerName(value.provider)}</option>)}</select></label>

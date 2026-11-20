@@ -60,7 +60,9 @@ def redis_client(monkeypatch, isolated_identity_environment):
 @pytest.fixture
 def catalog_products():
     return [dict(id='plus', name='PLUS', monthly_classic_pages=None, trial_days=7,
-        trial_classic_pages=None, prices={'month': 999, 'year': 9999})]
+        trial_classic_pages=None, prices=[
+            dict(id='plus-month-v1', interval='month', billing_type='recurring', unit_amount=999),
+            dict(id='plus-year-v1', interval='year', billing_type='recurring', unit_amount=9999)])]
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +70,9 @@ def isolated_catalog(monkeypatch, catalog_products):
     # Public-catalog tests opt out by returning None from catalog_products.
     if catalog_products is not None:
         from app import billing_catalog
-        monkeypatch.setattr(billing_catalog, 'DEFAULT_CATALOG', {'currency': 'usd', 'products': catalog_products})
+        monkeypatch.setattr(billing_catalog, 'DEFAULT_CATALOG', {**billing_catalog.DEFAULT_CATALOG, 'products': catalog_products})
+        # Recreate the original storefront for legacy subscription lifecycle fixtures.
+        monkeypatch.setattr(billing_catalog, 'NEW_SALE_TYPES', ('onetime', 'recurring'))
 
 
 TEST_DATABASE = 'nodecomics_concurrency_test'

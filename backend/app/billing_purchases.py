@@ -1,9 +1,10 @@
 """One-off quota or membership purchases; payment, grants and audit commit together."""
 from datetime import timedelta
-from sqlalchemy import func, literal_column, select
+from sqlalchemy import func, select
 from . import stripe_client as stripe, creem_client as creem
-from .billing_models import BillingCheckout, BillingEvent, BillingOrder, BillingPlanRevision, BillingPrice, BillingPriceBinding, BillingTerm
+from .billing_models import MEMBERSHIP_MONTHS, BillingCheckout, BillingEvent, BillingOrder, BillingPlanRevision, BillingPrice, BillingPriceBinding, BillingTerm
 from .billing_orders import checkout_order, transition
+from .billing_reversals import apply_creem_reversals, creem_transaction_events
 from .billing_providers import require, provider_environment, stripe_quote
 from .billing_grants import grant_term, timestamp
 from .billing_checkout import bind_checkout_customer
@@ -60,7 +61,7 @@ def grant_purchase(db, row, order, paid_at):
         revoke_purchase(db, order)
         return
     if price.interval != 'once':
-        require(price.interval in ('quarter', 'year') and revision.quota_pages == 0, 'BILLING_PURCHASE_INVALID')
+        require(price.interval in MEMBERSHIP_MONTHS and revision.quota_pages == 0, 'BILLING_PURCHASE_INVALID')
         term = db.scalar(select(BillingTerm).where(BillingTerm.billing_order_id == order.id))
         if term:
             require(term.owner_id == row.owner_id and term.price_id == price.id, 'BILLING_PURCHASE_CONFLICT')
@@ -76,7 +77,7 @@ def grant_purchase(db, row, order, paid_at):
         if user.plus_expires_at and not user.plus_pending:
             start = max(start, user.plus_expires_at)
         grant_term(db, user, None, price, 'paid', start,
-            month_boundary(start, 3 if price.interval == 'quarter' else 12, 'UTC'), billing_order_id=order.id)
+            month_boundary(start, MEMBERSHIP_MONTHS[price.interval], 'UTC'), billing_order_id=order.id)
         return
     require(revision.quota_pages > 0 and revision.service_plan_id
         and revision.monthly_classic_pages == 0, 'BILLING_PURCHASE_INVALID')
@@ -162,34 +163,6 @@ def sync_stripe_purchase(checkout_id):
         db.commit()
 
 
-def creem_purchase_events(db, transaction_id):
-    return select(BillingEvent).where(BillingEvent.provider == 'creem',
-        BillingEvent.environment == provider_environment('creem'),
-        BillingEvent.payload.op('->>')(literal_column("'transaction_id'")) == transaction_id)
-
-
-def apply_creem_reversals(db, order):
-    from .billing_reversals import record_reversal
-    # A signed reversal can precede the checkout callback or a current API read.
-    # Exact transaction lookup uses the payment-event correlation index.
-    events = db.scalars(creem_purchase_events(db, order.external_id).where(
-        BillingEvent.event_type.in_(['refund.created', 'dispute.created'])).order_by(BillingEvent.occurred_at))
-    for event in events:
-        snapshot = event.payload.get('reversal') or {}
-        record_reversal(db, order, event.event_type.split('.')[0], event.resource_id,
-            amount=snapshot.get('amount'), currency=snapshot.get('currency'), status=snapshot.get('status') or 'unknown',
-            occurred_at=event.occurred_at, observed_at=event.occurred_at, event_id=event.id)
-        if event.event_type == 'dispute.created':
-            transition(db, order, 'disputed', 'purchase_reversal', event.id)
-    db.flush()
-    from .billing_models import BillingRefund
-    total = db.scalar(select(func.coalesce(func.sum(BillingRefund.amount), 0)).where(
-        BillingRefund.order_id == order.id, BillingRefund.status == 'succeeded', BillingRefund.currency == order.currency))
-    order.refunded_total = max(order.refunded_total or 0, total)
-    if order.status not in REVERSED and total:
-        transition(db, order, 'refunded' if total >= order.total else 'partially_refunded', 'purchase_reversal')
-
-
 def sync_creem_purchase(checkout_id):
     with session_factory()() as db:
         row = db.get(BillingCheckout, checkout_id)
@@ -261,7 +234,7 @@ def sync_creem_purchase_reversal(transaction_id, event_id=None):
             session_id = (event.payload.get('checkout_session_id') if event and event.provider == 'creem'
                 and event.environment == provider_environment('creem') and event.payload.get('transaction_id') == transaction_id else None)
             if not session_id:
-                session_ids = set(db.scalars(creem_purchase_events(db, transaction_id).with_only_columns(
+                session_ids = set(db.scalars(creem_transaction_events(transaction_id).with_only_columns(
                     BillingEvent.resource_id).where(BillingEvent.event_type == 'checkout.completed').limit(2)))
                 require(len(session_ids) == 1, 'CREEM_REFUND_UNBOUND')
                 session_id = session_ids.pop()

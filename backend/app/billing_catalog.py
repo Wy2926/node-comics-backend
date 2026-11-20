@@ -17,6 +17,7 @@ from .request_models import RequestBody
 
 router = APIRouter(prefix='/v1/admin/billing', dependencies=[Depends(admin)])
 PROVIDERS = ('stripe', 'creem')
+NEW_SALE_TYPES = ('onetime',)
 DEFAULT_CATALOG = json.loads(Path(__file__).with_name('catalog_defaults.json').read_text(encoding='utf-8'))
 
 
@@ -33,25 +34,33 @@ def initialize_catalog(db):
         db.add(BillingSettings(id=1, default_provider=next((p for p in PROVIDERS if provider_enabled(p)), None)))
     environment = provider_environment('creem' if provider_enabled('creem') else 'stripe')
     for product in DEFAULT_CATALOG['products']:
-        if db.get(BillingPlan, product['id']) is not None:
-            continue
         plan_id, name = product['id'], product['name']
-        db.add(BillingPlan(id=plan_id, name=name))
+        if db.get(BillingPlan, plan_id) is None:
+            db.add(BillingPlan(id=plan_id, name=name))
+            db.flush()
+        missing = [price for price in product['prices'] if db.get(BillingPrice, price['id']) is None]
+        if not missing:
+            continue
+        benefits = BenefitsRequest(**({'trial_days': 0} | {
+            key: value for key, value in product.items() if key not in ('id', 'prices')})).model_dump()
+        revisions = list(db.scalars(select(BillingPlanRevision).where(
+            BillingPlanRevision.plan_id == plan_id).order_by(BillingPlanRevision.version.desc())))
+        # Legacy seed IDs can hold different sold benefits; reuse only an exact revision.
+        revision = next((r for r in revisions if all(getattr(r, k) == v for k, v in benefits.items())), None)
+        if revision is None:
+            revision = BillingPlanRevision(id=uid() if revisions else f'{plan_id}-v1', plan_id=plan_id,
+                version=revisions[0].version + 1 if revisions else 1, **benefits)
+            db.add(revision)
+            db.flush()
+        for price in missing:
+            request = PriceRequest(**price, plan_revision_id=revision.id, environment=environment,
+                currency=DEFAULT_CATALOG['currency'])
+            quote = request.model_dump(exclude={'id'})
+            if db.scalar(select(BillingPrice.id).where(
+                    *(getattr(BillingPrice, key) == value for key, value in quote.items())).limit(1)):
+                continue
+            db.add(BillingPrice(**request.model_dump(), plan_id=plan_id, status='draft'))
         db.flush()
-        db.add(BillingPlanRevision(id=f'{plan_id}-v1', plan_id=plan_id, version=1, name=name,
-            monthly_classic_pages=product['monthly_classic_pages'], service_plan_id=product.get('service_plan_id'),
-            quota_pages=product.get('quota_pages', 0), quota_validity_days=None,
-            trial_days=product.get('trial_days', 0), trial_classic_pages=product.get('trial_classic_pages', 0)))
-        db.flush()
-        for interval, amount in product['prices'].items():
-            variants = [('', 'onetime' if interval == 'once' else 'recurring')]
-            if interval in ('quarter', 'year') and not product.get('trial_days', 0):
-                variants.append(('-prepaid', 'onetime'))
-            for suffix, billing_type in variants:
-                db.add(BillingPrice(id=f'{plan_id}-{interval}{suffix}-v1', plan_id=plan_id,
-                    plan_revision_id=f'{plan_id}-v1', environment=environment,
-                    currency=DEFAULT_CATALOG['currency'], unit_amount=amount,
-                    interval=interval, billing_type=billing_type, status='draft'))
 
 
 class BenefitsRequest(RequestBody):
@@ -98,9 +107,8 @@ class PriceRequest(RequestBody):
     def payment_type(self):
         if self.billing_type is None:
             self.billing_type = 'onetime' if self.interval == 'once' else 'recurring'
-        if (self.interval == 'once' and self.billing_type != 'onetime'
-                or self.interval == 'month' and self.billing_type != 'recurring'):
-            raise ValueError('One-time membership supports only quarter or year; page packs use once')
+        if self.interval == 'once' and self.billing_type != 'onetime':
+            raise ValueError('Page packs require one-time payment')
         return self
 
 
@@ -149,12 +157,14 @@ def binding_json(binding):
 
 def price_json(db, price):
     revision = db.get(BillingPlanRevision, price.plan_revision_id)
+    service_plan_id = revision.service_plan_id or revision.plan_id
+    service_plan = db.get(BillingPlan, service_plan_id)
     return {'id': price.id, 'plan_id': price.plan_id, 'plan_revision_id': revision.id,
         'name': revision.name, 'version': revision.version, 'currency': price.currency,
         'unit_amount': price.unit_amount, 'interval': price.interval, 'billing_type': price.billing_type,
         'monthly_classic_pages': revision.monthly_classic_pages,
         'hourly_image_limit': revision.hourly_image_limit,
-        'service_plan_id': revision.service_plan_id or revision.plan_id,
+        'service_plan_id': service_plan_id, 'service_plan_name': service_plan.name if service_plan else service_plan_id,
         'quota_pages': revision.quota_pages, 'quota_validity_days': revision.quota_validity_days,
         'trial_days': revision.trial_days, 'trial_classic_pages': revision.trial_classic_pages}
 
@@ -172,7 +182,7 @@ def offers(db, *, interval=None):
             available.setdefault(binding.price_id, []).append(binding)
     result = []
     period = BillingPrice.interval == interval if interval else BillingPrice.interval != 'once'
-    for price in db.scalars(select(BillingPrice).where(BillingPrice.status == 'active', period)
+    for price in db.scalars(select(BillingPrice).where(BillingPrice.status == 'active', BillingPrice.billing_type.in_(NEW_SALE_TYPES), period)
             .order_by(BillingPrice.plan_id, BillingPrice.interval, BillingPrice.billing_type, BillingPrice.currency)):
         channels = available.get(price.id, [])
         if channels:
@@ -272,6 +282,8 @@ def create_price(body: PriceRequest, db: Session = Depends(get_db), actor: User 
     revision = db.get(BillingPlanRevision, body.plan_revision_id)
     if not revision:
         problem('NOT_FOUND', '产品权益版本不存在', 404)
+    if body.billing_type not in NEW_SALE_TYPES:
+        problem('BILLING_PLAN_UNAVAILABLE', '新报价仅支持一次性购买', 409)
     if (body.interval == 'once') != (revision.quota_pages > 0):
         problem('BILLING_PRICE_INTERVAL_INVALID', '额度包使用 once 周期，会员使用月付、季付或年付周期', 422)
     if body.billing_type == 'onetime' and revision.trial_days:
@@ -359,6 +371,8 @@ def publish_price(price_id: str, body: PriceState, db: Session = Depends(get_db)
     before = {'status': price.status}
     archived_ids = []
     if body.status == 'active':
+        if price.billing_type not in NEW_SALE_TYPES:
+            problem('BILLING_PLAN_UNAVAILABLE', '历史自动续订价格不能重新上架', 409)
         bindings = list(db.scalars(select(BillingPriceBinding).where(
             BillingPriceBinding.price_id == price.id, BillingPriceBinding.status == 'active')))
         if not bindings:

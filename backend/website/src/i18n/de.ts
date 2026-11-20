@@ -1,7 +1,7 @@
 import { localTranslationGuides } from './guides/de';
 import type { Dictionary } from './types';
 
-const membershipSummary = `Lokales Lesen ist kostenlos. Mit Free kannst du täglich 30 Seiten mit den Basismodellen übersetzen. PLUS: 2.500 Seiten pro Monat für 6,66 USD pro Quartal oder 23,99 USD pro Jahr. Pro: 4.000 Seiten pro Monat für 9,99 USD pro Quartal oder 35,99 USD pro Jahr. Beide Tarife enthalten die Basismodelle und weitere Modelle. Die verfügbaren Modelle und ihre Verbrauchsfaktoren findest du in der Übersetzungsansicht. Monatliche Zuteilung ohne Übertrag und ohne Probeabo. Unbefristete Pakete: 3.500 Seiten für 5,99 USD oder 7.000 für 9,99 USD. Steuern und Endbetrag beim Bezahlen.`;
+const membershipSummary = `Lokales Lesen ist kostenlos. Mit Free kannst du täglich 30 Seiten mit den Basismodellen übersetzen. PLUS: 2.500 Seiten pro Monat für 2,99 USD für einen Monat, 6,66 USD für drei Monate oder 23,99 USD für ein Jahr. Pro: 4.000 Seiten pro Monat für 3,99 USD für einen Monat, 9,99 USD für drei Monate oder 35,99 USD für ein Jahr. Beide Tarife enthalten die Basismodelle und weitere Modelle. Die verfügbaren Modelle und ihre Verbrauchsfaktoren findest du in der Übersetzungsansicht. Monatliche Zuteilung ohne Übertrag und ohne Probezeit. Einmalzahlung ohne automatische Verlängerung. Unbefristete Pakete: 3.500 Seiten für 5,99 USD oder 7.000 für 9,99 USD. Steuern und Endbetrag beim Bezahlen.`;
 
 export default {
   "ui": {
@@ -21,7 +21,7 @@ export default {
     "changelog": "Änderungsprotokoll",
     "privacy": "Datenschutzrichtlinie",
     "terms": "Nutzungsbedingungen",
-    "refund": "Abonnements und Rückerstattungen",
+    "refund": "Käufe und Erstattungen",
     "home": "Startseite",
     "skip": "Zum Inhalt springen",
     "navigation": "Hauptnavigation",
@@ -82,7 +82,7 @@ export default {
     "ctaDescription": "Öffne eine Geschichte, die du lesen darfst. Übersetze bei Bedarf und behalte das Original griffbereit.",
     "ctaButton": "Beginnen Sie Ihre Lesereise",
     "pricingTitle": "Kostenlos lesen. Wählen Sie Ihren Übersetzungsplan.",
-    "pricingDescription": "PLUS / Pro und Seitenpakete ohne Ablaufdatum. Quartals- oder Jahreszahlung, monatliche Seiten. Kein Probeabo.",
+    "pricingDescription": "PLUS / Pro für einen Monat, drei Monate oder ein Jahr und unbefristete Seitenpakete. Einmalzahlung ohne automatische Verlängerung oder Probezeit. Monatliche Seitenkontingente.",
     "freePlan": "Kostenlos",
     "freePlanDescription": "Für eine kleine Lektüre jeden Tag",
     "free": "kostenlos",
@@ -488,7 +488,7 @@ export default {
           {
             "title": "Service und Konten",
             "paragraphs": [
-              "NodeLane Comics bietet Erweiterungs-, Lese- und Übersetzungsdienste. Lesen Sie diese Bedingungen und die Datenschutzrichtlinie vor der Nutzung; Beenden Sie die Nutzung des Dienstes, wenn Sie damit nicht einverstanden sind. Aktualisiert am 2026-10-17. Die Website bietet Produktinformationen, Anleitungen, Downloads und Kontoverwaltung, keinen Comic-Katalog oder Comic-Verkäufe.",
+              "NodeLane Comics bietet Erweiterungs-, Lese- und Übersetzungsdienste. Lesen Sie diese Bedingungen und die Datenschutzrichtlinie vor der Nutzung. Beenden Sie die Nutzung des Dienstes, wenn Sie damit nicht einverstanden sind. Die Website bietet Produktinformationen, Anleitungen, Downloads und Kontoverwaltung, keinen Comic-Katalog oder Comic-Verkäufe.",
               "Verwenden Sie ein Konto, zu dessen Nutzung Sie berechtigt sind, und schützen Sie Ihre Anmeldeinformationen und Ihr Gerät. Vorteile und Zugriff werden auf dem Server überprüft. Geben Sie sich nicht als andere aus, greifen Sie nicht auf deren private Aufzeichnungen zu, umgehen Sie keine Raten- oder Bildbeschränkungen, stören Sie Dienste nicht durch missbräuchliche Automatisierung und greifen Sie das Produkt und seine Anbieter nicht an. Bei Missbrauch kann es zu einer Zugangsbeschränkung kommen.",
               "Der Erweiterungsquellcode steht unter GPL-3.0-only; Drittkomponenten behalten eigene Lizenzen. Diese Onlinedienstbedingungen beschränken keine GPL-Rechte zur Nutzung, Änderung oder Weitergabe und gewähren keine Rechte an Comic-Inhalten."
             ]
@@ -504,7 +504,7 @@ export default {
             "title": "Vorteile und Abonnements",
             "paragraphs": [
               membershipSummary,
-              "Neue Abos werden derzeit vierteljährlich oder jährlich ohne Testphase mit Karte abgerechnet und automatisch verlängert. Der Zeitraum enthält 3/12 monatliche Kontingentfenster, verankert am ursprünglichen UTC-Abrechnungstag. Ungenutzte Seiten werden nicht übertragen, zukünftige nicht vorgezogen. Preise, Steuern und Rechte richten sich nach Bestellung und Konto. Bestehende Abos behalten ursprüngliche Preise und Rechteversionen; frühere Tests und Geschenke folgen ihren ursprünglichen Einträgen.",
+              "Neue Mitgliedschaften für einen Monat, drei Monate oder ein Jahr werden einmal bezahlt, ohne automatische Verlängerung oder Probezeit. Monatliche Kontingentfenster sind am ursprünglichen UTC-Berechtigungszeitraum verankert. Ungenutzte Seiten werden nicht übertragen, zukünftige nicht vorgezogen. Preise, Steuern und Rechte richten sich nach Bestellung und Konto. Bestehende Abos behalten ihre Preise, Rechteversionen und Verlängerungsbedingungen; frühere Tests und Geschenke folgen ihren ursprünglichen Einträgen.",
               "Kostenlose Modelle verbrauchen erst kostenlose Seiten einschließlich geltender Geschenke, dann Abo- und Kaufseiten. Bezahlmodelle nutzen nur Abo- oder Kaufseiten. Jede erfolgreich erzeugte neue Seitenversion kostet 1 Seite. Dieselbe Anfrage, eigene gültige Ergebniswiederverwendung und interne Wiederholungen kosten nicht doppelt; ausdrücklich neu übersetzte Versionen zählen. Fehler, Abbruch oder kein übersetzbarer Text geben Reservierungen regelgemäß frei; unklare Ergebnisse werden zuerst geprüft. Aktuelle Pakete laufen nicht ab und verlängern sich nicht automatisch. Aufgaben, die tatsächlich gekaufte Seiten verbrauchen, erhalten die PLUS-Annahmelimits und Ausführungspriorität des Pakets; ein Guthaben allein stuft Aufgaben mit kostenlosem Kontingent nicht auf die kostenpflichtige Annahme hoch. Nach Verbrauch gewährt das Paket keine weiteren Vorteile.",
               "Annahmerate und Seitenguthaben sind getrennt. Standardmäßig: 10 neue Bilder je gleitenden 60 Sekunden für normale Konten, 100 für bezahlte Stufen. Stundenlimits gelten nur bei entsprechender Rechtekonfiguration; tatsächliche Konto- und Dienstgrenzen sind maßgeblich. Gleiche Anfrage und gültige Wiederverwendung zählen nicht doppelt; angenommene Fehler oder Abbrüche können das Zeitfenster belegen. Bild-, Parallelitäts- und Kapazitätsgrenzen gelten weiterhin, ohne Geschwindigkeitsgarantie."
             ]
@@ -519,19 +519,19 @@ export default {
         ]
       },
       "refund": {
-        "title": "Abonnements, Stornierung und Rückerstattungen",
-        "description": "Neue Abos werden derzeit vierteljährlich oder jährlich ohne Testphase mit Karte abgerechnet und automatisch verlängert.",
+        "title": "Mitgliedschaftskäufe und Erstattungen",
+        "description": "Monats-, Dreimonats- und Jahrespässe mit Einmalzahlung ohne automatische Verlängerung. Gültigkeit, Kontingente, Erstattungen und bestehende Abos.",
         "updated": "2026-10-17",
         "sections": [
           {
-            "title": "Aktuelle Tarife und Verlängerung",
+            "title": "Aktuelle Tarife und Gültigkeit",
             "paragraphs": [
               membershipSummary,
-              "Neue Abos werden derzeit vierteljährlich oder jährlich ohne Testphase mit Karte abgerechnet und automatisch verlängert. Der Zeitraum enthält 3/12 monatliche Kontingentfenster, verankert am ursprünglichen UTC-Abrechnungstag. Ungenutzte Seiten werden nicht übertragen, zukünftige nicht vorgezogen. Preise, Steuern und Rechte richten sich nach Bestellung und Konto. Bestehende Abos behalten ursprüngliche Preise und Rechteversionen; frühere Tests und Geschenke folgen ihren ursprünglichen Einträgen."
+              "Neue Mitgliedschaften für einen Monat, drei Monate oder ein Jahr werden einmal bezahlt, ohne automatische Verlängerung oder Probezeit. Monatliche Kontingentfenster sind am ursprünglichen UTC-Berechtigungszeitraum verankert. Ungenutzte Seiten werden nicht übertragen, zukünftige nicht vorgezogen. Preise, Steuern und Rechte richten sich nach Bestellung und Konto. Bestehende Abos behalten ihre Preise, Rechteversionen und Verlängerungsbedingungen; frühere Tests und Geschenke folgen ihren ursprünglichen Einträgen."
             ]
           },
           {
-            "title": "Stoppen Sie zukünftige Verlängerungen",
+            "title": "Bestehende Abos verwalten",
             "paragraphs": [
               "Melden Sie sich bei Ihrem Website-Konto an oder verwenden Sie den Erweiterungskontoeintrag, um das Abonnement zu verwalten. Durch die Stornierung wird die nächste Verlängerung gestoppt und bereits gültige Vorteile werden nicht automatisch gelöscht. Verlassen Sie sich auf das in Ihrem Konto angezeigte Ablaufdatum.",
               "Vor Verlängerung im Website-Konto kündigen. Bei früheren Testphasen vor deren ursprünglichem Ende kündigen, um Zahlung zu vermeiden. Deinstallation, Browserschließen oder Abmelden kündigen nicht. Mehrere bezahlte Bestellungen bleiben getrennt, ohne automatische Zusammenführung, anteilige Verrechnung oder Erstattung. Fehlkauf oder Zugangsprobleme: comics@nodelane.net."
@@ -616,8 +616,8 @@ export default {
       },
       {
         "id": "cancel-subscription",
-        "question": "Wie kann ich kündigen?",
-        "answer": "Verwenden Sie die Website oder den Erweiterungskontoeintrag, um das Abonnement zu verwalten. Kündigen Sie vor der nächsten Verlängerung oder dem Ablauf der Testversion. Die Deinstallation wird nicht abgebrochen. Bestehende Vorteile laufen nach dem in Ihrem Konto angezeigten Ablauf ab. Wenn Sie Hilfe bei der Abrechnung benötigen, senden Sie eine E-Mail an comics@nodelane.net.",
+        "question": "Muss ich die Verlängerung kündigen?",
+        "answer": "Bestehende Abos laufen zu ihren ursprünglichen Bedingungen weiter. Verwalten Sie sie über Ihr Konto auf der Website oder in der Erweiterung und kündigen Sie vor der nächsten Verlängerung, um weitere Abbuchungen zu stoppen. Eine Deinstallation kündigt das Abo nicht. Bezahlte Leistungen gelten bis zum im Konto angezeigten Ablauf. Hilfe: comics@nodelane.net.",
         "relatedPath": "/refund/"
       },
       {

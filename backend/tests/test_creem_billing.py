@@ -370,6 +370,45 @@ def test_portal_never_uses_another_users_customer(creem_billing):
     assert state['portal_customer'] == 'cust_fixture'
 
 
+@pytest.mark.parametrize('kind,amount,expected', [('refund.created',999,'refunded'), ('refund.created',400,'partially_refunded'), ('dispute.created',999,'disputed')])
+def test_signed_reversal_overrides_still_paid_subscription_snapshot(creem_billing, kind, amount, expected):
+    from app.billing_models import BillingOrder
+    from app.creem_billing_sync import sync_subscription
+    from app.db import session_factory
+    state = creem_billing
+    complete(state, trial=False)
+    value = transaction(state)
+    sync_subscription('sub_fixture')
+    body, headers = signed_event(state, kind, {'id':'rev_fixture','mode':'test','transaction':value['id'],
+        'refund_amount':amount,'refund_currency':'USD','status':'succeeded'})
+    assert state['client'].post('/webhooks/creem',content=body,headers=headers).status_code == 200
+    sync_subscription('sub_fixture')
+    assert value['status'] == 'paid' and rights(state)['plan'] == ('plus' if expected=='partially_refunded' else 'free')
+    with session_factory()() as db:
+        assert db.scalar(select(BillingOrder.status)) == expected
+
+
+def test_receipt_cannot_be_reassigned_to_a_different_checkout(creem_billing):
+    from types import SimpleNamespace
+    from app.billing_models import BillingOrder, BillingSubscription
+    from app.billing_orders import payment_order
+    from app.billing_providers import BillingError
+    from app.creem_billing_sync import sync_subscription
+    from app.db import session_factory
+    state = creem_billing
+    complete(state, trial=False)
+    value = transaction(state)
+    sync_subscription('sub_fixture')
+    with session_factory()() as db:
+        sub = db.scalar(select(BillingSubscription))
+        other = SimpleNamespace(provider=sub.provider, environment=sub.environment, owner_id=sub.owner_id,
+            checkout_id='other-checkout', id='other-subscription')
+        with pytest.raises(BillingError, match='BILLING_PURCHASE_CONFLICT'):
+            payment_order(db, other, value['id'], 1, 'paid', 'transaction_sync')
+        order = db.scalar(select(BillingOrder))
+        assert order.subscription_id == sub.id and order.total == 999
+
+
 def test_paginated_transaction_failure_rolls_back_partial_grants(creem_billing):
     state = creem_billing
     complete(state, trial=False)
