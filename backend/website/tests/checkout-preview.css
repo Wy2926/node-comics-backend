@@ -1,0 +1,22 @@
+.demo-stage { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+.demo-card { width: min(100%, 540px); padding: var(--comic-panel-padding); border: var(--comic-border); border-radius: var(--comic-panel-radius); background: var(--surface); }
+.demo-card h1 { margin-block: 16px 8px; font-size: clamp(1.7rem, 4vw, 2.3rem); }
+.demo-card p, .demo-form p { color: var(--muted); }
+.demo-picks { display: grid; gap: 8px; margin-block: 22px 14px; }
+.demo-stamp { display: inline-block; padding: 3px 8px; border-radius: var(--comic-control-radius); background: var(--comic-warning-paper); color: var(--comic-warning-ink); font-size: .76rem; font-weight: 600; }
+.demo-form { min-height: 100dvh; max-width: 560px; margin: auto; padding: var(--comic-panel-padding); background: var(--surface); }
+body:has(.demo-form) { background: var(--surface); }
+.demo-form-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.demo-form h2 { margin-block: 20px 4px; font-size: 1.4rem; }
+.demo-form p { margin-bottom: 18px; font-size: .88rem; }
+.demo-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.demo-form label { display: grid; gap: 5px; margin-bottom: 14px; color: var(--ink); font-size: .87rem; font-weight: 600; }
+.demo-form :is(input:not([type='radio']),select) { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; background: var(--surface); color: var(--ink); border: var(--comic-input-border); border-radius: var(--comic-control-radius); font: inherit; font-size: 1rem; font-weight: 400; }
+.demo-form .button { width: 100%; margin-block-start: 6px; }
+.demo-methods { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; border: 0; }
+.demo-methods legend { font-size: .8rem; color: var(--muted); }
+.demo-methods label { display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px; border: var(--comic-border); border-radius: var(--comic-card-radius); cursor: pointer; }
+.demo-methods label:has(:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.demo-methods input { accent-color: var(--accent); }
+.demo-methods small { display: block; color: var(--muted); font-weight: 400; }
+.demo-back { min-height: 44px; padding-inline: 0; border: 0; background: transparent; color: var(--accent); }

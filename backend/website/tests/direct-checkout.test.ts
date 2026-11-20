@@ -8,7 +8,7 @@ import * as intent from '../src/lib/checkout-intent';
 import {checkoutStatusCopy} from '../src/i18n/commerce';
 import {dictionaries} from '../src/i18n';
 import type {CheckoutCopy} from '../src/components/CheckoutButton';
-import { checkoutSelection, directCheckout } from '../src/lib/direct-checkout';
+import { checkoutSelection, directCheckout, type CreemPurchase } from '../src/lib/direct-checkout';
 import { rememberCheckout, takeCheckout, checkoutIntentKey,PurchaseRetryAllowed,purchaseIntent,readPurchaseIntent } from '../src/lib/checkout-intent';
 import { accountReturnPath } from '../src/lib/auth-config';
 import {ApiError,type api} from '../src/lib/auth';
@@ -150,7 +150,7 @@ test('an unpaid subscription and an independent page pack each retain their orig
     if(path==='/v1/me')return {user:{id:'buyer'}};
     writes.push({body,headers});return {provider:'creem',checkout_url:'https://creem.io/test/checkout/new-kind'};
   }) as typeof api;
-  assert.equal(await directCheckout(pack.id,request,storage),'https://creem.io/test/checkout/new-kind');
+  assert.deepEqual(await directCheckout(pack.id,request,storage),{url:'https://creem.io/test/checkout/new-kind',offer:pack});
   assert.equal(await directCheckout(year.id,request,storage),'https://creem.io/test/checkout/new-kind');
   assert.deepEqual(writes.map(write=>write.body),[{price_id:pack.id,provider:'creem'},{price_id:year.id,provider:'creem'}]);
   assert.ok(writes[0].headers?.['Idempotency-Key']);assert.equal(writes[1].headers,undefined);
@@ -264,7 +264,7 @@ test('a missing local key adopts the exact server pending purchase even after it
       if(path==='/v1/me')return {user:{id:'buyer'}};
       writes.push({body,headers});return {provider:'creem',checkout_url:'https://creem.io/test/checkout/original'};
     }) as typeof api;
-    assert.equal(await directCheckout(quote.id,request,storage),'https://creem.io/test/checkout/original');
+    assert.deepEqual(await directCheckout(quote.id,request,storage),{url:'https://creem.io/test/checkout/original',offer:original.price});
     assert.deepEqual(writes,[{body:{price_id:quote.id,provider:'creem'},headers:{'Idempotency-Key':'server-original'}}]);
     assert.equal(readPurchaseIntent(storage,'buyer',quote.id)?.key,'server-original');
   }
@@ -377,23 +377,23 @@ const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.
 const base:CheckoutCopy={busy:'busy',error:'safe fallback',before:'before',refund:'refund',retry:'new purchase',retryHint:'verified unpaid'};
 
 // Run the real button's catch/interaction path without a browser or live payment.
-function button(copy:CheckoutCopy,checkout:()=>Promise<unknown>,signedIn=true,options:{search?:string;loginIntent?:boolean;continueAfterLogin?:boolean;session?:()=>Promise<unknown>}={}){
+function button(copy:CheckoutCopy,checkout:()=>Promise<unknown>,signedIn=true,options:{search?:string;loginIntent?:boolean;continueAfterLogin?:boolean;session?:()=>Promise<unknown>;onEmbed?:(purchase:CreemPurchase)=>void}={}){
   const values:unknown[]=[],effects:(()=>unknown)[]=[],requests:string[]=[],redirects:string[]=[],logins:string[]=[];
   const storageValues=new Map<string,string>();
   const storage={getItem:(key:string)=>storageValues.get(key)??null,setItem:(key:string,value:string)=>storageValues.set(key,value),removeItem:(key:string)=>storageValues.delete(key)};
   let cursor=0,dirty=true,tree:ReactNode;
   const state=<T,>(initial:T)=>{const index=cursor++;if(index===values.length)values.push(initial);return [values[index],(next:unknown)=>{values[index]=typeof next==='function'?next(values[index]):next;dirty=true;}];};
   const modules:Record<string,unknown>={
-    react:{useState:state,useRef:<T,>(initial:T)=>state({current:initial})[0],useEffect:(effect:()=>unknown)=>{const index=cursor++;if(index===values.length){values.push(true);effects.push(effect);}}},
+    react:{useId:()=>'checkout-methods',useState:state,useRef:<T,>(initial:T)=>state({current:initial})[0],useEffect:(effect:()=>unknown)=>{const index=cursor++;if(index===values.length){values.push(true);effects.push(effect);}}},
     'react/jsx-runtime':jsx,'../lib/checkout-intent':intent,'../lib/auth-session':{ApiError},
     '../lib/direct-checkout':{session:options.session??(async()=>signedIn?{}:null),subscribeAuth:()=>()=>{},signIn:async(path:string)=>{logins.push(path);},
       directCheckout:async(price:string)=>{requests.push(price);return checkout();}},
   };
   const exported={} as typeof import('../src/components/CheckoutButton');
-  const location={pathname:'/pricing/',search:options.search??'',assign:(url:string)=>redirects.push(url)},window=new EventTarget();
+  const location={pathname:'/pricing/',search:options.search??'',assign:(url:string)=>redirects.push(url)},window=Object.assign(new EventTarget(),{HTMLDialogElement:class {showModal(){}}});
   if(options.loginIntent)intent.rememberCheckout(storage as unknown as Storage,location.pathname+location.search,'original-quote');
   new Function('require','exports','location','sessionStorage','window',compiled)((name:string)=>{assert.ok(name in modules,name);return modules[name];},exported,location,storage,window);
-  const render=()=>{cursor=0;dirty=false;tree=exported.default({priceId:'original-quote',accountHref:'/account/',label:'purchase',copy,continueAfterLogin:options.continueAfterLogin});for(const effect of effects.splice(0))effect();};
+  const render=()=>{cursor=0;dirty=false;tree=exported.default({priceId:'original-quote',accountHref:'/account/',label:'purchase',copy,continueAfterLogin:options.continueAfterLogin,onEmbed:options.onEmbed});for(const effect of effects.splice(0))effect();};
   render();
   return {requests,redirects,logins,storage,
     returnFromCheckout:()=>window.dispatchEvent(Object.assign(new Event('pageshow'),{persisted:true})),
@@ -404,6 +404,17 @@ function button(copy:CheckoutCopy,checkout:()=>Promise<unknown>,signedIn=true,op
     busy:()=>nodes(tree).find(node=>'data-purchase-link' in node.props)?.props['aria-disabled'],
   };
 }
+
+test('one verified Creem response opens one in-site checkout; hosted fallback uses the same URL',async()=>{
+  const purchase={url:'https://www.creem.io/test/checkout/prod_demo/ch_demo',offer:prepaid};
+  const opened:CreemPurchase[]=[];
+  const embedded=button(base,async()=>purchase,true,{onEmbed:p=>opened.push(p)});
+  embedded.click();embedded.click();await embedded.flush();
+  assert.deepEqual(opened,[purchase]);assert.deepEqual(embedded.redirects,[]);
+  assert.deepEqual(embedded.requests,['original-quote']);assert.equal(embedded.busy(),undefined);
+  const hosted=button(base,async()=>purchase);
+  hosted.click();await hosted.flush();assert.deepEqual(hosted.redirects,[purchase.url]);
+});
 
 test('all 17 languages provide distinct checkout verification and conflict guidance',()=>{
   for(const locale of locales){

@@ -7,6 +7,7 @@ import {
   membershipCheckoutBlocked,
   selectedChannel,
   type Billing,
+  type BillingOffer,
   type BillingProvider,
 } from "./billing";
 import {
@@ -15,6 +16,7 @@ import {
   PurchaseRetryAllowed,
 } from "./checkout-intent";
 export { session, signIn, subscribeAuth } from "./auth";
+export type CreemPurchase = { url: string; offer: BillingOffer };
 export async function checkoutStatus() {
   const identity = await sessionIdentity();
   return identity
@@ -38,7 +40,7 @@ export async function directCheckout(
   priceId: string,
   request: typeof api = api,
   storage?: Storage,
-) {
+): Promise<CreemPurchase | string | {fulfilled:true} | null> {
   const identity = request === api ? await sessionIdentity() : undefined;
   if (request === api && !identity) throw new ApiError("LOGIN_REQUIRED", 401);
   const billing = await request<Billing>(
@@ -109,5 +111,6 @@ export async function directCheckout(
   const destination = checkoutUrl(result.checkout_url, selection.provider);
   // A checkout URL confirms creation, not payment. Returning or reloading
   // continues this purchase until fulfillment or a verified explicit restart.
-  return destination;
+  return result.provider === "creem" && offer && isOneTimePrice(offer)
+    ? { url: destination, offer } : destination;
 }

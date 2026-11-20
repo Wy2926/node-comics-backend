@@ -25,6 +25,37 @@
 .pricing-comparison .plan-allowance > span { font-size: .75rem; color: var(--muted); }
 .pricing-comparison .subscription-allowance { font-size: 1.6rem; color: var(--accent); line-height: 1.4; font-variant-numeric: tabular-nums; }
 .pricing-comparison .plan-difference { padding: 4px 9px; border-radius: var(--comic-badge-radius); background: var(--accent-soft); color: var(--accent); font-size: .72rem; line-height: 1.7; }
+.pricing-comparison .checkout-methods { display: grid; gap: 3px; margin-block-end: 10px; font-size: .8rem; line-height: 1.6; color: var(--muted); }
+.pricing-comparison .checkout-methods strong { color: var(--accent); font-size: .9rem; }
+.pricing-comparison .payment-dialog { width: min(900px, calc(100% - 32px)); height: min(712px, calc(100dvh - 40px)); max-height: none; padding: 0; overflow: hidden; color: var(--ink); background: var(--surface); border: var(--comic-border); border-radius: var(--comic-panel-radius); box-shadow: var(--comic-dialog-shadow); }
+.pricing-comparison .payment-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.pricing-comparison .payment-dialog::backdrop { background: var(--site-backdrop); }
+.pricing-comparison .payment-header { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: var(--comic-border); }
+.pricing-comparison .payment-header .eyebrow { font-size: .64rem; }
+.pricing-comparison .payment-header h2 { font-size: 1.25rem; }
+.pricing-comparison .payment-close { margin-inline-start: auto; min-width: 44px; min-height: 44px; padding: 0; }
+.pricing-comparison .payment-body { display: grid; min-height: 0; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); }
+.pricing-comparison .payment-summary { display: flex; flex-direction: column; gap: 24px; overflow: auto; padding: var(--comic-panel-padding); background: var(--canvas); border-inline-end: var(--comic-border); overflow-wrap: anywhere; color: var(--muted); }
+.pricing-comparison .payment-ticket { flex: none; overflow: hidden; border: var(--comic-border); border-radius: var(--comic-card-radius); background: var(--surface); }
+.pricing-comparison .ticket-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 20px; background: linear-gradient(125deg, var(--accent-soft), var(--surface)); }
+.pricing-comparison .ticket-main h3 { color: var(--ink); font-size: 1.25rem; }
+.pricing-comparison .ticket-main p, .pricing-comparison .ticket-stub small { font-size: .8rem; }
+.pricing-comparison .ticket-main p { margin-block-start: 4px; }
+.pricing-comparison .ticket-pages { width: 64px; flex: none; color: var(--accent); }
+.pricing-comparison .ticket-stub { position: relative; padding: 14px 20px 18px; border-block-start: var(--comic-perforation); }
+.pricing-comparison .ticket-stub::before, .pricing-comparison .ticket-stub::after { content: ''; position: absolute; inset-block-start: -7px; width: 12px; height: 12px; border: var(--comic-border); border-radius: 50%; background: var(--canvas); }
+.pricing-comparison .ticket-stub::before { inset-inline-start: -7px; }
+.pricing-comparison .ticket-stub::after { inset-inline-end: -7px; }
+.pricing-comparison .payment-price { margin: 2px 0 0; color: var(--ink); font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; letter-spacing: -.04em; }
+.pricing-comparison .payment-price .price-currency { font-size: .54em; letter-spacing: normal; }
+.pricing-comparison .payment-summary .checkout-methods { gap: 7px; margin: 0; font-size: .86rem; }
+.pricing-comparison .payment-summary .checkout-methods strong { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
+.pricing-comparison .payment-summary .checkout-methods svg { flex: none; }
+.pricing-comparison .payment-help { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin-block-start: auto; padding-block-start: 12px; border-top: var(--comic-border); font-size: .82rem; }
+.pricing-comparison .payment-help small { font-size: .76rem; }
+.pricing-comparison .payment-frame { position: relative; min-height: 0; }
+.pricing-comparison .payment-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.pricing-comparison .payment-loading { position: absolute; inset: 0; display: grid; place-content: center; pointer-events: none; background: var(--surface); color: var(--muted); font-size: .9rem; }
 .pricing-comparison .subscription-card .button { width: 100%; justify-content: center; white-space: normal; text-align: center; }
 .pricing-comparison .subscription-card :is(.trial-note, .billing-status) { margin: 10px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.7; }
 .pricing-comparison .subscription-card .billing-status { color: var(--ink); }
@@ -58,6 +89,18 @@
 .pricing-comparison .feature-info-content { display: block; padding: 12px 14px; border: var(--comic-border); border-radius: var(--comic-card-radius); background: var(--surface-soft); box-shadow: var(--comic-shadow); }
 .pricing-comparison > .comparison-note { max-width: 920px; margin: 20px auto 0; color: var(--muted); font-size: .76rem; line-height: 1.8; text-align: start; }
 @media (max-width: 640px) {
+  .pricing-comparison .payment-dialog { width: 100%; max-width: none; height: 100dvh; margin: 0; border: 0; border-radius: 0; padding-block: env(safe-area-inset-top) env(safe-area-inset-bottom); }
+  .pricing-comparison .payment-header { padding: 8px 16px; }
+  .pricing-comparison .payment-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(min(240px, 58dvh), 1fr); overflow: auto; overscroll-behavior: contain; }
+  .pricing-comparison .payment-summary { gap: 10px; padding: 12px 16px; overflow: visible; border-inline-end: 0; border-block-end: var(--comic-border); }
+  .pricing-comparison .payment-ticket { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pricing-comparison .ticket-main, .pricing-comparison .ticket-stub { padding: 10px 12px; }
+  .pricing-comparison .ticket-main h3, .pricing-comparison .ticket-stub small { text-wrap: balance; }
+  .pricing-comparison .ticket-stub small { display: block; line-height: 1.45; }
+  .pricing-comparison .ticket-pages, .pricing-comparison .ticket-stub::before, .pricing-comparison .ticket-stub::after { display: none; }
+  .pricing-comparison .ticket-stub { border-block-start: 0; border-inline-start: var(--comic-perforation); }
+  .pricing-comparison .payment-summary .checkout-methods { gap: 2px; }
+  .pricing-comparison .payment-help { padding: 0; border: 0; }
   .pricing-comparison .subscription-grid { grid-template-columns: 1fr; gap: 20px; }
   .pricing-comparison .subscription-card { grid-row: auto; grid-template-rows: auto; padding: 24px; gap: 20px; }
   .pricing-comparison .comparison-scroll { margin-top: 36px; }

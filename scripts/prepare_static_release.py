@@ -179,7 +179,7 @@ def prepare(kind, source, destination, release, nginx_root, *, admin_path='', oi
                 blobs = ' blob:' if 'translate' in segments else ''
                 documents = ' ' + document_r2_origin if document_r2_origin and 'translate' in segments else ''
                 app_updates = ' https://comics-updates.nodelane.net' if parser.app_downloads else ''
-                frames = challenge.strip() or "'none'"
+                frames = 'https://creem.io https://www.creem.io' if path.parent.name == 'pricing' else challenge.strip() or "'none'"
                 csp = (f"default-src 'self'; script-src 'self'{challenge} " + ' '.join(parser.hashes) +
                        f"; style-src 'self' 'unsafe-inline'; img-src 'self' data:{blobs}; font-src 'self'; worker-src 'self'; " +
                        f"connect-src 'self' {oidc_origin}{challenge}{documents}{app_updates}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; frame-src {frames}")

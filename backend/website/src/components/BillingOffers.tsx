@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {amount,offerBenefits,offerLabel,renewalCopy,findCheckoutOffer,isOneTimePrice,membershipCheckoutBlocked,manageLabel,type BillingCatalog,type Billing} from '../lib/billing';
+import {amount,offerBenefits,offerLabel,renewalCopy,findCheckoutOffer,checkoutMethods,isOneTimePrice,membershipCheckoutBlocked,manageLabel,type BillingCatalog,type Billing} from '../lib/billing';
 import {publishedPricingCopy} from '../lib/pricing';
 import {comparisonCopy,comparisonRows,extraPagesCopy,paidComparisonValue} from '../lib/pricing-comparison';
 import {pricingHighlightsCopy} from '../i18n/pricing-highlights';
@@ -10,6 +10,8 @@ import {membershipIntervals,membershipPricing} from '../lib/billing-cycle';
 import {PlanPrice,PublishedPurchaseAvailability} from './PublishedPlanPricing';
 import PriceAmount from './PriceAmount';
 import CheckoutButton, { type CheckoutCopy } from './CheckoutButton';
+import CreemCheckout from './CreemCheckout';
+import type {CreemPurchase} from '../lib/direct-checkout';
 import QuotaOffers from './QuotaOffers';
 import PlanComparison from './PlanComparison';
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
@@ -31,6 +33,8 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
   const [billing,setBilling]=useState<Billing|null>();
   const [preferred,setPreferred]=useState<BillingInterval>();
   const [selectedPrice,setSelectedPrice]=useState('');
+  const [checkout,setCheckout]=useState<CreemPurchase|null>(null);
+  const openCheckout=(purchase:CreemPurchase)=>setCheckout(current=>current??purchase);
   const comparison=comparisonCopy(locale);
   const quota=subscriptionQuotaCopy(locale);
   const prepaid=prepaidMembershipCopy(locale);
@@ -42,6 +46,8 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
     const controller=new AbortController();
     let disposed=false;
     let unsubscribe:(()=>void)|undefined,epoch=0;
+    const returned=(event:PageTransitionEvent)=>{if(event.persisted)setCheckout(null);};
+    window.addEventListener('pageshow',returned);
     const timeout=setTimeout(()=>{setError(true);controller.abort();},10000);
     fetch('/v1/billing/catalog',{signal:controller.signal,cache:'no-store'}).then(async r=>{
       if(!r.ok)throw Error();
@@ -60,10 +66,10 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
         try{const value=await checkoutStatus();if(!disposed&&current===epoch)setBilling(value);}
         catch{if(!disposed&&current===epoch)setBilling(null);}
       };
-      unsubscribe=subscribeAuth(()=>void load());
+      unsubscribe=subscribeAuth(()=>{setCheckout(null);void load();});
       void load();
     }).catch(()=>{if(!disposed)setBilling(null);});
-    return()=>{disposed=true;unsubscribe?.();clearTimeout(timeout);controller.abort();};
+    return()=>{disposed=true;unsubscribe?.();window.removeEventListener('pageshow',returned);clearTimeout(timeout);controller.abort();};
   },[]);
   const outstanding=[billing?.pending_checkout?.price,billing?.subscription_checkout?.price];
   const pending=outstanding.find(price=>price&&price.interval!=='once'&&isOneTimePrice(price));
@@ -87,7 +93,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
     {recoveries.map(price=><div className="billing-recovery" key={price.id}>
       {price===recurring&&<p className="billing-status" role="status">{buttonCopy.pending}</p>}
       <p>{offerLabel(price,locale)} · {renewalCopy(price,locale)}</p>
-      <CheckoutButton priceId={price.id} accountHref={accountHref} label={checkoutCopy.resume??prepaid.buy.replace('{0}',price.name)} copy={buttonCopy} showDisclosure={false} continueAfterLogin={false}/>
+      <CheckoutButton priceId={price.id} accountHref={accountHref} label={checkoutCopy.resume??prepaid.buy.replace('{0}',price.name)} copy={buttonCopy} methods={checkoutMethods(price,locale,billing)} onEmbed={openCheckout} showDisclosure={false} continueAfterLogin={false}/>
     </div>)}
     <div className="subscription-grid">
       <article className="subscription-card free">
@@ -108,7 +114,7 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
         <div className="plan-allowance"><span>{prepaid.allowance}</span><strong className="subscription-allowance">{offerBenefits(offer,locale)}</strong>{extra&&<p className="plan-difference">{extra}</p>}</div>
         <div className="subscription-purchase">
         {offer.channels.length>0?<>
-        {managed?<a className="button" href={accountHref}>{manageLabel(locale)} ↗</a>:<CheckoutButton priceId={offer.id} accountHref={accountHref} label={pending?.id===offer.id?checkoutCopy.resume??prepaid.buy.replace('{0}',offer.name):prepaid.buy.replace('{0}',offer.name)} copy={buttonCopy} disabled={billing===undefined||billing?.enabled===false||!!recurring&&pending?.id!==offer.id}/>}
+        {managed?<a className="button" href={accountHref}>{manageLabel(locale)} ↗</a>:<CheckoutButton priceId={offer.id} accountHref={accountHref} label={pending?.id===offer.id?checkoutCopy.resume??prepaid.buy.replace('{0}',offer.name):prepaid.buy.replace('{0}',offer.name)} copy={buttonCopy} methods={checkoutMethods(offer,locale,billing)} onEmbed={openCheckout} disabled={billing===undefined||billing?.enabled===false||!!recurring&&pending?.id!==offer.id}/>}
         <p className="trial-note">{prepaid.notice} {publishedPricingCopy(locale).tax}</p>
         </>:<PublishedPurchaseAvailability locale={locale} name={offer.name} state={availability}/>}
         </div>
@@ -119,7 +125,8 @@ export default function BillingOffers({locale,accountHref,downloadHref,free,chec
     <p className="comparison-note">{quota.rule}</p>
     <p className="comparison-note">{prepaid.quotaRule}</p>
     <p className="comparison-note">{comparison.note}</p>
-    {recoverSelected&&!recoveries.some(price=>price.id===selectedPrice)&&<div className="billing-recovery"><CheckoutButton priceId={selectedPrice} accountHref={accountHref} label={checkoutCopy.resume??retry} copy={buttonCopy} showDisclosure={false} continueAfterLogin={false}/></div>}
-    <QuotaOffers preview locale={locale} offers={billing?.quota_offers??catalog?.quota_offers??(error?[]:publishedPacks)} blocked={billing===undefined||billing?.enabled===false} accountHref={accountHref} checkoutCopy={buttonCopy}/>
+    {recoverSelected&&!recoveries.some(price=>price.id===selectedPrice)&&<div className="billing-recovery"><CheckoutButton priceId={selectedPrice} accountHref={accountHref} label={checkoutCopy.resume??retry} copy={buttonCopy} onEmbed={openCheckout} showDisclosure={false} continueAfterLogin={false}/></div>}
+    <QuotaOffers preview locale={locale} offers={billing?.quota_offers??catalog?.quota_offers??(error?[]:publishedPacks)} billing={billing} blocked={billing===undefined||billing?.enabled===false} accountHref={accountHref} checkoutCopy={buttonCopy} onEmbed={openCheckout}/>
+    {checkout&&<CreemCheckout purchase={checkout} locale={locale} successHref={accountHref.replace(/account\/$/,'payment/success/')} onClose={()=>setCheckout(null)}/>}
   </div>;
 }

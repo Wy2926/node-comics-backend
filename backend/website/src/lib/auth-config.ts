@@ -26,10 +26,11 @@ export function oidcSettings(config: AuthConfig, origin: string): UserManagerSet
   };
 }
 
+export const isCreemOrigin=(origin:string)=>origin==='https://creem.io'||origin==='https://www.creem.io';
 export function checkoutUrl(value: string, provider:'stripe'|'creem', portal = false) {
   const url = new URL(value);
   const allowed=provider==='stripe'?url.hostname===(portal?'billing.stripe.com':'checkout.stripe.com'):
-    provider==='creem'&&['creem.io','www.creem.io'].includes(url.hostname)&&(portal?/^\/(?:test\/)?my-orders\/login\/[^/]+/.test(url.pathname):/^\/(?:test\/)?checkout\/[^/]+/.test(url.pathname));
+    provider==='creem'&&isCreemOrigin(url.origin)&&(portal?/^\/(?:test\/)?my-orders\/login\/[^/]+/.test(url.pathname):/^\/(?:test\/)?checkout\/[^/]+/.test(url.pathname));
   if (url.protocol !== 'https:' || !allowed || url.port || url.username || url.password) throw Error('结账地址无效，请联系支持。');
   return url.href;
 }

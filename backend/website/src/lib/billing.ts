@@ -3,6 +3,7 @@ import { commerceCopy, formatCopy } from '../i18n/commerce';
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
 import {subscriptionQuotaCopy} from '../i18n/subscription-quota';
 import {prepaidMembershipCopy} from '../i18n/prepaid-membership';
+import {checkoutMethodCopy} from '../i18n/checkout-methods';
 export type BillingProvider='stripe'|'creem';
 export type BillingType='recurring'|'onetime';
 export interface BillingCatalog {offers:BillingOffer[];quota_offers:BillingOffer[]}
@@ -36,6 +37,14 @@ export function hasManagedSubscription(status:string|undefined,entitlementExpire
   return !!status&&(['active','trialing','past_due','unpaid','paused','incomplete','scheduled_cancel'].includes(status)||!!entitlementExpiresAt&&Date.parse(entitlementExpiresAt)>now);
 }
 export const isOneTimePrice=(price:Pick<BillingPrice,'interval'|'billing_type'>)=>price.billing_type==='onetime'||price.interval==='once';
+export function checkoutMethods(offer:BillingOffer,locale:string,billing?:Billing|null){
+  const pending=billing&&findPendingCheckout(billing,offer.id);
+  const price=pending?.price??offer,provider=selectedChannel(price,pending?.provider)?.provider;
+  const [alipayAndCard,card,hint]=checkoutMethodCopy(locale);
+  // Creem offers Alipay for one-time payments; our Stripe sessions request cards.
+  if(provider==='creem')return {label:isOneTimePrice(price)?alipayAndCard:card,hint};
+  if(provider==='stripe')return {label:card};
+}
 export const hasPrepaidMembership=(billing:Billing,now=Date.now())=>!!billing.prepaid_membership&&Date.parse(billing.prepaid_membership.paid_through??billing.prepaid_membership.ends_at)>now;
 export function hasCurrentSubscription(billing:Billing){
   const subscription=billing.subscription;

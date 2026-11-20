@@ -120,7 +120,7 @@ class WebsiteFiles(StaticFiles):
             challenge = ' https://challenges.cloudflare.com' if 'translate' in segments else ''
             blobs = ' blob:' if 'translate' in segments else ''
             documents = document_connect_source() if 'translate' in segments else ''
-            frames = challenge.strip() or "'none'"
+            frames = 'https://creem.io https://www.creem.io' if file.parent.name == 'pricing' else challenge.strip() or "'none'"
             response.headers['Content-Security-Policy'] = (
                 f"default-src 'self'; script-src 'self'{challenge} {hashes}; style-src 'self' 'unsafe-inline'; "
                 f"img-src 'self' data:{blobs}; font-src 'self'; worker-src 'self'; connect-src 'self' {identity_origin}{challenge}{documents}; "

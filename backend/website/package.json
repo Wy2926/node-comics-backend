@@ -9,6 +9,7 @@
   "scripts": {
     "notices": "tsx scripts/write-notices.ts",
     "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "dev:checkout": "vite --config tests/account-fixture.config.ts",
     "dev:documents": "vite --config tests/document-live.config.ts",
     "check": "astro check",
     "build": "astro check && astro build && tsx scripts/check-build.ts",

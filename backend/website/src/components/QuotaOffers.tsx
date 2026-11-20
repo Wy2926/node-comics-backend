@@ -1,5 +1,6 @@
 import {quotaPurchaseCopy} from '../i18n/quota-purchase';
-import {amountParts,type BillingOffer} from '../lib/billing';
+import {amountParts,checkoutMethods,type Billing,type BillingOffer} from '../lib/billing';
+import type {CreemPurchase} from '../lib/direct-checkout';
 import CheckoutButton,{type CheckoutCopy} from './CheckoutButton';
 import PriceAmount from './PriceAmount';
 
@@ -13,7 +14,7 @@ function QuotaIcon({kind}:{kind:keyof typeof iconPaths}){
   return <svg className="quota-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={iconPaths[kind]}/></svg>;
 }
 
-export default function QuotaOffers({locale,offers,blocked=false,preview=false,accountHref,checkoutCopy}:{locale:string;offers:BillingOffer[];blocked?:boolean;preview?:boolean;accountHref:string;checkoutCopy:CheckoutCopy}){
+export default function QuotaOffers({locale,offers,billing,blocked=false,preview=false,accountHref,checkoutCopy,onEmbed}:{locale:string;offers:BillingOffer[];billing?:Billing|null;blocked?:boolean;preview?:boolean;accountHref:string;checkoutCopy:CheckoutCopy;onEmbed?:(purchase:CreemPurchase)=>void}){
   const copy=quotaPurchaseCopy(locale);
   const visible=offers.filter(offer=>offer.interval==='once'&&(preview||offer.channels.length>0));
   if(!visible.length)return null;
@@ -29,7 +30,7 @@ export default function QuotaOffers({locale,offers,blocked=false,preview=false,a
         <li><QuotaIcon kind="clock"/><span>{offer.quota_validity_days==null?copy.noExpiry:copy.validity.replace('{0}',offer.quota_validity_days.toLocaleString(locale))}</span></li>
         {offer.hourly_image_limit!=null&&<li><QuotaIcon kind="bolt"/><span>{copy.hourly.replace('{0}',offer.hourly_image_limit.toLocaleString(locale))}</span></li>}
       </ul>
-      <div className="quota-offer-action">{offer.channels.length?<CheckoutButton priceId={offer.id} accountHref={accountHref} disabled={blocked} showDisclosure={false} label={copy.action} copy={checkoutCopy}/>:<button className="button" disabled>{copy.action}</button>}</div>
+      <div className="quota-offer-action">{offer.channels.length?<CheckoutButton priceId={offer.id} accountHref={accountHref} disabled={blocked} showDisclosure={false} label={copy.action} copy={checkoutCopy} methods={checkoutMethods(offer,locale,billing)} onEmbed={onEmbed}/>:<button className="button" disabled>{copy.action}</button>}</div>
     </article>)}</div>
     <div className="quota-offer-policy">
       <ul className="quota-offer-notes">{[copy.usage,copy.subscription,copy.validityStart].map(note=><li key={note}><span className="ui-icon icon-check" aria-hidden="true"/><span>{note}</span></li>)}</ul>

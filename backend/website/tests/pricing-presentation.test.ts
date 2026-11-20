@@ -10,6 +10,7 @@ import ts from 'typescript';
 import QuotaOffers from '../src/components/QuotaOffers';
 import {quotaPurchaseCopy} from '../src/i18n/quota-purchase';
 import CheckoutButton,{type CheckoutCopy} from '../src/components/CheckoutButton';
+import CreemCheckout from '../src/components/CreemCheckout';
 import {PlanPrice,PublishedPurchaseAvailability} from '../src/components/PublishedPlanPricing';
 import PriceAmount from '../src/components/PriceAmount';
 import BillingCycle from '../src/components/BillingCycle';
@@ -190,6 +191,61 @@ function pricingSnapshot(billing:Billing|null,locale='en',selectedPrice='',inter
   return load(renderToStaticMarkup(createElement(exports.default,{locale,accountHref:localPath('/account/',locale as typeof locales[number]),downloadHref:'/download/',checkoutCopy,
     free:{name:'Free',description:'Free',action:'Download',note:'Free',priceLabel:'free'}})));
 }
+
+test('signed-out buyers see Alipay and the next step beside live Creem purchases before clicking',()=>{
+  for(const locale of locales){
+    const $=pricingSnapshot(null,locale);
+    for(const selector of ['.subscription-card.paid','.quota-offer']){
+      const link=$(selector).find('[data-purchase-link]'),note=link.prev('.checkout-methods');
+      assert.match(note.find('strong').text(),/Alipay|支付宝|支付寶/,locale);
+      assert.equal(link.attr('aria-describedby'),note.attr('id'),locale);
+      const hint=note.find('span').text();
+      assert.ok(hint.trim(),locale);
+      if(locale==='zh-CN')assert.match(hint,/邮箱、姓名.*账单国家或地区.*下一步.*可用的支付方式/);
+    }
+    assert.equal($('.free .checkout-methods').length,0);
+  }
+  assert.equal(pricingSnapshot(null,'zh-CN','',null,null)('.checkout-methods').length,0,'static prices have no verified channel');
+});
+
+test('payment method hints follow the selected or original channel and exclude Alipay on recurring orders',()=>{
+  const stripe={...pack.channels[0],provider:'stripe' as const};
+  const stripeFirst={...pack,channels:[stripe,...pack.channels]};
+  const recurring={...subscription,id:'legacy',billing_type:'recurring' as const};
+  const current={...emptyBilling,offers:[{...subscription,channels:stripeFirst.channels}],quota_offers:[stripeFirst]};
+  const cards=pricingSnapshot(current,'zh-CN');
+  assert.deepEqual(cards('.checkout-methods strong').map((_,el)=>cards(el).text()).get(),['银行卡支付','银行卡支付']);
+  const resumed=pricingSnapshot({...current,pending_checkout:original(stripeFirst),subscription_checkout:original(recurring)},'zh-CN');
+  assert.match(resumed('.quota-offer .checkout-methods').text(),/支付宝/,'resume the Creem pack even though Stripe is now first');
+  assert.match(resumed('.billing-recovery .checkout-methods strong').text(),/^银行卡支付$/,'Creem recurring is not Alipay eligible');
+  assert.equal(resumed('.subscription-card .checkout-methods').length,0,'no payment promise beside a blocked purchase');
+  assert.equal(pricingSnapshot(current,'zh-CN','unknown-price')('.billing-recovery .checkout-methods').length,0);
+});
+
+test('the checkout sheet shows the exact quote and methods above a localized frame with the same hosted fallback',()=>{
+  const url='https://www.creem.io/test/checkout/prod_demo/ch_demo?theme=light';
+  for(const offer of [pack,subscription])for(const locale of locales){
+    const $=load(renderToStaticMarkup(createElement(CreemCheckout,{locale,purchase:{url,offer},successHref:localPath('/payment/success/',locale),onClose:()=>{}})));
+    const summary=$('.payment-summary'),frame=$('iframe'),src=new URL(frame.attr('src')!);
+    assert.ok(summary.find('h3').text().includes(offer.name));
+    assert.equal(summary.find('.payment-price').text(),amount(offer,locale));
+    assert.match(summary.find('.checkout-methods strong').text(),/Alipay|支付宝|支付寶/);
+    assert.equal(summary.next('.payment-frame').find('iframe').length,1);
+    assert.ok(summary.find('.ticket-stub').text().includes(quotaPurchaseCopy(locale).once));
+    assert.ok($('.payment-frame [role="status"]').text().trim());
+    assert.equal(src.searchParams.get('locale'),locale);
+    src.searchParams.delete('locale');assert.equal(src.href,url);
+    assert.equal(summary.find('a').attr('href'),url);
+    assert.equal(frame.attr('referrerpolicy'),'no-referrer');
+  }
+});
+
+test('a numbered page pack has one quantity on the ticket and the catalog expiry',()=>{
+  const offer={...pack,name:'3500',quota_pages:3500,quota_validity_days:30};
+  const $=load(renderToStaticMarkup(createElement(CreemCheckout,{locale:'zh-CN',purchase:{offer,url:'https://creem.io/test/checkout/demo'},successHref:'/payment/success/',onClose:()=>{}})));
+  assert.equal($('.ticket-main h3').text(),'3,500 页');
+  assert.equal($('.ticket-main p').text(),'30 天有效');
+});
 
 test('page packs show exact page counts and expiry without recurring or unlimited subscription claims in all locales',()=>{
   for(const locale of locales)for(const days of [null,30]){

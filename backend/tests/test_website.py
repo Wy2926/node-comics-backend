@@ -45,6 +45,8 @@ def test_public_pages_and_existing_api_precedence(website):
         assert result.headers['cache-control'] == 'public, max-age=0, must-revalidate'
         assert "'sha256-" in result.headers['content-security-policy']
         assert "script-src 'self' 'unsafe-inline'" not in result.headers['content-security-policy']
+        creem = [part.strip() for part in result.headers['content-security-policy'].split(';') if 'creem.io' in part]
+        assert creem == ([] if path == '/' else ['frame-src https://creem.io https://www.creem.io'])
     assert website.get('/v1/me').json() == {'api': True}
     assert website.get('/private-console/').json() == {'admin': True}
     assert website.get('/pricing', follow_redirects=False).status_code in {307, 308}

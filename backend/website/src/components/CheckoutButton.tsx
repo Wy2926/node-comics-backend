@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { checkoutIntentKey, rememberCheckout, takeCheckout,PurchaseRetryAllowed } from '../lib/checkout-intent';
 import { ApiError } from '../lib/auth-session';
+import type {CreemPurchase} from '../lib/direct-checkout';
 
 export interface CheckoutCopy { busy: string; error: string; before: string; refund: string;retry?:string;retryHint?:string;resume?:string;uncertain?:string;conflict?:string;pending?:string }
-export default function CheckoutButton({ priceId, accountHref, label, copy,disabled=false,showDisclosure=true,continueAfterLogin=true }: {
+export default function CheckoutButton({ priceId, accountHref, label, copy,methods,onEmbed,disabled=false,showDisclosure=true,continueAfterLogin=true }: {
   priceId: string; accountHref: string; label: string; copy: CheckoutCopy;disabled?:boolean;showDisclosure?:boolean;continueAfterLogin?:boolean;
+  methods?:{label:string;hint?:string};
+  onEmbed?:(purchase:CreemPurchase)=>void;
 }) {
+  const methodsId=useId();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const inFlight = useRef(false);
   const epoch=useRef(0);
@@ -31,7 +35,13 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,disab
       } else {
         const destination = await directCheckout(id);
         if(current!==epoch.current)return;
-        location.assign(typeof destination==='string'?destination:accountHref);
+        if (destination && typeof destination==='object' && 'url' in destination) {
+          if (onEmbed && typeof window.HTMLDialogElement?.prototype.showModal==='function') {
+            onEmbed(destination);
+            inFlight.current=false;
+            setBusy(false);
+          } else location.assign(destination.url);
+        } else location.assign(typeof destination==='string'?destination:accountHref);
       }
     } catch(error) {
       if(current!==epoch.current)return;
@@ -65,7 +75,9 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,disab
     } catch { /* Storage may be disabled; an explicit click still works. */ }
   }, [priceId,disabled,continueAfterLogin]);
   return <>
+    {!disabled&&methods&&<small className="checkout-methods" id={methodsId}><strong>{methods.label}</strong>{methods.hint&&<span>{methods.hint}</span>}</small>}
     <a className="button" data-purchase-link href={destination} aria-disabled={busy || disabled || undefined}
+      aria-describedby={!disabled&&methods?methodsId:undefined}
       onClick={event => {
         if(disabled){event.preventDefault();return;}
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
