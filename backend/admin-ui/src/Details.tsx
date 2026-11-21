@@ -1,7 +1,6 @@
 import {EntityLink} from './EntityLink';
-import {Country} from './ui';
 import type {Mode, TaskDetail as TaskData, UserDetail as UserData} from './types';
-import {Badge, duration, Empty, label, number, Stat, Table, time} from './ui';
+import {Badge, Country, duration, Empty, label, number, Stat, submissionSourceLabel, Table, time} from './ui';
 import {MembershipActions} from './MembershipActions';
 import {TaskAttempts} from './TaskAttempts';
 import {TaskImages} from './TaskImages';
@@ -17,7 +16,7 @@ export function TaskDetail({job: j, onUnauthorized}: {job: TaskData; onUnauthori
       <Stat title="首次等待" value={duration(j.initial_wait_seconds)} note="创建至首次领取"/>
       <Stat title="执行占用" value={duration(j.execution_seconds)} note="并行阶段合并"/>
       <Stat title="非执行时间" value={duration(j.non_execution_seconds)} note="上传、排队与阶段间等待"/></div>
-    <dl className="detail-meta"><dt>提交 IP</dt><dd>{j.submitted_ip || "未记录"}</dd><dt>来源国家 / 地区</dt><dd><Country value={j.country}/></dd><dt>创建时间</dt><dd>{time(j.created_at)}</dd><dt>结束时间</dt><dd>{time(j.completed_at)}</dd>
+    <dl className="detail-meta"><dt>首次提交端</dt><dd>{submissionSourceLabel(j.submission_source)}</dd><dt>提交 IP</dt><dd>{j.submitted_ip || "未记录"}</dd><dt>来源国家 / 地区</dt><dd><Country value={j.country}/></dd><dt>创建时间</dt><dd>{time(j.created_at)}</dd><dt>结束时间</dt><dd>{time(j.completed_at)}</dd>
       <dt>交付节点</dt><dd>{final?.name || '—'}</dd>
       <dt>交付执行机 / 进程</dt><dd>{final ? final.executor_id || '未记录' : '—'}</dd>
       <dt>额度结算</dt><dd>{label(j.settlement)} · {j.quota_pages} 页</dd><dt>供应商</dt><dd>{j.provider?.name || '未记录'}</dd></dl>

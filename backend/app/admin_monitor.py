@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, exists, extract, func, or_, select
+from sqlalchemy import and_, case, exists, extract, func, or_, select
 from sqlalchemy.orm import Session, defer
 
 from .auth import admin, user_json
@@ -16,9 +16,10 @@ from .entitlements import entitlements_json, iso, membership_benefits, period_js
 from .billing_access import plan_expression
 from .entitlement_models import QuotaPeriod
 from .errors import problem
-from .models import Attempt, ClassicState, Job, TextCall, User, now
+from .models import Asset, Attempt, ClassicState, Job, TextCall, User, now
 from .queue_models import ComputeNode, ExecutionLease, JobStage
 from .translation_models import TranslationProvider
+from .upload_models import UploadReservation
 from .scheduler import ACTIVE
 
 router = APIRouter(prefix="/v1/admin/monitor", dependencies=[Depends(admin)])
@@ -27,6 +28,7 @@ Status = Literal["active", "attention", "awaiting_upload", "validating_upload", 
                  "outcome_unknown", "unknown_released", "succeeded", "no_text", "failed", "cancelled",
                  "uploading", "preflight", "awaiting_quota"]
 MONITOR_ACTIVE = ACTIVE | {"uploading", "preflight", "awaiting_quota"}
+PLATFORMS = ("extension", "website", "app", "unknown")
 STAGE_ORDER = {name: i for i, name in enumerate(["validate_upload", "page", "text",
     "doc_prepare", "doc_ocr", "doc_text", "doc_render", "doc_zip"])}
 
@@ -80,14 +82,25 @@ def timing(job, leases, at):
             "started_at": iso(leases[0].started_at) if leases else None}
 
 
-def task_json(job, owner_name, leases, at):
+def task_platform(source, guest_trial):
+    if source in PLATFORMS:
+        return source
+    return "website" if not source and guest_trial else "unknown"
+
+
+def task_json(row, leases, at):
+    job = row.Job
+    size = row.byte_size if row.byte_size is not None else row.expected_size
     live = [r for r in leases if not r.completed_at and r.expires_at > at]
     final = [r for r in leases if r.outcome == "succeeded" and (
         r.stage in {"page", "doc_zip"} if job.status == "succeeded" else
         job.status == "no_text" and r.stage in {"page"})]
     completed_by = final[-1] if final else None
-    return {"id": job.id, "owner_id": job.owner_id, "owner_name": owner_name, "mode": job.mode,
+    return {"id": job.id, "owner_id": job.owner_id, "owner_name": row.owner_name, "mode": job.mode,
+            "input_image": {"width": row.width, "height": row.height, "byte_size": size,
+                            "declared": row.byte_size is None} if size is not None else None,
             "workflow_kind": job.workflow_kind, "submitted_ip": job.submitted_ip,
+            "submission_source": task_platform(job.submission_source, job.quota_kind == "guest_trial"),
             "target_language": job.target_language, "status": job.status, "phase": job.phase,
             "created_at": iso(job.created_at), "completed_at": iso(job.completed_at),
             "settlement": job.settlement, "quota_pages": job.quota_pages, "error_code": job.error_code,
@@ -100,7 +113,19 @@ def task_json(job, owner_name, leases, at):
 
 
 def task_query():
-    return select(Job, User.name).options(defer(Job.config)).join(User, User.id == Job.owner_id)
+    return select(Job, User.name.label("owner_name")).options(
+        defer(Job.config), defer(Job.entitlement), defer(Job.result_description)).join(User, User.id == Job.owner_id)
+
+
+def with_input_image(query):
+    info = UploadReservation.verified_info
+    return query.outerjoin(Asset, and_(Job.workflow_kind == 'image', Asset.id == Job.input_asset_id,
+        Asset.owner_id == Job.owner_id, Asset.kind == 'original')).outerjoin(UploadReservation, and_(
+        Job.workflow_kind == 'image', Job.input_asset_id.is_(None), UploadReservation.job_id == Job.id,
+        UploadReservation.owner_id == Job.owner_id)).add_columns(
+        func.coalesce(Asset.width, info['width'].as_integer()).label('width'),
+        func.coalesce(Asset.height, info['height'].as_integer()).label('height'),
+        func.coalesce(Asset.byte_size, info['byte_size'].as_integer()).label('byte_size'), UploadReservation.expected_size)
 
 
 @router.get("/tasks")
@@ -124,22 +149,22 @@ def tasks(status: Status | None = None, mode: Mode | None = None,
     if q.strip():
         value = q.strip()
         query = query.where(or_(Job.id.contains(value, autoescape=True), User.name.contains(value, autoescape=True)))
-    total = db.scalar(select(func.count()).select_from(query.subquery()))
-    rows = db.execute(query.order_by(Job.created_at.desc(), Job.id.desc()).offset(offset).limit(limit)).all()
-    leases = lease_rows(db, [job.id for job, _ in rows]) if rows else {}
-    locations = countries(job.submitted_ip for job, _ in rows)
-    return {"items": [{**task_json(job, name, leases.get(job.id, []), at),
-                       "country": locations.get(job.submitted_ip)} for job, name in rows],
+    total = db.scalar(select(func.count()).select_from(query.with_only_columns(Job.id).subquery()))
+    rows = db.execute(with_input_image(query).order_by(Job.created_at.desc(), Job.id.desc()).offset(offset).limit(limit)).all()
+    leases = lease_rows(db, [row.Job.id for row in rows]) if rows else {}
+    locations = countries(row.Job.submitted_ip for row in rows)
+    return {"items": [{**task_json(row, leases.get(row.Job.id, []), at),
+                       "country": locations.get(row.Job.submitted_ip)} for row in rows],
             "total": total, "next_offset": offset + limit if offset + limit < total else None, "generated_at": iso(at)}
 
 
 @router.get("/tasks/{job_id}")
 def task_detail(job_id: str, db: Session = Depends(get_db)):
-    row = db.execute(task_query().where(Job.id == job_id)).first()
+    row = db.execute(with_input_image(task_query()).where(Job.id == job_id)).first()
     if not row:
         problem("NOT_FOUND", "任务不存在", 404)
     at = now()
-    job, name = row
+    job = row.Job
     leases = lease_rows(db, [job.id])[job.id]
     stages = db.execute(select(JobStage.id, JobStage.name, JobStage.page_index, JobStage.status, JobStage.attempts,
         JobStage.available_at, JobStage.completed_at).where(JobStage.job_id == job.id)).all()
@@ -153,7 +178,7 @@ def task_detail(job_id: str, db: Session = Depends(get_db)):
         TextCall.accounted_micros, TextCall.usage, TextCall.error_code).outerjoin(TranslationProvider, TranslationProvider.id == TextCall.provider_id).where(TextCall.job_id == job.id).order_by(TextCall.started_at, TextCall.id)).all()
     provider = db.execute(select(Attempt.provider_id, Attempt.cost_state, TranslationProvider.name).outerjoin(
         TranslationProvider, TranslationProvider.id == Attempt.provider_id).where(Attempt.id == job.attempt_id)).first() if job.attempt_id else None
-    return {**task_json(job, name, leases, at), "country": countries([job.submitted_ip]).get(job.submitted_ip), "generated_at": iso(at), "error_message": job.error_message,
+    return {**task_json(row, leases, at), "country": countries([job.submitted_ip]).get(job.submitted_ip), "generated_at": iso(at), "error_message": job.error_message,
         "timings": db.scalar(select(ClassicState.timings).where(ClassicState.job_id == job.id)) or {},
         "provider": {"id": provider.provider_id, "name": provider.name, "cost_state": provider.cost_state} if provider else None,
         "stages": [{"name": s.name, "page_index": s.page_index, "status": s.status, "attempts": s.attempts,
@@ -167,8 +192,32 @@ def task_detail(job_id: str, db: Session = Depends(get_db)):
             "accounted_micros": c.accounted_micros, "error_code": c.error_code} for c in calls]}
 
 
+def task_activity(db, at, period):
+    hourly = period == "24h"
+    since = at - timedelta(days=1 if hourly else 7)
+    step = timedelta(hours=1) if hourly else timedelta(days=1)
+    fields = [func.date(Job.created_at).label("day")]
+    if hourly:
+        fields.append(extract("hour", Job.created_at).label("hour"))
+    guest = (Job.quota_kind == "guest_trial").label("guest")
+    counts = defaultdict(int)
+    platforms = dict.fromkeys(PLATFORMS, 0)
+    for row in db.execute(select(*fields, Job.submission_source, guest, func.count().label("jobs"))
+            .where(Job.created_at >= since, Job.created_at < at).group_by(*fields, Job.submission_source, guest)):
+        counts[str(row.day), int(row.hour) if hourly else 0] += row.jobs
+        platforms[task_platform(row.submission_source, row.guest)] += row.jobs
+    buckets = []
+    start = since.replace(hour=since.hour if hourly else 0, minute=0, second=0, microsecond=0)
+    while start < at:
+        end = start + step
+        buckets.append({"start": iso(max(start, since)), "end": iso(min(end, at)),
+                       "count": counts[start.date().isoformat(), start.hour]})
+        start = end
+    return {"period": period, "buckets": buckets, "platforms": platforms}
+
+
 @router.get("/overview")
-def overview(db: Session = Depends(get_db)):
+def overview(period: Literal["24h", "7d"] = "24h", db: Session = Depends(get_db)):
     at = now()
     since = at - timedelta(hours=24)
     groups = db.execute(select(Job.mode, Job.workflow_kind, Job.status, func.count(), func.min(Job.created_at))
@@ -187,14 +236,16 @@ def overview(db: Session = Depends(get_db)):
     user_count = db.scalar(select(func.count()).select_from(User).where(User.kind == 'registered'))
     plus_count = db.scalar(select(func.count()).select_from(User).where(
         User.kind == 'registered', plan_expression(at) == 'plus'))
+    activity = task_activity(db, at, period)
     from .admin_workspace import commerce_summary
     return {**commerce_summary(db, since), "generated_at": iso(at), "window_hours": 24, "users": {"total": user_count, "plus": plus_count,
-        "submitted_24h": db.scalar(select(func.count(func.distinct(Job.owner_id))).join(User, User.id == Job.owner_id).where(Job.created_at >= since, User.kind == 'registered'))},
+        "submitted_24h": db.scalar(select(func.count(func.distinct(Job.owner_id))).join(User, User.id == Job.owner_id).where(Job.created_at >= since, Job.created_at < at, User.kind == 'registered'))},
         "nodes": {"total": len(nodes), "online_enabled": online}, "leases": dict(lease_counts),
         "queues": queues, "stages": [{"name": name, "status": status, "count": count} for name, status, count in stages],
         "completed_24h": [{"mode": mode, "workflow_kind": kind, "status": status, "count": count, "avg_elapsed_seconds": round(max(0, avg), 3)}
                           for mode, kind, status, count, avg in recent],
-        "submitted_24h": db.scalar(select(func.count()).select_from(Job).where(Job.created_at >= since))}
+        "task_activity": activity, "submitted_24h": sum(activity["platforms"].values()) if period == "24h" else
+            db.scalar(select(func.count()).select_from(Job).where(Job.created_at >= since, Job.created_at < at))}
 
 
 @router.get("/nodes")

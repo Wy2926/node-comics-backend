@@ -1,5 +1,5 @@
 import pytest
-from datetime import timedelta
+from datetime import datetime, timedelta
 from sqlalchemy import select
 from conftest import login, login_plus, upload, create
 from admin_fixture import seed, DONE_ID, CACHE_ID, EXPIRED_ID
@@ -44,6 +44,7 @@ def test_uninstrumented_and_expired_timings(monitor):
     client, auth, _ = monitor
     cache = client.get("/v1/admin/monitor/tasks/"+CACHE_ID, headers=auth).json()
     assert cache["execution_seconds"] == 0 and cache["completed_by"] is None
+    assert cache["submission_source"] == "unknown"
     expired = client.get("/v1/admin/monitor/tasks/"+EXPIRED_ID, headers=auth).json()
     assert expired["execution_seconds"] == 40 and expired["expired_leases"] == 1
     assert expired["running_nodes"] == [] and expired["executions"][0]["outcome"] == "expired"
@@ -123,14 +124,56 @@ def test_overview_counts_tasks_and_nodes_without_storage(monitor, monkeypatch):
     assert overview["users"] == {"total":5,"plus":1,"submitted_24h":4}
     assert overview["nodes"] == {"total":5,"online_enabled":3}
     assert overview["leases"] == {"expired":1,"running":1}
+    assert {r["avg_elapsed_seconds"] for r in overview["completed_24h"]} == {120}
     assert any(q["count"] > 0 for q in overview["queues"])
     assert all("paused" not in q for q in overview["queues"])
-    nodes = client.get("/v1/admin/monitor/nodes", headers=auth).json()["items"]
-    gpu_b = next(n for n in nodes if n["id"] == "gpu-b")
+    nodes = {n["id"]: n for n in client.get("/v1/admin/monitor/nodes", headers=auth).json()["items"]}
+    gpu_b = nodes["gpu-b"]
     assert not gpu_b["online"] and gpu_b["occupied"] == gpu_b["expired_leases"] == 1
-    assert next(n for n in nodes if n["id"] == "control-text")["kind"] == "control_pool"
+    assert nodes["gpu-a"]["completed_24h"] == [] and gpu_b["completed_24h"][0]["avg_seconds"] == 90
+    assert nodes["control-text"]["kind"] == "control_pool" and nodes["control-text"]["completed_24h"][0]["avg_seconds"] == 40
     for path in ["tasks", "tasks/"+DONE_ID, "users", "users/20000000-0000-4000-8000-000000000000"]:
         assert client.get("/v1/admin/monitor/"+path,headers=auth).status_code == 200
+
+
+def test_task_charts_share_creation_window_and_platform_rules(monitor, monkeypatch):
+    from sqlalchemy import update
+    from app import admin_monitor
+    from app.db import session_factory
+    from app.models import Job
+    client, auth, _ = monitor
+    at = datetime(2026, 4, 1, 0, 30)
+    day, week, tick = at - timedelta(days=1), at - timedelta(days=7), timedelta(microseconds=1)
+    midnight = at.replace(minute=0)
+    with session_factory()() as db:
+        db.execute(update(Job).values(created_at=week - tick))
+        jobs = db.scalars(select(Job).order_by(Job.id).limit(7)).all()
+        for job, (created, source) in zip(jobs, [(day, 'extension'), (day-tick, 'website'),
+                (midnight-tick, 'app'), (midnight, None), (at-tick, None), (at, 'extension'), (week, 'app')], strict=True):
+            job.created_at, job.submission_source = created, source
+        jobs[3].quota_kind = 'guest_trial'
+        db.commit()
+    monkeypatch.setattr(admin_monitor, 'now', lambda: at)
+    path = '/v1/admin/monitor/overview'
+    hourly = client.get(path, headers=auth).json()
+    daily = client.get(path, params={'period': '7d'}, headers=auth).json()
+    assert hourly['submitted_24h'] == daily['submitted_24h'] == 4
+    for result, period, since, nonempty, platforms in [
+        (hourly, '24h', day, {0: 1, 23: 1, 24: 2}, dict(extension=1, website=1, app=1, unknown=1)),
+        (daily, '7d', week, {0: 1, 6: 3, 7: 2}, dict(extension=1, website=2, app=2, unknown=1)),
+    ]:
+        activity = result['task_activity']
+        buckets = activity['buckets']
+        assert activity['period'] == period and activity['platforms'] == platforms
+        assert buckets[0]['start'] == since.isoformat()+'Z' and buckets[-1]['end'] == result['generated_at']
+        assert all(left['end'] == right['start'] for left, right in zip(buckets, buckets[1:]))
+        assert {i: b['count'] for i, b in enumerate(buckets) if b['count']} == nonempty
+        assert sum(b['count'] for b in buckets) == sum(platforms.values())
+    monkeypatch.setattr(admin_monitor, 'now', lambda: midnight + timedelta(days=10))
+    empty = client.get(path, headers=auth).json()['task_activity']
+    assert len(empty['buckets']) == 24 and not any(b['count'] for b in empty['buckets'])
+    assert empty['platforms'] == dict(extension=0, website=0, app=0, unknown=0)
+    assert client.get(path, params={'period': 'all'}, headers=auth).status_code == 422
 
 
 def test_users_plan_search_and_read_only_entitlements(monitor):

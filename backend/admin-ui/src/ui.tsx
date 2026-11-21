@@ -15,6 +15,8 @@ export const labels: Record<string, string> = {
   daily: '每日额度', membership: '运营会员', grant: '赠送额度', subscription: '付费订阅', reconcile: '人工核实',
 };
 export const label = (value: string | null | undefined) => value ? labels[value] || value : '—';
+const sourceLabels: Record<string, string> = {extension: 'PC 插件', website: '官网', app: 'App', unknown: '未知'};
+export const submissionSourceLabel = (value: string) => Object.hasOwn(sourceLabels, value) ? sourceLabels[value] : sourceLabels.unknown;
 export const number = (value: number | undefined) => (value || 0).toLocaleString('zh-CN');
 export const time = (value: string | null | undefined) => value ? new Date(/(?:Z|[+-]\d\d:\d\d)$/i.test(value) ? value : `${value}Z`).toLocaleString('zh-CN', {hour12: false}) : '—';
 export function duration(value: number | null | undefined): string {

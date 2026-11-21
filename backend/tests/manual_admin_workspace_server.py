@@ -1,5 +1,6 @@
 """Disposable admin workspace: local SQLite/Redis, synthetic IPs and LLM only."""
 import os
+from datetime import timedelta
 from pathlib import Path
 import sys
 
@@ -24,8 +25,14 @@ CHANNELS['openai'] = TranslationChannel(channel.label, channel.config_type, chan
 admin_monitor.countries = lambda addresses: {ip: {'code': country, 'status': 'located'}
     for ip in addresses if (country := {'203.0.113.20': 'JP', '2001:db8::10': 'US'}.get(ip))}
 with session_factory()() as db:
-    for index, job in enumerate(db.scalars(select(Job))):
+    for index, job in enumerate(db.scalars(select(Job).order_by(Job.id))):
         job.submitted_ip = '2001:db8::10' if index % 3 == 0 else '203.0.113.20'
+        job.submission_source = ('extension', 'website', 'extension', 'app', None)[index % 5]
+        if job.id.startswith('10000000-') and int(job.id[-12:]) >= 5:
+            shift = timedelta(hours=index * 5 % (150 if index % 3 == 0 else 24))
+            job.created_at -= shift
+            if job.completed_at:
+                job.completed_at -= shift
     for kind, comment, contact in [
         ('plugin', '希望在阅读器里更方便地对照原图和译文。', 'reader@example.invalid'),
         ('uninstall', '暂时用不到，希望以后继续支持更多网站。', ''),

@@ -1,4 +1,3 @@
-import {Button} from './ui';
 import {lazy, Suspense, useCallback, useContext, useEffect, useRef, useState} from 'react';
 import {authError, type AuthConfig, errorText, finishLogin, getAdmin, hasSession, request, saveToken, startLogin} from './api';
 import {EntityWorkspace} from './EntityWorkspace';
@@ -21,12 +20,11 @@ const AuditLogPage = lazy(() => import('./AuditLog').then(module => ({default: m
 const ServiceHealthPage = lazy(() => import('./ServiceHealth').then(module => ({default: module.ServiceHealthPage})));
 const StatisticsPage = lazy(() => import('./Statistics').then(module => ({default: module.StatisticsPage})));
 const QuotaCampaignsPage = lazy(() => import('./QuotaCampaigns').then(module => ({default: module.QuotaCampaignsPage})));
-import type {Node} from './types';
-import type {AdminUser, Nodes as NodesData, Overview as OverviewData, Page, Task, User} from './types';
-import {Empty, href, label, Pagination, time} from './ui';
+import type {AdminUser, Node, Nodes as NodesData, Overview as OverviewData, Page, Task, User} from './types';
+import {Button, Empty, href, label, Pagination, time} from './ui';
 
 const views = {
-  overview: ['概览', '先处理反馈与订单，再查看用户和翻译运行情况。'],
+  overview: ['概览', '查看翻译任务何时提交、来自哪个平台，以及当前的订单与反馈。'],
   tasks: ['翻译任务', '查看单图与整本文件的状态、等待时间及节点履历。'],
   nodes: ['计算节点', '查看图像计算节点与控制资源池的心跳、容量和占用。'],
   'translation-providers': ['翻译供应商', '管理文本翻译的渠道、模型与独立供应商配置。'],
@@ -114,6 +112,7 @@ function WorkspacePage({view, params, onUnauthorized, onNavigate, auto, setAuto}
   const query = new URLSearchParams();
   const allowed = view === 'tasks' ? ['mode', 'workflow_kind', 'status', 'q', 'owner_id', 'node_id', 'offset'] : view === 'users' ? ['q', 'plan', 'offset'] : [];
   for (const key of allowed) if (params.get(key)) query.set(key, params.get(key)!);
+  if (view === 'overview' && params.get('period') === '7d') query.set('period', '7d');
   const {data, busy, error, reload} = useResource<OverviewData | NodesData | Page<Task> | Page<AdminUser>>(`/v1/admin/monitor/${view}?${query}`, onUnauthorized, auto && !detailOpen);
   const page = data as Page<Task> | Page<AdminUser> | undefined;
   const [title, description] = views[view];
@@ -121,7 +120,7 @@ function WorkspacePage({view, params, onUnauthorized, onNavigate, auto, setAuto}
   return <main id="main" tabIndex={-1}>
     <div className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div>
       <div className="refresh-controls"><label><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)}/>每 15 秒刷新</label><Button className="secondary" disabled={busy} onClick={reload}>{busy ? '正在刷新…' : '↻ 刷新数据'}</Button></div></div>
-    <div className="sync-line"><span role="status">{busy ? '正在读取数据…' : error ? '更新失败 · 当前数据可能已过时' : `已更新 ${time(data?.generated_at)}`}{!auto && ' · 自动刷新已暂停'}</span><span>时间按浏览器本地时区显示</span></div>
+    <div className="sync-line"><span role="status">{busy ? '正在读取数据…' : error ? '更新失败 · 当前数据可能已过时' : `已更新 ${time(data?.generated_at)}`}{!auto && ' · 自动刷新已暂停'}</span><span>{view === 'overview' ? '任务图表按 UTC 统计，其余时间为本地时间' : '时间按浏览器本地时区显示'}</span></div>
     {error && <div className="error" role="alert">{error}</div>}
     <Filters view={view} params={params} onChange={values => {if (href(view, values) === location.hash) reload(); else onNavigate(values);}}/>
     <div aria-busy={busy}>

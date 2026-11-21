@@ -4,7 +4,7 @@ from alembic.migration import MigrationContext
 import pytest
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, inspect, text
 
-HEAD = "monthly_membership_0031"
+HEAD = "job_submission_source_0032"
 NEW_TABLES = {"guest_sessions", "guest_daily_usage", "guest_daily_budgets", "quota_campaigns", "quota_campaign_awards", "quota_periods", "comic_title_cache", "system_settings",
               "translation_providers", "translation_provider_revisions", "billing_accounts",
               "billing_customers", "billing_price_bindings", "billing_orders", "billing_order_transitions", "billing_plans", "billing_plan_revisions", "billing_prices", "billing_terms", "billing_checkouts", "billing_checkout_aliases", "billing_subscriptions", "billing_events", "billing_invoices", "compute_claims", "upload_reservations", "translation_requests",
@@ -108,6 +108,7 @@ def test_fifo_upgrade_preserves_checkpoint_and_active_lease(isolated_migration_d
     db.initialize()
     with sa.orm.Session(isolated_migration_database) as session:
         job, lease = session.get(Job, 'fifo-job'), session.get(ExecutionLease, 'fifo-lease')
+        assert job.submission_source is None
         assert job.config['engine'] == {'protocol_version': 3}
         assert job.cache_key == content_key('a' * 64, 'classic', 'en', job.config)
         assert (job.status, job.settlement, job.quota_pages) == ('running', 'reserved', 1)

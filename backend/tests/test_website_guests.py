@@ -84,6 +84,18 @@ def test_origin_protocol_and_proof_are_all_required(visitor):
     assert submit(visitor, mode='removed-mode').status_code == 422
 
 
+def test_admin_identifies_guest_website_even_for_older_tasks(visitor):
+    client, _, owner, _ = visitor
+    assert submit(visitor).status_code == 202
+    with session_factory()() as db:
+        job = db.scalars(select(Job).where(Job.owner_id == owner)).one()
+        assert job.submission_source == 'website'
+        job.submission_source = None  # Guest jobs created before the source column.
+        db.commit()
+    items = client.get('/v1/admin/monitor/tasks', headers=login(client, 'admin')).json()['items']
+    assert items[0]['submission_source'] == 'website'
+
+
 def test_durable_five_attempts_replay_conflict_and_cancel(visitor):
     client, headers, owner, calls = visitor
     for index in range(5):

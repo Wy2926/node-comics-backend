@@ -11,6 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from .assets import available
 from .image_results import asset_response, result_json
 from .auth import identity
+from .client_address import client_ip, submission_source
 from .config import settings
 from .db import get_db, session_factory
 from .errors import ANALYSIS_LIMIT_MESSAGES, problem
@@ -180,7 +181,7 @@ def translation_json(db, row, *, context=None):
         'updated_at': iso(row.revoked_at or (entry.changed_at if entry else row.created_at))}
 
 
-def accept_translation(db, user, request_id, body, *, submitted_ip=None):
+def accept_translation(db, user, request_id, body, *, submitted_ip=None, submission_source=None):
     content = body.model_dump(mode='json')
     if body.model_id is not None:
         content['model_id'] = body.model_id
@@ -239,10 +240,11 @@ def accept_translation(db, user, request_id, body, *, submitted_ip=None):
     if image.byte_size > settings().max_upload_bytes:
         problem('IMAGE_TOO_LARGE', '图片大小超过限制', 413)
     font_id = resolve_font(font_id, language)
-    asset = None  # Inputs are private to each actual job, never claimed by hash.
-    entry = create_job(db, user, asset, mode, language, request_id, operation='translation',
+    # Inputs are private to each actual job, never claimed by hash.
+    entry = create_job(db, user, None, mode, language, request_id, operation='translation',
         force=previous_id is not None, source_sha256=image.sha256, request_hash_override=signature,
-        result_format=result_format, model_id=model_id, font_id=font_id, submitted_ip=submitted_ip)
+        result_format=result_format, model_id=model_id, font_id=font_id,
+        submitted_ip=submitted_ip, submission_source=submission_source)
     row = db.get(TranslationRequest, (user.id, request_id))
     row.descriptor = {**(row.descriptor or {}), 'image': image.model_dump(), 'mode': mode, 'target_language': language,
         'retry_of': str(body.retry_of) if body.retry_of else None,
@@ -271,8 +273,8 @@ def translate(translation_id: UUID, body: TranslationInput, request: Request, us
     db.rollback()
     token = acquire_control(owner_id)
     try:
-        from .client_address import client_ip
-        row = accept_translation(db, db.get(User, owner_id), str(translation_id), body, submitted_ip=client_ip(request))
+        row = accept_translation(db, db.get(User, owner_id), str(translation_id), body,
+            submitted_ip=client_ip(request), submission_source=submission_source(request))
         # Persist admission before building the client snapshot.
         db.commit()
         result = translation_json(db, row)

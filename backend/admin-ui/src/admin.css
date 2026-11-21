@@ -193,6 +193,36 @@ tbody tr:hover td {background: #fafbfc;}
 .test-metrics {display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;}
 
 /* Overview and inbox */
+.task-activity {margin-bottom: 24px;}
+.task-activity .panel-heading {flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--border);}
+.activity-period {display: flex; gap: 2px; padding: 3px; background: var(--background); border-radius: 7px;}
+.activity-period a {padding: 4px 12px; border-radius: 5px; font-size: 13px; color: var(--muted);}
+.activity-period a[aria-current] {background: var(--surface); color: var(--primary); font-weight: 600; box-shadow: 0 1px 3px #18223020;}
+.activity-charts {display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 28px;}
+.activity-charts figure {margin: 0; min-width: 0;}
+.activity-charts figcaption, .platform-bars li > div:first-child {display: flex; align-items: baseline; justify-content: space-between; gap: 12px;}
+.activity-charts figcaption h3 {font-size: 15px;}
+.activity-summary {display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; margin: 6px 0;}
+.activity-total {font-size: 12px; color: var(--muted);}
+.activity-total strong {color: var(--text); font-size: 28px; font-variant-numeric: tabular-nums;}
+.activity-plot {display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px;}
+.activity-scale, .activity-ticks {display: flex; justify-content: space-between; font-size: 11px; color: var(--muted);}
+.activity-scale {flex-direction: column; align-items: flex-end;}
+.activity-ticks {display: grid; grid-column: 2; text-align: center;}
+.activity-ticks span {justify-self: center; white-space: nowrap;}
+.activity-ticks span:first-child {justify-self: start;}
+.activity-ticks span:last-child {justify-self: end;}
+.activity-plot svg {width: 100%; height: 112px; fill: var(--primary);}
+.activity-plot line {stroke: var(--border); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke;}
+.activity-charts details {margin-top: 10px; font-size: 12px; color: var(--muted);}
+.activity-charts details[open] summary {margin-bottom: 8px;}
+.activity-empty {padding: 36px 12px; color: var(--muted); text-align: center; background: var(--background);}
+.platform-bars {list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 9px; font-size: 13px; font-variant-numeric: tabular-nums;}
+.platform-track {height: 6px; margin-top: 4px; background: var(--background); border-radius: 4px; overflow: hidden;}
+.platform-track i {display: block; height: 100%; background: var(--primary);}
+.platform-website i {background: #0f766e;}
+.platform-app i {background: #8051be;}
+.platform-unknown i {background: #818b9b;}
 .business-stats a:hover .stat {border-color: #bfdbfe;}
 .overview-columns {display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; align-items: start;}
 .overview-columns > .panel, .running-summary {padding: 0; overflow: hidden; margin: 0;}
@@ -403,6 +433,7 @@ progress::-webkit-progress-value {background: var(--primary); border-radius: 3px
   .detail-meta {grid-template-columns: 150px minmax(0, 1fr);}
 }
 @media (max-width: 760px) {
+  .activity-charts {grid-template-columns: 1fr; gap: 20px;}
   .workspace {display: block;}
   .sidebar {position: static; width: 100%; padding: 16px; border-right: 0; border-bottom: 1px solid var(--border);}
   .sidebar nav {margin: 16px 0 0; display: flex; gap: 8px; overflow-x: auto;}

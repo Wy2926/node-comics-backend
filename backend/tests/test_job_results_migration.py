@@ -18,6 +18,8 @@ def legacy_jobs():
 def before_quota_multiplier(model):
     table = model.__table__.to_metadata(MetaData())
     table._columns.remove(table.c.quota_multiplier)
+    if 'submission_source' in table.c:
+        table._columns.remove(table.c.submission_source)
     return table
 
 

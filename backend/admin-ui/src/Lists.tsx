@@ -1,15 +1,24 @@
-import {Button} from './ui';
 import {EntityLink} from './EntityLink';
-import {Country} from './ui';
 import type {AdminUser, Node, Nodes as NodesData, Task} from './types';
-import {Badge, duration, Empty, Jump, label, number, Table, time} from './ui';
+import {Badge, Button, Country, duration, Empty, Jump, label, number, submissionSourceLabel, Table, time} from './ui';
+
+function ImageSpecs({task}: {task: Task}) {
+  if (task.workflow_kind === 'document') return <span className="muted">不适用</span>;
+  const image = task.input_image;
+  if (!image) return <span className="muted">未记录</span>;
+  const bytes = image.byte_size, kib = bytes / 1024;
+  const size = bytes < 1024 ? `${bytes} B` : kib < 1024 ? `${kib.toFixed(1)} KiB` : `${(kib / 1024).toFixed(2)} MiB`;
+  return <>{image.width && image.height ? `${image.width} × ${image.height} px` : '尺寸未确认'}
+    <small title={`${number(bytes)} 字节`}>{size}{image.declared && '（申报）'}</small></>;
+}
 
 export function Tasks({items, onTask}: {items: Task[]; onTask: (id: string) => void}) {
   if (!items.length) return <Empty>没有符合条件的任务</Empty>;
-  return <Table heads={['任务 / 提交时间', '用户 / 来源', '模式 / 优先级', '状态 / 阶段', '总耗时 / 执行占用', '执行节点', '操作']}>
+  return <Table heads={['任务 / 提交时间', '原图尺寸 / 文件大小', '用户 / 提交端', '模式 / 优先级', '状态 / 阶段', '总耗时 / 执行占用', '执行节点', '操作']}>
     {items.map(j => <tr key={j.id}>
       <td><Button className="text-link" onClick={() => onTask(j.id)}>{label(j.workflow_kind)} → {j.target_language}</Button><small>{time(j.created_at)}</small></td>
-      <td><EntityLink kind="users" id={j.owner_id}>{j.owner_name}</EntityLink><small><Country value={j.country}/></small><small className="ip-address">{j.submitted_ip || "IP 未记录"}</small></td>
+      <td className="numeric"><ImageSpecs task={j}/></td>
+      <td><EntityLink kind="users" id={j.owner_id}>{j.owner_name}</EntityLink><small>{submissionSourceLabel(j.submission_source)} · <Country value={j.country}/></small><small className="ip-address">{j.submitted_ip || "IP 未记录"}</small></td>
       <td>{label(j.mode)}<small>{label(j.workflow_kind)}{j.workflow_kind === 'document' && ' · 后台低优先级'}</small></td>
       <td><Badge value={j.status}/><small>{label(j.phase)}{j.expired_leases > 0 && ' · 租约待回收'}</small></td>
       <td className="numeric">{duration(j.elapsed_seconds)}<small>执行 {duration(j.execution_seconds)}</small></td>

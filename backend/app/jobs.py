@@ -112,7 +112,8 @@ def find_reusable(db, user, cache_key):
 
 
 def create_job(db, user, asset, mode, language, key, *, operation=None, force=False,
-               source_sha256=None, request_hash_override=None, result_format='overlay-v1', model_id=None, font_id=None, submitted_ip=None):
+               source_sha256=None, request_hash_override=None, result_format='overlay-v1', model_id=None, font_id=None,
+               submitted_ip=None, submission_source=None):
     # Upload intents have no runnable stage. Guests also consume a shared site-wide budget.
     if asset is not None or user.kind == 'guest':
         lock_scheduler(db)
@@ -155,7 +156,7 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
     kind = require_entitlement(user, mode, db=db, policy=policy)
     version = (db.scalar(select(func.max(Job.version)).where(Job.owner_id == user.id, Job.cache_key == ck)) or 0) + 1
     job = Job(id=uid(), owner_id=user.id, input_asset_id=asset.id if asset else None, source_sha256=sha,
-        mode=mode, target_language=language, submitted_ip=submitted_ip,
+        mode=mode, target_language=language, submitted_ip=submitted_ip, submission_source=submission_source,
         operation=operation, idempotency_key=key, request_hash=request_hash, cache_key=ck, config=config,
         quota_pages=0, quota_multiplier=provider.quota_multiplier,
         quota_kind=kind, settlement="free", version=version,

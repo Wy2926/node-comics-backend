@@ -43,6 +43,39 @@ def test_preview_paths_stream_private_original_and_full_result(client, png, prev
         assert client.get(image, headers={**admin, 'If-None-Match': content.headers['etag']}).status_code == 304
 
 
+def test_list_distinguishes_declared_size_from_measured_original(client, png, monkeypatch):
+    from sqlalchemy import select
+    from conftest import request_record
+    from test_cluster_submissions import descriptor, submit, upload_and_enqueue
+    from app.assets import inspect_image
+    from app.storage import LocalStore
+    from app.upload_models import UploadReservation
+    reader, admin = login(client, 'reader'), login(client, 'admin')
+    translation = submit(client, reader, descriptor(png)).json()
+    job_id = request_record(client, reader, translation['id']).job_id
+
+    def listed():
+        return client.get('/v1/admin/monitor/tasks', params={'q': job_id}, headers=admin).json()['items'][0]['input_image']
+
+    assert listed() == {'width': None, 'height': None, 'byte_size': len(png), 'declared': True}
+    measured = {'width': 320, 'height': 480, 'byte_size': len(png), 'declared': False}
+    with session_factory()() as db:
+        # Ingress can persist measurements before it publishes the asset pointer.
+        receipt = db.scalar(select(UploadReservation).where(UploadReservation.job_id == job_id))
+        receipt.verified_info = inspect_image(png)
+        db.commit()
+    assert listed() == measured
+    upload_and_enqueue(client, reader, translation, png)
+    with session_factory()() as db:
+        original = db.get(Asset, db.get(Job, job_id).input_asset_id)
+        original.purged_at = now()
+        db.commit()
+    def no_storage(*args, **kwargs): pytest.fail('listing tasks must not fetch or probe image files')
+    monkeypatch.setattr(LocalStore, 'read', no_storage)
+    monkeypatch.setattr(LocalStore, 'exists', no_storage)
+    assert listed() == measured
+
+
 def test_original_expiry_uses_current_setting_before_cleanup_and_keeps_full_result(client, preview):
     path, admin, _, job_id, _ = preview
     with session_factory()() as db:
@@ -126,6 +159,7 @@ def test_result_expiry_is_independent_and_unknown_or_document_tasks_are_rejected
     with session_factory()() as db:
         db.get(Job, job_id).workflow_kind = 'document'
         db.commit()
+    assert client.get('/v1/admin/monitor/tasks', params={'q': job_id}, headers=admin).json()['items'][0]['input_image'] is None
     assert client.get(path, headers=admin).status_code == 404
     assert client.get('/v1/admin/monitor/tasks/missing/images', headers=admin).status_code == 404
 
@@ -138,3 +172,4 @@ def test_task_pointers_cannot_expose_another_owners_original(client, png, previe
         db.commit()
     for suffix in ('', '/original', '/result'):
         assert client.get(path + suffix, headers=admin).status_code == 404
+    assert client.get('/v1/admin/monitor/tasks', params={'q': job_id}, headers=admin).json()['items'][0]['input_image'] is None

@@ -1,8 +1,55 @@
 import type {Overview as OverviewData} from './types';
-import {duration, Empty, href, Jump, label, number, Stat, Table, time} from './ui';
+import {duration, Empty, href, Jump, label, number, Stat, submissionSourceLabel, Table, time} from './ui';
 import {billingStatus, environmentName, money} from './billing';
 import {EntityLink} from './EntityLink';
 import {inboxLabels, inboxViews} from './Inbox';
+
+const periods = {'24h': '近 24 小时', '7d': '近 7 天'} as const;
+const stamp = (utc: string) => utc.slice(5, 16).replace('T', ' ');
+const share = new Intl.NumberFormat('zh-CN', {style: 'percent', maximumFractionDigits: 1});
+
+function TaskActivity({activity}: {activity: OverviewData['task_activity']}) {
+  const {period, buckets} = activity;
+  const platforms = Object.entries(activity.platforms);
+  const total = platforms.reduce((sum, [, count]) => sum + count, 0);
+  const busiest = buckets.reduce((a, b) => a.count >= b.count ? a : b), peak = busiest.count;
+  const first = buckets[0], last = buckets[buckets.length - 1], hourly = period === '24h';
+  const range = (b: typeof first) => `${stamp(b.start)} – ${stamp(b.end)}`;
+  const tick = (utc: string) => hourly ? utc.slice(11, 16) : utc.slice(5, 10);
+  return <section className="panel task-activity" aria-labelledby="task-activity-heading">
+    <div className="panel-heading"><div><h2 id="task-activity-heading">任务提交概况</h2>
+      <p className="muted">{stamp(first.start)} – {stamp(last.end)} UTC · 按新建任务计数，重试和复用不另计。</p></div>
+      <nav className="activity-period" aria-label="任务图表时间范围">{Object.entries(periods).map(([key, title]) =>
+        <a key={key} href={href('overview', key === '7d' ? {period: key} : {})} aria-current={period === key ? 'page' : undefined}>{title}</a>)}</nav></div>
+    <div className="activity-charts">
+      <figure><figcaption><h3>任务时间分布</h3><small>{hourly ? '按小时' : '按天'} · UTC</small></figcaption>
+        <div className="activity-summary"><p className="activity-total"><strong>{number(total)}</strong> 个新任务</p>
+          {peak > 0 && <small>峰值 {range(busiest)} · {number(peak)} 个</small>}</div>
+        {peak ? <div className="activity-plot"><div className="activity-scale" aria-hidden="true"><span>{number(peak)}</span><span>0</span></div>
+          <svg role="img" aria-label={`${periods[period]}任务提交柱状图，单时段最高 ${number(peak)} 个`} viewBox={`0 0 ${buckets.length * 12} 100`} preserveAspectRatio="none">
+            {[1, 50, 99].map(y => <line key={y} x1="0" y1={y} x2="100%" y2={y}/>)}
+            {buckets.map((b, i) => <g key={b.start}><title>{range(b)} UTC：{number(b.count)} 个任务</title>
+              <rect x={i * 12 + 1} y={100 - 99 * b.count / peak} width="10" height={99 * b.count / peak} rx="1"/>
+              <rect x={i * 12} width="12" height="100" fill="transparent"/></g>)}</svg>
+          <div className="activity-ticks" aria-hidden="true" style={{gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))`}}>
+            {buckets.map((b, i) => (!hourly || i % 6 === 0 || i === buckets.length - 1) &&
+              <span key={b.start} style={{gridColumn: i + 1}}>{tick(b.start)}</span>)}</div>
+        </div> : <p className="activity-empty">所选时段没有新建任务。</p>}
+        <details><summary>查看逐{hourly ? '小时' : '日'}数据</summary><Table heads={['统计时段（UTC）', '任务数']}>
+          {buckets.map(b => <tr key={b.start}><td>{range(b)}</td><td className="numeric">{number(b.count)}</td></tr>)}</Table></details>
+      </figure>
+      <figure><figcaption><h3>任务平台分布</h3><small>任务数 / 占比</small></figcaption>
+        <ul className="platform-bars">{platforms.map(([key, count]) => {
+          const ratio = total ? count / total : 0;
+          return <li key={key} className={`platform-${key}`}><div><span>{submissionSourceLabel(key)}</span>
+            <span><b>{number(count)}</b> · {total ? ratio > 0 && ratio < 0.001 ? '<0.1%' : share.format(ratio) : '—'}</span></div>
+            <div className="platform-track" aria-hidden="true"><i style={{width: `${100 * ratio}%`}}/></div></li>;
+        })}</ul>
+        <p className="muted">按首次提交端统计；无法识别的任务计入「未知」。</p>
+      </figure>
+    </div>
+  </section>;
+}
 
 export function Overview({data}: {data: OverviewData}) {
   const active = data.queues.reduce((sum, row) => sum + row.count, 0);
@@ -10,6 +57,7 @@ export function Overview({data}: {data: OverviewData}) {
   const failed = data.completed_24h.filter(row => row.status === 'failed').reduce((sum, row) => sum + row.count, 0);
   const revenue = data.commerce.revenue_24h.map(row => money(row.amount, row.currency)).join(' / ');
   return <div className="overview-workspace">
+    <TaskActivity activity={data.task_activity}/>
     <div className="stats-grid business-stats">
       <a href={href('orders', {environment: 'live'})}><Stat title="近 24 小时实收原金额" value={revenue || '暂无收款'} note="正式订单 · 分币种 · 退款前金额"/></a>
       <a href={href('orders')}><Stat title="近 24 小时订单" value={number(data.commerce.orders_24h)} note={`${data.commerce.attention_orders} 笔异常或待核定 · 含测试订单`}/></a>

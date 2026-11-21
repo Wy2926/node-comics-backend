@@ -9,6 +9,7 @@ from pydantic import Field, field_validator
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 from ..auth import identity
+from ..client_address import client_ip, submission_source
 from ..classic_config import profile_snapshot
 from ..config import settings
 from ..system_settings import get_request_limits
@@ -228,8 +229,8 @@ def create_document(request_id: UUID, body: DocumentInput, request: Request, use
     else:
         at = now()
         config, entitlement, quota_multiplier = _model(db, user, body, at)
-        from ..client_address import client_ip
-        job = Job(id=uid(), owner_id=user.id, submitted_ip=client_ip(request), mode='classic', workflow_kind='document',
+        job = Job(id=uid(), owner_id=user.id, submitted_ip=client_ip(request), submission_source=submission_source(request),
+            mode='classic', workflow_kind='document',
             target_language=body.target_language, operation=OPERATION, idempotency_key=str(request_id),
             source_sha256=body.sha256, request_hash=request_hash, cache_key=digest([user.id, request_hash]),
             config=config, quota_pages=0, quota_multiplier=quota_multiplier, quota_kind='document_pages', settlement='unreserved',

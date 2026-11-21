@@ -36,6 +36,7 @@ export type Overview = {
   inbox: import('./Inbox').InboxData;
   recent_feedback: {id: string; kind: string; comment: string; name: string; status: string; created_at: string}[];
   generated_at: string; submitted_24h: number;
+  task_activity: {period: '24h' | '7d'; buckets: {start: string; end: string; count: number}[]; platforms: Record<Task['submission_source'], number>};
   users: {total: number; plus: number; submitted_24h: number};
   nodes: {total: number; online_enabled: number};
   leases: {running?: number; expired?: number};
@@ -46,6 +47,8 @@ export type Overview = {
 export type Task = {
   id: string; owner_id: string; owner_name: string; mode: Mode; target_language: string;
   submitted_ip: string | null; country: {code: string | null; status: string} | null;
+  submission_source: 'extension' | 'website' | 'app' | 'unknown';
+  input_image: {width: number | null; height: number | null; byte_size: number; declared: boolean} | null;
   workflow_kind: 'image' | 'document'; status: string; phase: string;
   created_at: string; completed_at: string | null; settlement: string;
   quota_pages: number; error_code: string | null; cancel_requested: boolean; discard_output: boolean;

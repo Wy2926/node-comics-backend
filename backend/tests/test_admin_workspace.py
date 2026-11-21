@@ -3,8 +3,10 @@ import asyncio
 from dataclasses import replace
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from starlette.datastructures import Headers
 from starlette.requests import Request
 
 from conftest import login, login_plus, request_record
@@ -13,16 +15,31 @@ from test_document_quota_api import document_case, body, purchase
 from test_billing_admin import administrator, order_data
 
 
+@pytest.mark.parametrize(('headers', 'expected'), [
+    ({'User-Agent': 'nodelane-comics/0.2.0+17 (android; arm64)'}, 'app'),
+    ({'Origin': 'moz-extension://b4615c46-1f33-4f3d-b602-8c21ac944def'}, 'extension'),
+    ({'User-Agent': 'Mozilla/5.0', 'X-Translation-Protocol': 'overlay-v1'}, None),
+    ({'Origin': 'null'}, None),
+    ({'Origin': 'https://comics.nodelane.net.example.org'}, None),
+    ({'Origin': 'chrome-extension://' + 'a' * 32 + '/page.html'}, None),
+    ({'Origin': 'chrome-extension://' + 'a' * 32, 'User-Agent': 'nodelane-comics/1.0'}, None),
+])
+def test_submission_headers_distinguish_clients_from_ambiguous_origins(headers, expected):
+    from app.client_address import submission_source
+    assert submission_source(Request({'type': 'http', 'headers': Headers(headers).raw})) == expected
+
+
 def test_image_address_uses_peer_and_replay_does_not_rewrite_origin(client):
     from app.main import app
     from app.db import session_factory
     from app.models import Job
     auth = login_plus(client)
     first_client = TestClient(app, client=('2001:4860:4860::8888', 54321))
-    first = submit(first_client, {**auth, 'X-Forwarded-For': '1.1.1.1', 'CF-Connecting-IP': '8.8.8.8'}, descriptor(b'fixture'))
+    first = submit(first_client, {**auth, 'Origin': 'chrome-extension://' + 'a' * 32,
+        'X-Forwarded-For': '1.1.1.1', 'CF-Connecting-IP': '8.8.8.8'}, descriptor(b'fixture'))
     assert first.status_code == 202, first.text
     row = request_record(client, auth, first.json()['id'])
-    second_client = TestClient(app, client=('8.8.8.8', 54321))
+    second_client = TestClient(app, client=('8.8.8.8', 54321), headers={'User-Agent': 'nodelane-comics/1.0'})
     assert submit(second_client, auth, descriptor(b'fixture')).status_code == 202
     # Same user/content under a different request also reuses the original task.
     assert submit(second_client, auth, descriptor(b'fixture'), key='new-request').status_code == 202
@@ -30,25 +47,30 @@ def test_image_address_uses_peer_and_replay_does_not_rewrite_origin(client):
         assert db.get(Job, row.job_id).submitted_ip == '2001:4860:4860::8888'
         assert db.scalar(select(func.count()).select_from(Job)) == 1
     public = client.get('/v1/translations/' + first.json()['id'], headers=auth)
-    assert 'submitted_ip' not in public.text and 'country' not in public.text
+    assert not {'submitted_ip', 'country', 'submission_source'} & public.json().keys()
     assert client.get('/v1/admin/monitor/tasks/' + row.job_id, headers=auth).status_code == 403
-    detail = client.get('/v1/admin/monitor/tasks/' + row.job_id, headers=login(client, 'admin')).json()
+    admin = login(client, 'admin')
+    detail = client.get('/v1/admin/monitor/tasks/' + row.job_id, headers=admin).json()
     assert detail['submitted_ip'] == '2001:4860:4860::8888'
+    assert detail['submission_source'] == 'extension'
+    assert client.get('/v1/admin/monitor/tasks', headers=admin).json()['items'][0]['submission_source'] == 'extension'
 
 
 def test_document_address_is_recorded_only_on_first_acceptance(document_case):
+    from app.config import settings
     from app.main import app
     from app.db import session_factory
     from app.models import Job
     purchase(document_case, 10)
     key = str(uuid4())
-    peer = TestClient(app, client=('8.8.8.8', 12345))
+    peer = TestClient(app, client=('8.8.8.8', 12345), headers={'Origin': settings().guest_origin})
     result = peer.put('/v1/documents/' + key, json=body(document_case), headers=document_case.auth)
     assert result.status_code == 202, result.text
     assert document_case.client.put('/v1/documents/' + key, json=body(document_case), headers=document_case.auth).status_code == 202
     with session_factory()() as db:
-        assert db.scalar(select(Job).where(Job.idempotency_key == key)).submitted_ip == '8.8.8.8'
-    assert 'submitted_ip' not in result.text
+        job = db.scalar(select(Job).where(Job.idempotency_key == key))
+        assert (job.submitted_ip, job.submission_source) == ('8.8.8.8', 'website')
+    assert not {'submitted_ip', 'submission_source'} & result.json().keys()
 
 
 def test_country_lookup_is_local_bounded_and_handles_missing_database(client, monkeypatch):
