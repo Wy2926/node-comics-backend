@@ -21,6 +21,7 @@ test('suggestion respects manual choice, dismissal and in-progress private flows
 });
 test('manual switch keeps the current article, query and anchor',()=>{
   assert.equal(languageTarget(new URL('https://comics.nodelane.net/en/guides/local-comics/?from=help#section-2'),'pt-BR'),'/pt-br/guides/local-comics/?from=help#section-2');
+  assert.equal(languageTarget(new URL('https://comics.example/pricing/?app=1#app-billing=test-ticket'),'en'),'/en/pricing/?app=1');
 });
 test('suggestions use the first supported browser language rather than the page language',()=>{
   for (const target of locales) {

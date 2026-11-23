@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { checkoutIntentKey, rememberCheckout, takeCheckout,PurchaseRetryAllowed } from '../lib/checkout-intent';
 import { ApiError } from '../lib/auth-session';
+import { isAppPricing } from '../lib/app-billing';
 import type {CreemPurchase} from '../lib/direct-checkout';
 
-export interface CheckoutCopy { busy: string; error: string; before: string; refund: string;retry?:string;retryHint?:string;resume?:string;uncertain?:string;conflict?:string;pending?:string }
+export interface CheckoutCopy { busy: string; error: string; before: string; refund: string;retry?:string;retryHint?:string;resume?:string;uncertain?:string;conflict?:string;pending?:string;appLink?:string }
 export default function CheckoutButton({ priceId, accountHref, label, copy,methods,onEmbed,disabled=false,showDisclosure=true,continueAfterLogin=true }: {
   priceId: string; accountHref: string; label: string; copy: CheckoutCopy;disabled?:boolean;showDisclosure?:boolean;continueAfterLogin?:boolean;
   methods?:{label:string;hint?:string};
@@ -15,7 +16,8 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
   const epoch=useRef(0);
   const [restartPurchase,setRestartPurchase]=useState<(()=>void)|null>(null);
   const pricing=accountHref.replace(/account\/$/,'pricing/');
-  const destination = `${pricing}?price=${encodeURIComponent(priceId)}`;
+  const [appPricing,setAppPricing]=useState(false);
+  const destination = `${pricing}?${appPricing?'app=1&':''}price=${encodeURIComponent(priceId)}`;
   async function start(id: string, allowLogin: boolean) {
     if (inFlight.current) return;
     const current=++epoch.current;
@@ -24,11 +26,11 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
     try {
       if(restartPurchase){restartPurchase();setRestartPurchase(null);}
       const { session, signIn, directCheckout } = await import('../lib/direct-checkout');
-      const signedIn=await session();
+      const signedIn=isAppPricing() || await session();
       if(current!==epoch.current)return;
       if (!signedIn) {
         if (!allowLogin) throw Error('LOGIN_REQUIRED');
-         const path = `${pricing}?price=${encodeURIComponent(id)}`;
+        const path = `${pricing}?price=${encodeURIComponent(id)}`;
         rememberCheckout(sessionStorage, path, id);
         try { await signIn(path); }
         catch (error) { sessionStorage.removeItem(checkoutIntentKey); throw error; }
@@ -41,7 +43,9 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
             inFlight.current=false;
             setBusy(false);
           } else location.assign(destination.url);
-        } else location.assign(typeof destination==='string'?destination:accountHref);
+        } else if(typeof destination==='string') location.assign(destination);
+        else if(isAppPricing() && destination?.fulfilled) location.assign(accountHref.replace(/account\/$/,'payment/success/'));
+        else location.assign(isAppPricing()?pricing+'?app=1':accountHref);
       }
     } catch(error) {
       if(current!==epoch.current)return;
@@ -49,7 +53,8 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
       else if(error instanceof ApiError&&(error.code==='CREEM_CHECKOUT_UNCERTAIN'||error.code==='BILLING_CHECKOUT_UNCERTAIN'))setError(copy.uncertain??copy.error);
       else if(error instanceof ApiError&&error.code==='BILLING_CHECKOUT_PRICE_CONFLICT')setError(copy.conflict??copy.error);
       else if(error instanceof ApiError&&error.code==='BILLING_CHECKOUT_PENDING')setError(copy.pending??copy.error);
-      else setError(copy.error);
+      else if(error instanceof ApiError && error.code==='BILLING_LINK_EXPIRED')setError(copy.appLink??copy.error);
+      else setError(isAppPricing()?copy.appLink??copy.error:copy.error);
       inFlight.current = false;
       setBusy(false);
     }
@@ -60,7 +65,8 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
       if(event.persisted){epoch.current++;inFlight.current=false;setBusy(false);}
     };
     window.addEventListener('pageshow',returned);
-    void import('../lib/direct-checkout').then(({subscribeAuth})=>{
+    setAppPricing(isAppPricing());
+    if(!isAppPricing()) void import('../lib/direct-checkout').then(({subscribeAuth})=>{
       if(disposed)return;
       unsubscribe=subscribeAuth(()=>{epoch.current++;inFlight.current=false;setBusy(false);setError('');setRestartPurchase(null);});
     }).catch(()=>{/* The explicit purchase action reports an unavailable module. */});
@@ -68,7 +74,7 @@ export default function CheckoutButton({ priceId, accountHref, label, copy,metho
   },[]);
   useEffect(() => {
     try {
-      if(disabled)return;
+      if(disabled||isAppPricing())return;
       if(new URLSearchParams(location.search).get('price')!==priceId)return;
       const price = takeCheckout(sessionStorage, location.pathname + location.search);
       if (price&&continueAfterLogin) void start(price, false);

@@ -300,7 +300,7 @@ def fulfilled_checkout(row):
         'provider': row.provider, 'environment': row.environment, 'trial': False}
 
 
-def start_checkout(owner_id, price_id, provider, idempotency_key=None):
+def start_checkout(owner_id, price_id, provider, idempotency_key=None, *, app_pricing=False):
     with session_factory()() as db:
         user = locked_user(db, owner_id)
         price = db.get(BillingPrice, price_id)
@@ -370,9 +370,10 @@ def start_checkout(owner_id, price_id, provider, idempotency_key=None):
             if trial:
                 trial = not db.scalar(select(BillingCheckout.id).where(BillingCheckout.owner_id == owner_id,
                     BillingCheckout.trial.is_(True), pending_checkout_condition()).limit(1))
+            return_url = getattr(settings(), provider + '_return_url')
             row = BillingCheckout(id=uid(), owner_id=owner_id, provider=provider, binding_id=binding.id,
                 environment=price.environment, price_id=price.id, customer_id=customer.customer_id if customer else None,
-                idempotency_key=idempotency_key, return_url=getattr(settings(), provider + '_return_url'),
+                idempotency_key=idempotency_key, return_url=urljoin(return_url, '/pricing/?app=1') if app_pricing else return_url,
                 trial=trial,
                 created_at=now(), expires_at=now() + timedelta(hours=23))
             db.add(row)

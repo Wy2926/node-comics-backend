@@ -22,6 +22,19 @@ const labels:Record<Locale,[alipayAndCard:string,card:string,afterDetails:string
 
 export const checkoutMethodCopy=(locale:string)=>labels[locale as Locale]??labels.en;
 
+const reopen:Record<Locale,string>={
+  'zh-CN':'请返回 App，再点一次「升级」打开支付页。','zh-TW':'請返回 App，再點一次「升級」開啟付款頁。',
+  en:'Return to the app and tap Upgrade to reopen checkout.',ja:'アプリに戻り、「アップグレード」を押して決済ページを開き直してください。',
+  ko:'앱으로 돌아가 업그레이드를 눌러 결제 페이지를 다시 여세요.',fr:'Revenez dans l’application et touchez « Mettre à niveau » pour rouvrir le paiement.',
+  es:'Vuelve a la aplicación y pulsa «Mejorar plan» para abrir el pago de nuevo.','pt-BR':'Volte ao aplicativo e toque em “Melhorar plano” para reabrir o pagamento.',
+  de:'Kehre zur App zurück und tippe auf „Upgrade“, um die Zahlung erneut zu öffnen.',it:'Torna all’app e tocca «Migliora piano» per riaprire il pagamento.',
+  ru:'Вернитесь в приложение и нажмите «Улучшить план», чтобы снова открыть оплату.',pl:'Wróć do aplikacji i wybierz „Ulepsz plan”, aby ponownie otworzyć płatność.',
+  uk:'Поверніться в застосунок і натисніть «Покращити план», щоб знову відкрити оплату.',tr:'Uygulamaya dönüp ödemeyi yeniden açmak için Yükselt’e dokunun.',
+  vi:'Quay lại ứng dụng và nhấn Nâng cấp để mở lại trang thanh toán.',id:'Kembali ke aplikasi dan ketuk Tingkatkan untuk membuka kembali halaman pembayaran.',
+  ar:'ارجع إلى التطبيق واضغط على «ترقية» لفتح صفحة الدفع من جديد.',
+};
+export const reopenCheckoutCopy=(locale:string)=>reopen[locale as Locale]??reopen.en;
+
 const dialog:Record<Locale,[title:string,hosted:string,close:string,loading:string]>={
   'zh-CN':['订单付款','在 Creem 付款页继续','关闭','正在打开收银台…'],
   'zh-TW':['訂單付款','前往 Creem 付款頁繼續','關閉','正在開啟付款表單…'],

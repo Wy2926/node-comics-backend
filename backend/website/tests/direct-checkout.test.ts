@@ -386,6 +386,7 @@ function button(copy:CheckoutCopy,checkout:()=>Promise<unknown>,signedIn=true,op
   const modules:Record<string,unknown>={
     react:{useId:()=>'checkout-methods',useState:state,useRef:<T,>(initial:T)=>state({current:initial})[0],useEffect:(effect:()=>unknown)=>{const index=cursor++;if(index===values.length){values.push(true);effects.push(effect);}}},
     'react/jsx-runtime':jsx,'../lib/checkout-intent':intent,'../lib/auth-session':{ApiError},
+    '../lib/app-billing':{isAppPricing:()=>new URLSearchParams(options.search).get('app')==='1'},
     '../lib/direct-checkout':{session:options.session??(async()=>signedIn?{}:null),subscribeAuth:()=>()=>{},signIn:async(path:string)=>{logins.push(path);},
       directCheckout:async(price:string)=>{requests.push(price);return checkout();}},
   };
@@ -414,6 +415,15 @@ test('one verified Creem response opens one in-site checkout; hosted fallback us
   assert.deepEqual(embedded.requests,['original-quote']);assert.equal(embedded.busy(),undefined);
   const hosted=button(base,async()=>purchase);
   hosted.click();await hosted.flush();assert.deepEqual(hosted.redirects,[purchase.url]);
+});
+
+test('app upgrade waits for a purchase click, skips website login and directs an expired link back to the app',async()=>{
+  const attempt=button({...base,appLink:'Reopen from app'},async()=>{throw new ApiError('expired',401,'BILLING_LINK_EXPIRED');},false,
+    {search:'?app=1&price=original-quote',session:async()=>{throw Error('wrong website account');}});
+  await attempt.flush();assert.deepEqual(attempt.requests,[]);
+  attempt.click();await attempt.flush();
+  assert.deepEqual(attempt.requests,['original-quote']);assert.deepEqual(attempt.logins,[]);
+  assert.equal(attempt.alert(),'Reopen from app');
 });
 
 test('all 17 languages provide distinct checkout verification and conflict guidance',()=>{

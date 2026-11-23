@@ -1,6 +1,6 @@
 import {basePath, locales, type Locale} from '../i18n/locales';
 import {languageNoticeCopy} from '../i18n/language-notice';
-import {languageSuggestion, languageTarget, preferenceCookie} from './language-preference';
+import {languageSuggestion, languageSuffix, languageTarget, preferenceCookie} from './language-preference';
 import {bindHeaderMenus} from './header-menu';
 
 bindHeaderMenus(document);
@@ -15,8 +15,7 @@ document.querySelectorAll<HTMLAnchorElement>('.language-menu a[lang]').forEach(l
   const locale = link.lang as Locale;
   if (locales.includes(locale)) {
     if (!/^\/(?:auth|payment)(?:\/|$)/.test(basePath(location.pathname))) {
-      const target = new URL(link.href);
-      link.href = target.pathname + location.search + location.hash;
+      link.href = new URL(link.href).pathname + languageSuffix(location);
     }
     link.addEventListener('click', () => remember(locale));
   }

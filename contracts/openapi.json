@@ -4101,6 +4101,75 @@
         }
       }
     },
+    "/v1/billing/app-handoff": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "summary": "Issue App Handoff",
+        "description": "Issue a single-use pricing link code for the authenticated account (60 seconds).",
+        "operationId": "issue_app_handoff_v1_billing_app_handoff_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppHandoffResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/billing/app-handoff/redeem": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "summary": "Redeem App Handoff",
+        "description": "Exchange the app code once for a 15-minute billing-only session.",
+        "operationId": "redeem_app_handoff_v1_billing_app_handoff_redeem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppHandoff"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppBillingSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/billing/status": {
       "get": {
         "tags": [
@@ -4111,6 +4180,9 @@
         "security": [
           {
             "HTTPBearer": []
+          },
+          {
+            "AppCheckout": []
           }
         ],
         "parameters": [
@@ -4214,6 +4286,9 @@
         "security": [
           {
             "HTTPBearer": []
+          },
+          {
+            "AppCheckout": []
           }
         ]
       }
@@ -8090,6 +8165,58 @@
           "analysis"
         ],
         "title": "AnalysisRequest"
+      },
+      "AppBillingSession": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "session": {
+            "type": "string",
+            "title": "Session"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "session"
+        ],
+        "title": "AppBillingSession"
+      },
+      "AppHandoff": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 43,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "AppHandoff"
+      },
+      "AppHandoffResponse": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "code"
+        ],
+        "title": "AppHandoffResponse"
       },
       "ArtifactsRequest": {
         "properties": {
@@ -12191,6 +12318,11 @@
       "HTTPBearer": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "AppCheckout": {
+        "type": "http",
+        "description": "Tab-scoped authorization for billing status and checkout only.",
+        "scheme": "Billing"
       }
     }
   }
