@@ -163,6 +163,24 @@ def sync_stripe_purchase(checkout_id):
         db.commit()
 
 
+def creem_purchase_total(order, transaction, product, unit_amount):
+    taxes = [obj['tax_amount'] for obj in (order, transaction) if obj.get('tax_amount') is not None]
+    tax = taxes[0] if taxes else 0
+    require(all(type(n) is int and n >= 0 and n == tax for n in taxes), 'CREEM_PURCHASE_MISMATCH')
+    mode = product.get('tax_mode') if isinstance(product, dict) else None
+    total = transaction.get('amount_paid')
+    require(type(total) is int and 0 <= tax <= total and (
+        (mode in (None, 'exclusive') and total == unit_amount + tax) or
+        (mode in (None, 'inclusive') and total == unit_amount)), 'CREEM_PURCHASE_MISMATCH')
+    # The checkout quotes the product price; the transaction reports the gross charge.
+    subtotal = unit_amount - tax if mode == 'inclusive' else unit_amount
+    for amount, expected in ((transaction.get('amount'), total),
+            (order.get('sub_total', subtotal), total - tax),
+            (order.get('amount_due', total), total), (order.get('amount_paid', total), total)):
+        require(type(amount) is int and amount == expected, 'CREEM_PURCHASE_MISMATCH')
+    return total
+
+
 def sync_creem_purchase(checkout_id):
     with session_factory()() as db:
         row = db.get(BillingCheckout, checkout_id)
@@ -186,19 +204,19 @@ def sync_creem_purchase(checkout_id):
         require(creem.object_id(remote_order.get('customer')) == row.customer_id
             and creem.object_id(remote_order.get('product')) == binding.product_id
             and str(remote_order.get('currency', '')).lower() == price.currency
-            and remote_order.get('amount') == price.unit_amount and not remote_order.get('discount_amount'),
+            and type(remote_order.get('amount')) is int and remote_order['amount'] == price.unit_amount
+            and not remote_order.get('discount_amount'),
             'CREEM_PURCHASE_MISMATCH')
         transaction_id = creem.object_id(remote_order.get('transaction'))
         require(isinstance(transaction_id, str), 'CREEM_PURCHASE_UNPAID')
         value = creem.call('GET', '/transactions', params={'transaction_id': transaction_id})
         creem.environment(value)
-        total = value.get('amount_paid')
         require(value.get('id') == transaction_id and value.get('type') == 'payment' and not value.get('subscription')
             and creem.object_id(value.get('order')) == remote_order.get('id')
             and creem.object_id(value.get('customer')) == row.customer_id
-            and str(value.get('currency', '')).lower() == price.currency and value.get('amount') == price.unit_amount
-            and type(total) is int and total >= price.unit_amount and not value.get('discount_amount'),
+            and str(value.get('currency', '')).lower() == price.currency and not value.get('discount_amount'),
             'CREEM_PURCHASE_MISMATCH')
+        total = creem_purchase_total(remote_order, value, session['product'], price.unit_amount)
         state = {'paid': 'paid', 'refunded': 'refunded', 'partialRefund': 'partially_refunded',
             'chargedBack': 'disputed'}.get(value.get('status'))
         require(state is not None, 'CREEM_PURCHASE_UNPAID')
