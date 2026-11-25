@@ -316,13 +316,13 @@ def run_job(job_id):
     from app.assets import create_asset, read_asset
     from app.db import session_factory
     from app.models import Asset, Job
-    from app.scheduler import lock_scheduler, release_lease
+    from app.scheduler import lock_jobs, release_lease
     from app.queue_models import ExecutionLease, JobStage
     from app.workers import finish_job
     from app.errors import ProcessingError
     from sqlalchemy import select
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_jobs(db, [job_id])
         job = db.get(Job, job_id)
         if job.status not in {'queued', 'running'}:
             return

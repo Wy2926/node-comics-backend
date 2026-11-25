@@ -40,9 +40,13 @@ def purge_failed_outputs(db, at, limits, batch):
                       .execution_options(synchronize_session=False)).rowcount
 
 
-def compact_checkpoints(db, at, limits, batch):
-    base = select(ClassicState).join(Job, Job.id == ClassicState.job_id).where(
-        Job.workflow_kind == 'image', resolved_job())
+def compact_checkpoints(db, *, at=None, batch=20):
+    lock_scheduler(db)
+    at = at or now()
+    limits = get_request_limits(db)
+    base = (select(ClassicState).join(Job, Job.id == ClassicState.job_id).where(
+        Job.workflow_kind == 'image', Job.completed_at <= at, resolved_job())
+        .with_for_update(of=Job, key_share=True, skip_locked=True))
     compact = list(db.scalars(base.where(ClassicState.retention_stage == 0)
         .order_by(ClassicState.job_id).limit(batch)))
     for state in compact:
@@ -108,7 +112,7 @@ def compact_history(db, at, limits, batch):
         or_(Job.workflow_kind != 'image', and_(image_details_due(at, limits.image_result_retention_days),
             or_(Job.discard_output.is_(True), Job.status.in_(('failed', 'cancelled'))))),
         ~select(Document.job_id).where(Document.job_id == Job.id, Document.expires_at > at).exists())
-        .order_by(Job.completed_at, Job.id).limit(batch)))
+        .order_by(Job.completed_at, Job.id).limit(batch).with_for_update(of=Job, key_share=True, skip_locked=True)))
     for job in db.scalars(select(Job).where(Job.id.in_(ids))):
         # Keep identities, state, timestamps, quota and billing columns. No frozen prompts/config trees.
         config = {key: job.config[key] for key in ('font_id', 'result_format') if key in job.config}
@@ -137,8 +141,7 @@ def cleanup_execution_data(db, *, at=None, batch=20, claim_batch=1000):
     lock_scheduler(db)
     at = at or now()
     limits = get_request_limits(db)
-    counts = compact_checkpoints(db, at, limits, batch)
-    counts['failed_outputs'] = purge_failed_outputs(db, at, limits, batch)
+    counts = {'failed_outputs': purge_failed_outputs(db, at, limits, batch)}
     counts['claims'] = delete_claims(db, at, limits, claim_batch)
     counts['document_text'] = purge_document_text(db, at, batch)
     counts['history'] = compact_history(db, at, limits, batch)

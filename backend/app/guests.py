@@ -244,8 +244,9 @@ def expire_guests(db):
     # checked synchronously on reads and reuse, independent of cleanup timing.
     cutoff = now() - timedelta(hours=24)
     # A fixed predicate lets PostgreSQL prepared plans use the small expiry index.
-    jobs = list(db.scalars(select(Job).where(Job.quota_kind == literal_column("'guest_trial'"),
-        Job.completed_at <= cutoff, Job.discard_output.is_(False)).order_by(Job.completed_at).limit(100)))
+    from .scheduler import write_rows
+    jobs = write_rows(db, select(Job).where(Job.quota_kind == literal_column("'guest_trial'"),
+        Job.completed_at <= cutoff, Job.discard_output.is_(False)).order_by(Job.completed_at).limit(100), skip_locked=True).all()
     for job in jobs:
         job.discard_output = True
         db.execute(update(TranslationRequest).where(TranslationRequest.job_id == job.id,

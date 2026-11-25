@@ -23,6 +23,7 @@ import pytest
 from PIL import Image
 from sqlalchemy import event, func, select, text
 from conftest import TEST_DATABASE, pg_scope, run_job
+from test_compute_v3 import analyze, claim, claim_text, deliver, result_for, v3
 from translation_fixtures import configure_text_provider
 
 pytestmark = pytest.mark.skipif(
@@ -79,11 +80,11 @@ def new_job(pg, key="same-operation"):
         return job.id
 
 
-def assert_single_charge(pg, job_id):
+def assert_single_charge(job_id):
     from app.db import session_factory
-    from app.models import Job, Ledger, User
+    from app.models import Job, Ledger
     with session_factory()() as db:
-        user, job = db.get(User, pg["owner_id"]), db.get(Job, job_id)
+        job = db.get(Job, job_id)
         from app.entitlement_models import QuotaPeriod
         period = db.get(QuotaPeriod, job.quota_period_id)
         assert (period.used, period.reserved) == (1, 0)
@@ -115,29 +116,35 @@ def test_postgres_concurrent_idempotent_creation_reserves_once(pg):
         assert (period.used, period.reserved) == (0, 1)
 
 
-def test_postgres_concurrent_duplicate_workers_call_and_settle_once(pg, monkeypatch):
-    from app import workers
+@pytest.fixture
+def text_ready_page(v3):
+    v3['create']()
+    page = claim(v3)[0]
+    analyze(v3, page)
+    return page
 
+
+def test_postgres_concurrent_duplicate_workers_call_and_settle_once(v3, text_ready_page, png, monkeypatch):
+    from app import classic, workers
     from app.db import session_factory
     from app.models import Attempt
-    job_id = new_job(pg)
     provider_entered, release_provider = threading.Event(), threading.Event()
     calls = []
-    calls_lock = threading.Lock()
+    original = classic.call_text
 
     def provider(*args):
-        with calls_lock:
-            calls.append(1)
+        calls.append(1)
         provider_entered.set()
         assert release_provider.wait(10)
-        return pg["png"]
+        return original(*args)
 
-    monkeypatch.setattr("conftest.fixture_output", provider)
+    monkeypatch.setattr(classic, 'call_text', provider)
     barrier = threading.Barrier(2)
 
     def run():
         barrier.wait(timeout=10)
-        run_job(job_id)
+        if lease := claim_text():
+            workers.run_control_stage(lease.id)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(run) for _ in range(2)]
@@ -149,22 +156,21 @@ def test_postgres_concurrent_duplicate_workers_call_and_settle_once(pg, monkeypa
         for future in futures:
             future.result(timeout=15)
     assert calls == [1]
-    assert_single_charge(pg, job_id)
+    assert deliver(v3, text_ready_page, *result_for(v3, text_ready_page, png)).status_code == 200
+    assert_single_charge(text_ready_page['job_id'])
     with session_factory()() as db:
         assert db.scalar(select(func.count()).select_from(Attempt)) == 1
 
 
-def test_postgres_stale_worker_before_intent_cannot_call_after_recovery(pg, monkeypatch):
-    from app import workers
-
+def test_postgres_stale_worker_before_intent_cannot_call_after_recovery(v3, text_ready_page, png, monkeypatch):
+    from app import classic, workers
     from app.db import session_factory
     from app.dispatcher import recover_lease
     from app.errors import ProcessingError
     from app.models import Attempt, Job, now
     from app.queue_models import ExecutionLease, JobStage
-    from conftest import claim_job
-    job_id = new_job(pg)
-    old_lease = claim_job(job_id)
+    job_id = text_ready_page['job_id']
+    old_lease = claim_text().id
     with session_factory()() as db:
         old = db.get(ExecutionLease, old_lease)
         old.expires_at = now() - timedelta(seconds=1)
@@ -174,13 +180,14 @@ def test_postgres_stale_worker_before_intent_cannot_call_after_recovery(pg, monk
     with session_factory()() as db:
         db.get(JobStage, db.get(ExecutionLease, old_lease).stage_id).available_at = now()
         db.commit()
-    new_lease = claim_job(job_id)
+    new_lease = claim_text().id
     assert new_lease and new_lease != old_lease
     calls, barrier = [], threading.Barrier(2)
+    original = classic.call_text
     def provider(*args):
         calls.append(1)
-        return pg["png"]
-    monkeypatch.setattr("conftest.fixture_output", provider)
+        return original(*args)
+    monkeypatch.setattr(classic, 'call_text', provider)
     def stale():
         barrier.wait(timeout=10)
         with pytest.raises(ProcessingError, match="LEASE_EXPIRED"):
@@ -193,7 +200,8 @@ def test_postgres_stale_worker_before_intent_cannot_call_after_recovery(pg, monk
         for future in futures:
             future.result(timeout=15)
     assert calls == [1]
-    assert_single_charge(pg, job_id)
+    assert deliver(v3, text_ready_page, *result_for(v3, text_ready_page, png)).status_code == 200
+    assert_single_charge(job_id)
     with session_factory()() as db:
         assert db.get(ExecutionLease, new_lease).generation == 2
         assert db.scalar(select(func.count()).select_from(Attempt)) == 1
@@ -216,7 +224,8 @@ def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monk
         return original
 
     def observe_delete_lock(connection, cursor, statement, parameters, context, executemany):
-        if threading.current_thread().name.startswith("delete-original") and "pg_advisory_xact_lock" in statement:
+        if (threading.current_thread().name.startswith("delete-original") and "FROM jobs" in statement
+                and "FOR NO KEY UPDATE" in statement):
             deletion_waiting.set()
 
     def delete():
@@ -253,7 +262,7 @@ def test_postgres_delete_during_finalize_revokes_newly_committed_result(pg, monk
                 owned_asset(db, asset_id, pg["owner_id"])
             assert rejected.value.status_code == 410
         assert not job_json(db, job)["result_available"]
-    assert_single_charge(pg, job_id)
+    assert_single_charge(job_id)
 
 
 def test_postgres_initial_migrations_wait_on_advisory_lock_across_processes(pg_scope):
@@ -299,32 +308,17 @@ def test_postgres_initial_migrations_wait_on_advisory_lock_across_processes(pg_s
                 process.wait(timeout=5)
 
 
-def test_postgres_classic_metering_has_no_cost_cap(pg):
+def test_postgres_classic_metering_has_no_cost_cap(text_ready_page):
     from app.classic import reserve_call
     from app.adapters.llm import TextError
     from app.db import session_factory
-    from app.jobs import create_job
-    from app.models import Asset, TextCall, User
-    from app.queue_models import JobStage
-    from conftest import claim_job as claim
-    with session_factory()() as db:
-        job = create_job(db, db.get(User, pg['owner_id']), db.get(Asset, pg['asset_id']), 'classic', 'zh-Hans', 'classic-budget')
-        db.commit()
-        job_id = job.id
-    with session_factory()() as db:
-        for stage in db.scalars(select(JobStage).where(JobStage.job_id == job_id)):
-            if stage.name == "analyze":
-                stage.status = "succeeded"
-            elif stage.name == "text":
-                stage.status = "ready"
-        db.commit()
-    lease_id = claim(job_id)
-    assert lease_id
+    from app.models import TextCall
+    job_id, lease_id = text_ready_page['job_id'], claim_text().id
     barrier = threading.Barrier(6)
     def reserve_concurrently(index):
         barrier.wait(timeout=10)
         try:
-            return reserve_call(job_id, lease_id, [{'id': 'b001', 'source': 'Hello ' * 1000}], 'zh-Hans')[0]
+            return reserve_call(job_id, lease_id, [{'id': '0', 'source': 'Hello ' * 1000}], text_ready_page['language'])[0]
         except TextError as error:
             return error.code
     with ThreadPoolExecutor(max_workers=6) as pool:

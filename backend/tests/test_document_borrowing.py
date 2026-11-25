@@ -14,7 +14,7 @@ from app.documents.models import DocumentPage
 from app.entitlement_models import QuotaPeriod
 from app.models import Job, now
 from app.queue_models import ComputeNode, ExecutionLease, JobStage
-from app.scheduler import lock_scheduler, release_lease
+from app.scheduler import locked_node, release_lease
 from compute_pull import bound_pull
 from conftest import configure_system_limits
 from test_compute_v3 import v3, analyze, claim as image_claim
@@ -166,9 +166,9 @@ def test_image_only_pull_yields_to_ready_member_document_even_with_idle_slots(do
     connection = compute_channel.authenticated(identity, documents.v3['auth']['Authorization'])
     request = compute_channel.Pull(request_id='image-only', config_version=1, count=1, document_count=0)
     assert compute_channel.assign(identity, connection, request)['leases'] == []
-    assert not compute_channel.snapshot(identity, connection, set(), request)[-1]
+    assert not compute_channel.snapshot(identity, connection, {}, request)[-1]
     mixed = request.model_copy(update={'document_count': 1})
-    assert compute_channel.snapshot(identity, connection, set(), mixed)[-1]
+    assert compute_channel.snapshot(identity, connection, {}, mixed)[-1]
     reply = compute_channel.assign(identity, connection, mixed)
     assert [lease['job_id'] for lease in reply['leases']] == [job_id]
 
@@ -290,7 +290,7 @@ def test_parallel_mixed_claims_prioritize_ordinary_and_keep_baseline(documents):
             ExecutionLease.completed_at.is_(None))) <= 3
 
 
-def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, monkeypatch):
+def test_document_claim_rechecks_ordinary_ready_after_node_lock(documents, monkeypatch):
     create(documents, 3)
     configure_system_limits(free_daily_pages=20)
     job_id = documents.v3['create']()[0]
@@ -301,12 +301,12 @@ def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, 
         db.commit()
     entered = Event()
     pull = bound_pull(documents.v3)
-    def observed_lock(db):
+    def observed_lock(db, node_id):
         entered.set()
-        lock_scheduler(db)
-    monkeypatch.setattr(compute_channel, 'lock_scheduler', observed_lock)
+        return locked_node(db, node_id)
+    monkeypatch.setattr(compute_channel, 'locked_node', observed_lock)
     with session_factory()() as db:
-        lock_scheduler(db)
+        locked_node(db, documents.v3['node']['node_id'])
         db.get(JobStage, stage_id).status = 'ready'
         with ThreadPoolExecutor(1) as pool:
             pending = pool.submit(pull, 0, document_count=1)
@@ -316,6 +316,16 @@ def test_document_claim_rechecks_ordinary_ready_after_scheduler_lock(documents, 
                 db.commit()
             assert pending.result(timeout=10) == []
     assert image_claim(documents.v3)
+
+
+def test_busy_workspace_does_not_hold_node_capacity_or_bind_a_stale_host(documents):
+    from app.scheduler import lock_jobs
+    job_id = create(documents, prepared=False)
+    pull = bound_pull(documents.v3)
+    with session_factory()() as other:
+        lock_jobs(other, [job_id])
+        assert pull(0, 'busy-workspace', document_count=1) == []
+    assert pull(0, 'busy-workspace', document_count=1)[0]['job_id'] == job_id
 
 
 def test_claim_query_budget_is_independent_of_backlog(documents):

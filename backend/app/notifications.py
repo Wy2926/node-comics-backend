@@ -103,7 +103,15 @@ def hub():
 def publish(db, topic):
     # PostgreSQL only sends NOTIFY after commit; rollback sends nothing.
     if db.get_bind().dialect.name == 'postgresql':
-        db.execute(text("SELECT pg_notify('comics_changes', :topic)"), {'topic': topic})
+        transaction = db.get_nested_transaction() or db.get_transaction() or db.begin()
+        previous, topics = db.info.get('pg_notified', (None, None))
+        if previous is not transaction:
+            topics = set()
+            db.info['pg_notified'] = (transaction, topics)
+        if topic not in topics:
+            db.execute(text("SELECT pg_notify('comics_changes', :topic)"), {'topic': topic})
+            topics.add(topic)
+        return
     db.info.setdefault('wake_topics', set()).add(topic)
 
 

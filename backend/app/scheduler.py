@@ -19,19 +19,41 @@ CANDIDATE_LIMIT = 32
 
 
 def lock_scheduler(db):
-    # Transactions changing runnable work take this before User/Job.
-    # Model work and remote I/O never execute while holding it.
+    # Cross-resource maintenance and bootstrap take this before any row locks.
+    # A savepoint rollback can release a lock first acquired inside that savepoint.
+    transaction = db.get_nested_transaction() or db.get_transaction() or db.begin()
+    if db.info.get('scheduler_lock_transaction') is transaction:
+        return
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT pg_advisory_xact_lock(761349211)"))
     else:
         db.execute(update(SchedulerMutex).where(SchedulerMutex.id == 1).values(revision=SchedulerMutex.revision))
+    db.info['scheduler_lock_transaction'] = transaction
+
+
+def write_rows(db, query, *, skip_locked=False):
+    if db.get_bind().dialect.name != 'postgresql':
+        lock_scheduler(db)  # SQLite ignores FOR UPDATE; acquire its writer first.
+    return db.scalars(query.with_for_update(key_share=True, skip_locked=skip_locked).execution_options(populate_existing=True))
+
+
+def locked_node(db, node_id):
+    return write_rows(db, select(ComputeNode).where(ComputeNode.id == node_id)).one_or_none()
+
+
+def lock_jobs(db, ids):
+    # Node (if needed), then job IDs in order. Read stages/leases in a fresh statement after waiting.
+    write_rows(db, select(Job.id).where(Job.id.in_(ids)).order_by(Job.id)).all()
+
+
+def lock_lease_jobs(db, lease_ids, node_id=None):
+    # A completed lease only replays its receipt; a retry gets a new lease ID.
+    jobs = select(ExecutionLease.job_id).where(ExecutionLease.id.in_(lease_ids), ExecutionLease.completed_at.is_(None))
+    lock_jobs(db, jobs.where(ExecutionLease.node_id == node_id) if node_id is not None else jobs)
 
 
 def touch_job(db, job):
-    lock_scheduler(db)
     job.changed_at = now()
-    db.execute(update(SchedulerMutex).where(SchedulerMutex.id == 1)
-        .values(revision=SchedulerMutex.revision + 1).returning(SchedulerMutex.revision)).scalar_one()
     from .notifications import publish
     publish(db, 'user:' + job.owner_id)
     publish(db, 'compute')
@@ -53,14 +75,20 @@ def ensure_stages(db, job):
 
 def current_lease(db, lease_id, lease_token=None):
     lease = db.get(ExecutionLease, lease_id)
-    if not lease or lease.completed_at or lease.expires_at <= now() or (lease_token is not None and not hmac.compare_digest(lease.token, lease_token)):
+    if not lease or (lease_token is not None and not hmac.compare_digest(lease.token, lease_token)):
         raise ProcessingError("LEASE_EXPIRED", "执行授权已失效")
     stage = db.get(JobStage, lease.stage_id)
     job = db.get(Job, lease.job_id)
+    check_current_lease(lease, stage, job)
+    return lease, stage, job
+
+
+def check_current_lease(lease, stage, job):
+    if lease.completed_at or lease.expires_at <= now():
+        raise ProcessingError("LEASE_EXPIRED", "执行授权已失效")
     if (not stage or stage.generation != lease.generation or stage.status != "running" or not job
             or job.status != "running" or job.cancel_requested or job.discard_output):
         raise ProcessingError("LEASE_EXPIRED", "任务已停止或执行代次已更新")
-    return lease, stage, job
 
 
 def pool_for(stage):
@@ -122,7 +150,7 @@ def paid_reserve(node):
 def _preselect(db, node, allowed_stages, blocked_providers=(), min_priority=0):
     # Reuse the caller's connection, including its uncommitted nodes/pages.
     # A second Session can deadlock a full pool while every claimant holds its
-    # first connection. PostgreSQL READ COMMITTED rechecks after the mutex;
+    # first connection. PostgreSQL READ COMMITTED rechecks after the row locks;
     # our SQLite driver does not BEGIN on SELECT, while pending DML already
     # owns its writer lock. Transaction ownership always stays with the caller.
     stages = set(node.capabilities) & set(allowed_stages or node.capabilities)
@@ -297,10 +325,9 @@ def prepare_claim_candidates(db, node_id, allowed_stages=None, *, limit=CLAIM_BA
     """A bounded, non-authoritative snapshot, usable before a receipt transaction."""
     limit = max(0, min(CLAIM_BATCH_LIMIT, limit))
     if db.new or db.dirty or db.deleted:
-        # Internal callers may bring pending changes. Acquire the mutex before
-        # their first autoflush; normal read-only claimers still elect outside it.
+        # Take the node before flushing a caller's pending job; don't refresh dirty objects.
         with db.no_autoflush:
-            lock_scheduler(db)
+            write_rows(db, select(ComputeNode.id).where(ComputeNode.id == node_id)).all()
     observed_node = db.get(ComputeNode, node_id)
     free, ordinary = slot_budget(db, observed_node) if limit else (0, 0)
     blocked = _blocked_providers(db, observed_node, allowed_stages) if free else ()
@@ -310,14 +337,8 @@ def prepare_claim_candidates(db, node_id, allowed_stages=None, *, limit=CLAIM_BA
         limit, candidates_before_lock, tuple(blocked))
 
 
-def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, executor_id=None,
-                prepared=None, steal_before=None, higher_work=None):
-    """Select once outside the mutex, then dispatch a bounded batch.
-
-    The caller owns commit/rollback. Recheck the bounded snapshot under the
-    mutex, then account for this batch's capacity and provider usage.
-    Receipt-based callers may prepare before acquiring their atomic receipt lock.
-    """
+def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, executor_id=None, prepared=None):
+    """Elect before locking the shared capacity row; the caller owns commit/rollback."""
     limit = max(0, min(CLAIM_BATCH_LIMIT, limit))
     if not limit:
         return []
@@ -325,28 +346,35 @@ def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, ex
     stages = tuple(sorted(allowed_stages)) if allowed_stages is not None else None
     if prepared.node_id != node_id or prepared.stages != stages:
         raise ValueError('Claim snapshot scope does not match the claimant')
-    limit = min(limit, prepared.limit)
-    candidates_before_lock, blocked = dict(prepared.signatures), prepared.blocked_providers
-    with db.no_autoflush:
-        lock_scheduler(db)
-    node = db.get(ComputeNode, node_id, populate_existing=True)
-    at = now()
+    # report_pools supplies these workers' heartbeat independently of empty polls.
+    if not prepared.signatures and node_id in ('control-text', 'control-validate_upload'):
+        return []
+    return claim_prepared(db, locked_node(db, node_id), prepared, min(limit, prepared.limit), executor_id=executor_id)
+
+
+def claim_prepared(db, node, prepared, limit, *, executor_id=None, steal_before=None, higher_work=None):
+    """Caller holds the node across capacity accounting, leasing and any pull receipt."""
     if not node or not node.enabled:
         return []
-    node.heartbeat_at = at
-    free, ordinary = slot_budget(db, node)
-    limit = min(limit, free)
-    if not limit or not candidates_before_lock:
+    candidates_before_lock, blocked, stages = prepared.signatures, prepared.blocked_providers, prepared.stages
+    if node.engine_version != 'control':
+        node.heartbeat_at = now()
+    if not candidates_before_lock:
         return []
+    free, ordinary = slot_budget(db, node)
     rank = next(iter(candidates_before_lock.values()))[1]
+    limit = min(limit, free if rank else ordinary)
+    if not limit:
+        return []
+    lock_jobs(db, select(JobStage.job_id).where(JobStage.id.in_(candidates_before_lock)))
+    at = now()
     if not rank:
-        limit = min(limit, ordinary)
         # A paid stage may have arrived after preselection. Yield without a receipt.
-        if (not limit or has_eligible_work(db, node, stages or node.capabilities, min_priority=1, blocked_providers=blocked)
+        if (has_eligible_work(db, node, stages or node.capabilities, min_priority=1, blocked_providers=blocked)
                 or (higher_work and higher_work(db, node, min_priority=1))):
             return []
     leases = []
-    candidates = _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked)
+    candidates = _claimable_candidates(db, node, stages, at, candidates_before_lock, blocked)
     pages = [(stage, job) for stage, job in candidates if stage.name == 'page']
     assigned = assigned_candidates(node, pages, compute_loads(db, node, at), steal_before=steal_before) if pages else set()
     for stage, job in candidates:
@@ -360,14 +388,15 @@ def claim_batch(db, node_id, allowed_stages=None, *, limit=CLAIM_BATCH_LIMIT, ex
 
 def _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, blocked):
     stages = set(node.capabilities) & set(allowed_stages or node.capabilities)
-    # The full election ran without the mutex. Recheck only this bounded set
-    # under the lock, using current queue/provider/asset/node and stage state.
+    # Recheck only the bounded head after acquiring its job rows.
     candidates = [(stage, job) for stage, job in _candidate_rows(db, node, stages, at,
         stage_ids=candidates_before_lock, blocked_providers=blocked)
         if (stage.generation, stage.service_priority) == candidates_before_lock[stage.id]]
     if not candidates:
         return []
     sources = {job.input_asset_id for stage, job in candidates if stage.name != "validate_upload"}
+    if not sources:
+        return candidates
     assets = {row.id: row for row in db.scalars(select(Asset).where(Asset.id.in_(sources)).execution_options(populate_existing=True))}
     available_sources = {asset_id: available(asset) for asset_id, asset in assets.items()}
     failed_jobs = set()
@@ -375,9 +404,7 @@ def _claimable_candidates(db, node, allowed_stages, at, candidates_before_lock, 
         source = assets.get(job.input_asset_id)
         if (stage.name != "validate_upload" and source
                 and not available_sources[source.id] and job.id not in failed_jobs):
-            # SQL cannot test the isolated local filesystem. Retiring this
-            # bounded invalid head lets the next election reach later pages;
-            # silently skipping it would select the same missing head forever.
+            # Retire a missing head once so the next election can reach later pages.
             from .uploads import pause_missing_input
             pause_missing_input(db, job)
             failed_jobs.add(job.id)
@@ -422,10 +449,16 @@ def release_lease(db, lease, outcome):
 
 
 def heartbeat_lease(db, lease_id, token):
-    lock_scheduler(db)
+    lock_lease_jobs(db, [lease_id])
     lease, stage, job = current_lease(db, lease_id, token)
-    lease.expires_at = now() + timedelta(seconds=settings().cluster_lease_seconds)
-    attempt = db.get(Attempt, job.attempt_id)
-    attempt.heartbeat_at, attempt.lease_expires_at = now(), lease.expires_at
-    db.get(ComputeNode, lease.node_id).heartbeat_at = now()
+    renew_lease(lease, db.get(Attempt, job.attempt_id))
     return lease
+
+
+def renew_lease(lease, attempt):
+    at = now()
+    # The input file check can take the lease past its expiry.
+    if lease.expires_at <= at:
+        raise ProcessingError("LEASE_EXPIRED", "执行授权已失效")
+    lease.expires_at = at + timedelta(seconds=settings().cluster_lease_seconds)
+    attempt.heartbeat_at, attempt.lease_expires_at = at, lease.expires_at

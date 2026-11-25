@@ -1,4 +1,5 @@
 """Shared control capacity: initialized once, then owned by administrators."""
+from sqlalchemy import update
 from .config import settings
 from .models import now
 from .queue_models import ComputeNode
@@ -23,10 +24,8 @@ def initialize_pools(db):
     db.commit()
 
 
-def report_pools(db):
+def report_pools(db, node_ids=('control-text', 'control-validate_upload')):
     """Heartbeat even disabled/full pools; capacity is never overwritten by workers."""
-    lock_scheduler(db)
-    for stage in POOL_LIMITS:
-        node = db.get(ComputeNode, 'control-' + stage)
-        node.heartbeat_at = now()
+    if db.execute(update(ComputeNode).where(ComputeNode.id.in_(node_ids)).values(heartbeat_at=now())).rowcount != len(node_ids):
+        raise RuntimeError('Control pool is not initialized')
     db.commit()

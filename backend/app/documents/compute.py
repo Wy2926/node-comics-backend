@@ -22,7 +22,7 @@ from ..providers import digest
 from ..queue_models import ComputeNode, ExecutionLease, JobStage
 from ..request_models import RequestBody
 from ..scheduler import (CANDIDATE_LIMIT, assigned_candidates, compute_loads, current_lease,
-                         has_eligible_work, lock_scheduler, paid_reserve, release_lease, start_lease, touch_job)
+                         has_eligible_work, locked_node, lock_lease_jobs, paid_reserve, release_lease, start_lease, write_rows)
 from ..translation_fonts import resolve_font, supports_font
 from .config import get_document_settings
 from .models import Document, DocumentPage
@@ -115,10 +115,10 @@ class SyncRequest(RequestBody):
     workspace_ids: list[Annotated[str, Field(min_length=1, max_length=36)]] = Field(default_factory=list, max_length=200)
 
 
-def node_for(db, identity, node_id):
+def node_for(db, identity, node_id, *, lock=False):
     if identity != node_id:
         problem('NODE_SCOPE_MISMATCH', '节点身份不匹配', 403)
-    node = db.get(ComputeNode, node_id, populate_existing=True)
+    node = locked_node(db, node_id) if lock else db.get(ComputeNode, node_id, populate_existing=True)
     if not node or (node.runtime_report or {}).get('document_protocol') != 2:
         problem('PROTOCOL_MISMATCH', '节点未启用本地文件工作协议', 409)
     return node
@@ -126,7 +126,7 @@ def node_for(db, identity, node_id):
 
 def scoped(db, lease_id, token, identity, workspace_generation=None):
     lease = db.get(ExecutionLease, lease_id, populate_existing=True)
-    if not lease or lease.node_id != identity or not hmac.compare_digest(lease.token, token):
+    if not lease or lease.node_id != identity or not hmac.compare_digest(lease.token.encode(), token.encode()):
         problem('NODE_SCOPE_MISMATCH', '租约未授权给此节点', 403)
     stage = db.get(JobStage, lease.stage_id)
     if stage.name not in NODE_STAGES or lease.limits.get('document_protocol') != 2:
@@ -268,6 +268,14 @@ def claim_document(db, node, *, steal_before):
             break
     else:
         return None
+    # A mixed pull may already hold image jobs: never wait for an extra document out of ID order.
+    if not write_rows(db, select(Job.id).where(Job.id == job.id), skip_locked=True).one_or_none():
+        return None
+    current = db.execute(queue.where(JobStage.id == stage.id, JobStage.generation == stage.generation,
+        Document.workspace_generation == document.workspace_generation).execution_options(populate_existing=True)).first()
+    if not current:
+        return None
+    stage, job, document = current
     document.owner_node_id = node.id
     at, limits = now(), get_document_settings()
     cfg = NodeConfig.model_validate(node.desired_config)
@@ -286,8 +294,9 @@ def claim_document(db, node, *, steal_before):
 
 @router.post('/nodes/{node_id}/heartbeat')
 def heartbeat(node_id: str, body: HeartbeatRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
-    lock_scheduler(db)
-    node = node_for(db, identity, node_id)
+    node = node_for(db, identity, node_id, lock=True)
+    if body.leases:
+        lock_lease_jobs(db, {item.lease_id for item in body.leases}, identity)
     replies = []
     for item in body.leases:
         try:
@@ -365,7 +374,7 @@ def checked_result(db, lease, stage, body):
 
 @router.post('/leases/{lease_id}/uploads')
 def uploads(lease_id: str, body: ArtifactsRequest, identity=Depends(node_auth), db: Session = Depends(get_db)):
-    lock_scheduler(db)
+    lock_lease_jobs(db, [lease_id], identity)
     lease, stage = scoped(db, lease_id, body.lease_token, identity, body.workspace_generation)
     ref = zip_reference(lease, stage, body.output_ref)
     previous = lease.limits.get('output_ref')
@@ -406,6 +415,7 @@ def complete(lease_id: str, body: CompletionRequest, identity=Depends(node_auth)
         live(db, lease)
         result = checked_result(db, lease, stage, body)
         needs_head = stage.name == 'doc_zip'
+        quota_owner = lease.owner_id if stage.name == 'doc_prepare' else None
         db.rollback()  # Final R2 verification never holds a DB transaction/mutex.
         if needs_head:
             metrics.update(phase='head', artifact_count=1)
@@ -417,7 +427,10 @@ def complete(lease_id: str, body: CompletionRequest, identity=Depends(node_auth)
         metrics['phase'] = 'lock'
         lock_started = perf_counter()
         try:
-            lock_scheduler(db)
+            if quota_owner:
+                from ..entitlements import locked_user
+                locked_user(db, quota_owner)
+            lock_lease_jobs(db, [lease_id], identity)
         finally:
             metrics['lock_wait_ms'] = round((perf_counter() - lock_started) * 1000, 3)
         metrics['phase'] = 'commit'
@@ -448,7 +461,6 @@ def complete(lease_id: str, body: CompletionRequest, identity=Depends(node_auth)
         release_lease(db, lease, 'succeeded')
         db.flush()
         on_stage_completed(db, job, stage)
-        touch_job(db, job)
         db.commit()
         metrics['outcome'] = 'accepted'
         return receipt(lease)

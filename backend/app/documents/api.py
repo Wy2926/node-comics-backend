@@ -22,7 +22,7 @@ from ..models import Job, User, now, uid
 from ..providers import digest
 from ..queue_models import JobStage
 from ..request_models import RequestBody, TranslationBody
-from ..scheduler import lock_scheduler, touch_job
+from ..scheduler import lock_jobs, touch_job
 from ..translation_limits import acquire_control, release_control
 from ..translation_models import TranslationProvider
 from ..translation_providers import _provider_query
@@ -93,7 +93,8 @@ def owned_document(db, owner_id, request_id, *, lock=False):
         Job.owner_id == owner_id, Job.operation == OPERATION, Job.idempotency_key == str(request_id),
         Job.workflow_kind == 'document')
     if lock:
-        query = query.with_for_update().execution_options(populate_existing=True)
+        lock_jobs(db, query.with_only_columns(Job.id))
+        query = query.execution_options(populate_existing=True)
     row = db.execute(query).first()
     if row is None:
         problem('DOCUMENT_NOT_FOUND', '找不到文件任务', 404)
@@ -275,7 +276,6 @@ def complete_upload(request_id: UUID, user: User = Depends(guarded_user), db: Se
     key, upload_id, size, sha = document.source_key, document.upload_id, document.source_size, document.source_sha256
     db.commit()
     _storage('complete_multipart', key, upload_id, expected_size=size, expected_sha256=sha)
-    lock_scheduler(db)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if job.status == 'uploading' and document.expires_at > now() and not document.upload_completed_at:
         document.upload_completed_at = now()
@@ -284,7 +284,6 @@ def complete_upload(request_id: UUID, user: User = Depends(guarded_user), db: Se
         from .workflow import ensure_prepare
         ensure_prepare(db, job)
         job.version += 1
-        touch_job(db, job)
     db.commit()
     return document_json(db, job, document)
 
@@ -292,7 +291,7 @@ def complete_upload(request_id: UUID, user: User = Depends(guarded_user), db: Se
 @router.post('/{request_id}/resume', status_code=202)
 def resume_document(request_id: UUID, user: User = Depends(guarded_user), db: Session = Depends(get_db)):
     _enabled()
-    lock_scheduler(db)
+    locked_user(db, user.id)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if document.reserved_at is not None:
         return document_json(db, job, document)
@@ -308,7 +307,6 @@ def resume_document(request_id: UUID, user: User = Depends(guarded_user), db: Se
 
 @router.post('/{request_id}/cancel')
 def cancel_document(request_id: UUID, user: User = Depends(guarded_user), db: Session = Depends(get_db)):
-    lock_scheduler(db)
     job, document = owned_document(db, user.id, request_id, lock=True)
     if document.reserved_at is not None:
         problem('DOCUMENT_NOT_CANCELLABLE', '额度预占完成后文件任务不能取消', 409)

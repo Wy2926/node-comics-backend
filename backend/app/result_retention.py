@@ -36,8 +36,9 @@ def expire_registered_results(db):
     """Caller holds the scheduler lock; commit revocation before unlinking files."""
     at = now()
     cutoff = at - timedelta(days=get_request_limits(db).image_result_retention_days)
-    jobs = db.scalars(select(Job).where(text(IMAGE_RESULT_EXPIRY_FILTER), Job.completed_at <= cutoff)
-        .order_by(Job.completed_at, Job.id).limit(100))
+    from .scheduler import write_rows
+    jobs = write_rows(db, select(Job).where(text(IMAGE_RESULT_EXPIRY_FILTER), Job.completed_at <= cutoff)
+        .order_by(Job.completed_at, Job.id).limit(100), skip_locked=True)
     for job in jobs:
         job.discard_output = True
         job.error_code, job.error_message = 'RESULT_EXPIRED', '译图已过期，请手动重新翻译'

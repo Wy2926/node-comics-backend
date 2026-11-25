@@ -133,7 +133,7 @@ def test_idle_snapshot_never_renews_advertised_capacity(v3):
         node = db.get(ComputeNode, identity)
         node.runtime_report = {**node.runtime_report, 'dispatch_until': '2000-01-01T00:00:00Z'}
         db.commit()
-    assert not compute_channel.snapshot(identity, connection, set(), body)[-1]
+    assert not compute_channel.snapshot(identity, connection, {}, body)[-1]
     with session_factory()() as db:
         report = db.get(ComputeNode, identity).runtime_report
         assert report['dispatch_until'] == '2000-01-01T00:00:00Z'

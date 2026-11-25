@@ -43,12 +43,13 @@ def test_large_queue_lock_duration(scheduler_case, monkeypatch):
     from app.storage import get_store
     for index in range(owners):
         get_store().put(f'scale/{index}', b'fixture', 'image/png', kind='original')
-    lock = scheduler.lock_scheduler
+    lock = scheduler.locked_node
     acquired = []
-    def measured_lock(db):
-        lock(db)
+    def measured_lock(db, node_id):
+        node = lock(db, node_id)
         acquired.append(perf_counter())
-    monkeypatch.setattr(scheduler, "lock_scheduler", measured_lock)
+        return node
+    monkeypatch.setattr(scheduler, "locked_node", measured_lock)
     durations, loads = [], []
     loaded = []
     def capture(job, context):

@@ -132,3 +132,16 @@ def cleanup_inputs(asset_ids):
                 continue
             source.purged_at = now()
             db.commit()
+
+
+def cleanup_outputs(db, assets):
+    """Only unlink committed output tombstones; failed unlinks remain retryable."""
+    for asset in assets:
+        if asset.kind == 'original' or not asset.deleted_at or asset.purged_at:
+            continue
+        try:
+            get_store().delete(asset.storage_key)
+        except OSError:
+            continue
+        asset.purged_at = now()
+    db.commit()

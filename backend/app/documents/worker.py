@@ -12,16 +12,17 @@ from sqlalchemy import select
 # Standalone workers must register quota FKs before their first ORM flush.
 from .. import billing_models, entitlement_models  # noqa: F401
 from ..config import settings
+from ..control_pools import report_pools
 from ..db import session_factory
 from ..errors import ProcessingError
 from ..health import log_failure, report_failure, report_progress
 from ..models import Job, now
 from ..queue_models import ExecutionLease
-from ..scheduler import heartbeat_lease, lock_scheduler, touch_job
+from ..scheduler import heartbeat_lease, lock_jobs, touch_job
 from .config import get_document_settings
 from .models import Document
 from .storage import DocumentStoreError, get_document_store
-from .workflow import (TERMINAL, claim_control, complete_control, current,
+from .workflow import (NODE_ID, TERMINAL, claim_control, complete_control, current,
                        expire_offline_workspaces, fail_lease, finish_failed)
 
 
@@ -97,7 +98,7 @@ def maintain(state=None):
         state.unknown_after = unknown[-1] if unknown else None
     for job_id in ids:
         with session_factory()() as db:
-            lock_scheduler(db)
+            lock_jobs(db, [job_id])
             doc, job = db.get(Document, job_id), db.get(Job, job_id)
             if not doc.reserved_at and job.status not in TERMINAL and doc.expires_at <= now():
                 finish_failed(db, job, ProcessingError('DOCUMENT_UPLOAD_EXPIRED', '上传或等待补充额度已过期'))
@@ -154,7 +155,7 @@ def main():
         signal.signal(name, lambda *_: stopping.set())
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     executor_id = f'{socket.gethostname()}:{os.getpid()}'
-    pending, next_maintenance, maintenance = set(), 0, MaintenanceState()
+    pending, next_maintenance, next_heartbeat, maintenance = set(), 0, 0, MaintenanceState()
     from ..adapters.transport import close_pooled_connections
     with ExitStack() as cleanup:
         cleanup.callback(close_pooled_connections)
@@ -172,10 +173,14 @@ def main():
                     if not lease:
                         break
                     pending.add(pool.submit(execute, lease))
+                if time.monotonic() >= next_heartbeat:
+                    with session_factory()() as db:
+                        report_pools(db, (NODE_ID,))
+                    report_progress('document-worker')
+                    next_heartbeat = time.monotonic() + 5
                 if time.monotonic() >= next_maintenance:
                     maintain(maintenance)
                     next_maintenance = time.monotonic() + 60
-                report_progress('document-worker')
             except Exception as error:
                 report_failure('document-worker', error)
             stopping.wait(cfg.worker_poll_seconds)

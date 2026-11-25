@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import Field, model_validator
-from sqlalchemy import and_, func, or_, select, tuple_
+from sqlalchemy import and_, func, or_, select, tuple_, update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
-from .assets import available
+from .assets import available, cleanup_inputs, cleanup_outputs
 from .image_results import asset_response, result_json
 from .auth import identity
 from .client_address import client_ip, submission_source
@@ -22,7 +22,7 @@ from .models import Asset, Attempt, ClassicState, Job, TextCall, User, now
 from .queue_models import ExecutionLease
 from .providers import digest
 from .request_models import RequestBody, TranslationBody
-from .scheduler import lock_scheduler, touch_job
+from .scheduler import lock_jobs, lock_scheduler, touch_job
 from .schemas import TranslationHistoryResponse, TranslationResponse, TranslationsResponse
 from .translation_limits import acquire_control, release_control
 from .translation_fonts import RequestedFont, resolve_font
@@ -202,9 +202,13 @@ def accept_translation(db, user, request_id, body, *, submitted_ip=None, submiss
     result_format, model_id, font_id = body.result_format, body.model_id, body.font_id
     previous_id = body.retry_of or body.regenerate_of
     if previous_id:
-        lock_scheduler(db)  # Validate the source verdict before admitting new retry/regeneration work.
+        if user.kind == 'guest':
+            lock_scheduler(db)
+        locked_user(db, user.id)
         previous = owned_translation(db, user.id, previous_id)
-        entry = db.get(Job, previous.job_id) if previous.job_id else None
+        if previous.job_id:
+            lock_jobs(db, [previous.job_id])
+        entry = db.get(Job, previous.job_id, populate_existing=True) if previous.job_id else None
         expired_regeneration = bool(body.regenerate_of and entry and entry.quota_kind != 'guest_trial'
             and entry.status in {'succeeded', 'no_text'} and result_expired(db, entry))
         if unavailable(db, previous, entry) and not expired_regeneration:
@@ -410,7 +414,6 @@ async def translation_input(translation_id: UUID, request: Request,
 
 @router.post('/v1/translations/{translation_id}/cancel', response_model=TranslationResponse)
 def translation_cancel(translation_id: UUID, user: User = Depends(identity), db: Session = Depends(get_db)):
-    lock_scheduler(db)
     row = owned_translation(db, user.id, translation_id)
     if row.job_id:
         cancel_job(db, db.get(Job, row.job_id))
@@ -462,13 +465,12 @@ def translation_result(translation_id: UUID, request: Request, user: User = Depe
 
 @router.delete('/v1/translations/{translation_id}')
 def translation_delete(translation_id: UUID, user: User = Depends(identity), db: Session = Depends(get_db)):
-    lock_scheduler(db)
     locked_user(db, user.id)  # Serialize last-reference deletion with the same owner's new aliases.
     row = owned_translation(db, user.id, translation_id)
-    row.revoked_at = row.revoked_at or now()
-    db.flush()
     other = db.scalar(select(TranslationRequest.id).where(TranslationRequest.owner_id == user.id,
-        TranslationRequest.job_id == row.job_id, TranslationRequest.revoked_at.is_(None)).limit(1)) if row.job_id else None
+        TranslationRequest.job_id == row.job_id, TranslationRequest.id != row.id,
+        TranslationRequest.revoked_at.is_(None)).limit(1)) if row.job_id else None
+    source = output = None
     if not other and row.job_id:
         job = db.get(Job, row.job_id)
         cancel_job(db, job)
@@ -479,8 +481,11 @@ def translation_delete(translation_id: UUID, user: User = Depends(identity), db:
             output = db.get(Asset, job.output_asset_id)
             output.deleted_at = output.deleted_at or now()
         touch_job(db, job)
+    db.execute(update(TranslationRequest).where(TranslationRequest.owner_id == user.id, TranslationRequest.id == row.id,
+        TranslationRequest.revoked_at.is_(None)).values(revoked_at=now()))
     db.commit()
-    # Durable tombstones make interrupted unlink recoverable by maintenance.
-    from .dispatcher import cleanup
-    cleanup(db)
+    if source:
+        cleanup_inputs([source.id])
+    if output:
+        cleanup_outputs(db, [output])
     return {'deleted': True, 'id': str(translation_id)}

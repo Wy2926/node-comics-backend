@@ -34,8 +34,8 @@ def test_input_download_only_reads_identity_and_file_metadata(v3, monkeypatch):
     def unexpected(*args, **kwargs):
         pytest.fail('File reads must not lock, validate execution state or stat before opening')
 
-    monkeypatch.setattr(compute_v3, 'lock_scheduler', unexpected)
-    monkeypatch.setattr(compute_v3, 'live_lease', unexpected)
+    monkeypatch.setattr(compute_v3, 'lock_lease_jobs', unexpected)
+    monkeypatch.setattr(compute_v3, 'live_page', unexpected)
     monkeypatch.setattr(LocalStore, 'exists', unexpected)
     statements = []
     def track(connection, cursor, statement, parameters, context, executemany):
@@ -62,3 +62,57 @@ def test_full_node_and_replay_do_not_rank_the_queue(v3, monkeypatch):
     assert claim(v3, 4, 'full') == []
     with session_factory()() as db:
         assert db.get(ComputeClaim, (v3['node']['node_id'], 'full')) is None
+
+
+def test_unchanged_page_batches_do_not_fetch_bodies_or_repeat_queries(v3):
+    from app import compute_channel
+    from compute_pull import body as pull_body, connect
+    from test_compute_claims import capacity
+    from test_compute_v3 import analyze, text
+    from test_document_borrowing import statements
+
+    capacity(v3, 8)
+    jobs = v3['create'](8)
+    leases = claim(v3, 4, 'one') + claim(v3, 4, 'two')
+    assert {p['job_id'] for p in leases} == set(jobs)
+    for p in leases:
+        analyze(v3, p)
+        text(p)
+    node = v3['node']['node_id']
+    connection = compute_channel.authenticated(node, v3['auth']['Authorization'])
+    with statements() as sql:
+        updates = compute_channel.snapshot(node, connection, {}, None)[1]
+    assert sum('classic_states.translations' in s for s in sql) == 1
+    seen = {u['lease_id']: u['translations']['revision'] for u in updates}
+    assert len(seen) == 8
+    stale = leases[-1]['lease_id']
+    partial = {**seen, stale: 'outdated'}
+    changed, = compute_channel.snapshot(node, connection, partial, None)[1]
+    assert (changed['lease_id'], changed['translations']['revision']) == (stale, seen[stale])
+
+    for batch in (leases[:1], leases):
+        body = compute_v3.HeartbeatRequest(config_version=1, leases=[{
+            'lease_id': p['lease_id'], 'lease_token': p['lease_token'], 'translations_revision': seen[p['lease_id']]}
+            for p in batch])
+        with session_factory()() as db, statements() as sql:
+            result = compute_v3.heartbeat(node, body, node, db)
+        assert [r['lease_id'] for r in result['leases']] == [p['lease_id'] for p in batch]
+        assert all(r['status'] == 'active' and 'translations' not in r for r in result['leases'])
+        assert not any('pg_advisory_xact_lock' in s for s in sql)
+        assert len(sql) <= 6 and not any('classic_states.translations' in s for s in sql), sql
+    with statements() as sql:
+        result = compute_channel.snapshot(node, connection, seen, None)
+    assert not result[1] and result[2] == seen.keys()
+    assert len(sql) <= 2 and not any('classic_states.translations' in s for s in sql), sql
+
+    with connect(v3) as socket:
+        assert socket.receive_json()['config']['version'] == 1
+        assert {socket.receive_json()['leases'][0]['lease_id'] for _ in leases} == seen.keys()
+        # Each fresh pull crosses another snapshot on this connection without a lease update frame.
+        with statements() as sql:
+            for index in range(4):
+                request = pull_body(request_id=f'full-{index}')
+                socket.send_json(request)
+                reply = socket.receive_json()
+                assert (reply['type'], reply['request_id'], reply['leases']) == ('assignment', request['request_id'], [])
+        assert not any('classic_states.translations' in s for s in sql)

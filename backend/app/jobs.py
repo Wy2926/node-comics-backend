@@ -7,7 +7,7 @@ from .models import Asset, Job, now, uid
 from .entitlements import locked_user, require_entitlement, reserve, settle
 from .notifications import publish
 from .providers import digest
-from .scheduler import ACTIVE, ensure_stages, lock_scheduler, touch_job
+from .scheduler import ACTIVE, ensure_stages, lock_scheduler, touch_job, write_rows
 from .translation_fonts import resolve_font
 from .translation_selection import image_models
 from .result_retention import result_expired
@@ -39,12 +39,8 @@ def job_json(db, job):
 
 
 def owned_job(db, job_id, owner_id, *, lock=False):
-    if lock:
-        lock_scheduler(db)
     query = select(Job).where(Job.id == job_id, Job.owner_id == owner_id)
-    if lock:
-        query = query.with_for_update(key_share=True).execution_options(populate_existing=True)
-    job = db.scalar(query)
+    job = write_rows(db, query).one_or_none() if lock else db.scalar(query)
     if not job:
         problem("NOT_FOUND", "找不到此任务", 404)
     return job
@@ -114,8 +110,8 @@ def find_reusable(db, user, cache_key):
 def create_job(db, user, asset, mode, language, key, *, operation=None, force=False,
                source_sha256=None, request_hash_override=None, result_format='overlay-v1', model_id=None, font_id=None,
                submitted_ip=None, submission_source=None):
-    # Upload intents have no runnable stage. Guests also consume a shared site-wide budget.
-    if asset is not None or user.kind == 'guest':
+    # Guest admission also consumes a shared site-wide budget.
+    if user.kind == 'guest':
         lock_scheduler(db)
     user = locked_user(db, user.id)
     operation = operation or f"translate:{mode}"
@@ -177,11 +173,11 @@ def create_job(db, user, asset, mode, language, key, *, operation=None, force=Fa
 
 
 def cancel_job(db, job):
+    job = write_rows(db, select(Job).where(Job.id == job.id)).one()
     if job.workflow_kind != 'image':
         problem('WORKFLOW_MISMATCH', '文件任务必须通过文件工作流处理', 409)
     if job.status in TERMINAL:
         return
-    lock_scheduler(db)
     from .queue_models import ExecutionLease, JobStage
     job.cancel_requested, job.discard_output = True, True
     for stage in db.scalars(select(JobStage).where(JobStage.job_id == job.id, JobStage.status.in_(["waiting", "ready"]))):
@@ -190,4 +186,5 @@ def cancel_job(db, job):
     if not running and job.status != "outcome_unknown":
         job.status, job.phase, job.completed_at = "cancelled", "cancelled", now()
         settle(db, job, success=False)
-    touch_job(db, job)
+    else:
+        touch_job(db, job)

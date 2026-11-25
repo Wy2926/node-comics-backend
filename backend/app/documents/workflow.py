@@ -7,7 +7,7 @@ from ..errors import ProcessingError
 from ..models import Attempt, Job, now
 from ..providers import digest
 from ..queue_models import ComputeNode, ExecutionLease, JobStage
-from ..scheduler import current_lease, lock_scheduler, release_lease, slot_budget, touch_job
+from ..scheduler import current_lease, locked_node, lock_jobs, lock_lease_jobs, lock_scheduler, release_lease, slot_budget, touch_job
 from .models import Document, DocumentPage
 
 CONTROL_STAGES = ('doc_text',)
@@ -90,7 +90,7 @@ def _ready(db, job, name):
 
 
 def on_stage_completed(db, job, stage):
-    """Called under the scheduler mutex after durable object validation."""
+    """Caller holds the job after durable object validation."""
     document = db.get(Document, job.id)
     if stage.name == 'doc_prepare':
         from .quota import reserve_document
@@ -154,7 +154,7 @@ def finish_failed(db, job, error):
 
 def complete_control(lease_id, result):
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_lease_jobs(db, [lease_id])
         lease = db.get(ExecutionLease, lease_id)
         result_hash = digest(result)
         if lease and lease.completed_at and lease.outcome == 'succeeded' and lease.result_hash == result_hash:
@@ -191,7 +191,7 @@ def reset_workspace(db, job, document):
 def fail_lease(lease_id, error, *, token=None, node_id=None, recovering=False, workspace_generation=None):
     from ..workers import _scoped
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_lease_jobs(db, [lease_id])
         lease = db.get(ExecutionLease, lease_id)
         _scoped(lease, token, node_id)
         if lease.completed_at or (recovering and lease.expires_at > now()):
@@ -258,21 +258,21 @@ def expire_offline_workspaces(limit=50):
     from .config import get_document_settings
     cutoff = now() - timedelta(hours=get_document_settings().waiting_retention_hours)
     with session_factory()() as db:
-        candidate_ids = list(db.scalars(select(Job.id).join(Document, Document.job_id == Job.id)
+        candidates = db.execute(select(Job.id, Document.owner_node_id).join(Document, Document.job_id == Job.id)
             .join(ComputeNode, ComputeNode.id == Document.owner_node_id).where(
                 Job.workflow_kind == 'document', Job.status.not_in((*TERMINAL, 'outcome_unknown')),
                 Document.reserved_at.is_not(None),
                 func.coalesce(ComputeNode.heartbeat_at, Document.reserved_at) <= cutoff,
                 ~select(ExecutionLease.id).where(ExecutionLease.job_id == Job.id,
                     ExecutionLease.completed_at.is_(None)).exists())
-            .order_by(Document.reserved_at, Job.id).limit(limit)))
+            .order_by(Document.reserved_at, Job.id).limit(limit)).all()
     changed = 0
-    for job_id in candidate_ids:
+    for job_id, owner in candidates:
         with session_factory()() as db:
-            lock_scheduler(db)
+            node = locked_node(db, owner)
+            lock_jobs(db, [job_id])
             job, document = db.get(Job, job_id), db.get(Document, job_id)
-            node = db.get(ComputeNode, document.owner_node_id) if document.owner_node_id else None
-            if (job.status in TERMINAL or job.status == 'outcome_unknown' or not document.reserved_at or not node
+            if (document.owner_node_id != owner or job.status in TERMINAL or job.status == 'outcome_unknown' or not document.reserved_at or not node
                     or (node.heartbeat_at or document.reserved_at) > cutoff
                     or db.scalar(select(ExecutionLease.id).where(ExecutionLease.job_id == job_id,
                         ExecutionLease.completed_at.is_(None)).limit(1))):
@@ -298,7 +298,7 @@ def claim_control(db, executor_id):
     from ..scheduler import start_lease
     from .config import get_document_settings
     cfg = get_document_settings()
-    # Indexed bounded candidate election outside the global admission lock.
+    # Inspect only the bounded head before taking shared-pool capacity.
     queue = (select(JobStage, Job).join(Job, Job.id == JobStage.job_id)
         .join(Document, Document.job_id == Job.id).where(
         Job.workflow_kind == 'document', Job.status.in_(['preflight', 'queued', 'running']),
@@ -307,20 +307,24 @@ def claim_control(db, executor_id):
         JobStage.status == 'ready', JobStage.available_at <= now()))
     ordered = queue.order_by(JobStage.service_priority.desc(), JobStage.available_at, JobStage.id)
     candidate_ids = list(db.scalars(ordered.with_only_columns(JobStage.id).limit(32)))
-    lock_scheduler(db)
-    node = db.get(ComputeNode, NODE_ID, populate_existing=True)
+    if not candidate_ids and db.get(ComputeNode, NODE_ID) is not None:
+        return None
+    node = locked_node(db, NODE_ID)
+    if node is None:
+        lock_scheduler(db)  # First worker only: an absent capacity row cannot be row-locked.
+        node = locked_node(db, NODE_ID)
     if node is None:
         node = ComputeNode(id=NODE_ID, name='文件后台处理', resource_id=NODE_ID,
             capabilities=list(CONTROL_STAGES), capacity=cfg.worker_slots, engine_version='control', device='network',
             desired_config={'execution_slots': cfg.worker_slots}, applied_config_version=1)
         db.add(node)
         db.flush()
-    node.heartbeat_at = now()
     if not candidate_ids:
         return None
     free, ordinary = slot_budget(db, node)
     if not free:
         return None
+    lock_jobs(db, select(JobStage.job_id).where(JobStage.id.in_(candidate_ids)))
     row = db.execute(ordered.where(JobStage.id.in_(candidate_ids), JobStage.service_priority >= int(not ordinary)).limit(1)
         .execution_options(populate_existing=True)).first()
     if not row or (not row[0].service_priority and db.scalar(select(queue.where(JobStage.service_priority > 0).exists()))):

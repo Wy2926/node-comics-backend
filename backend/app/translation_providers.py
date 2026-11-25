@@ -141,8 +141,9 @@ def provider_profile(db, provider_id=None, *, purpose='text', routing_key='', pl
     return provider_resolver(db, provider_id, purpose=purpose, plan_id=plan_id)(routing_key)
 
 
-def require_enabled(db, profile):
-    provider = db.get(TranslationProvider, profile['provider_id'])
+def require_enabled(db, profile, *, lock=False):
+    provider = db.get(TranslationProvider, profile['provider_id'], with_for_update={'read': True} if lock else None,
+                      populate_existing=lock)
     if not provider:
         raise TextError('TEXT_PROVIDER_UNAVAILABLE', '翻译供应商不存在')
     if not provider.enabled:

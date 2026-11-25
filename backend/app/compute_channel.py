@@ -5,20 +5,20 @@ from datetime import timedelta
 import anyio
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import Field, ValidationError, model_validator
-from sqlalchemy import or_, select
+from sqlalchemy import or_
 from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketState
 
-from .compute_v3 import config_payload, lease_payload, page_update, receipt, stamp
+from .compute_v3 import changed_translations, checked_page_deadline, config_payload, lease_payload, node_lease_states, receipt, stamp
 from .db import session_factory
 from .errors import ProcessingError, problem
 from .models import now, uid
 from .node_auth import node_auth
 from .notifications import hub
 from .providers import digest
-from .queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
+from .queue_models import ComputeClaim, ComputeNode, ExecutionLease
 from .request_models import RequestBody
-from .scheduler import claim_batch, has_eligible_work, lock_scheduler, paid_reserve, prepare_claim_candidates, ready_page_priority
+from .scheduler import claim_prepared, has_eligible_work, locked_node, paid_reserve, prepare_claim_candidates, ready_page_priority
 
 router = APIRouter(prefix='/internal/compute/v3')
 RECONCILE_SECONDS = 5
@@ -43,9 +43,8 @@ class Pull(RequestBody):
 
 def authenticated(node_id, authorization):
     with session_factory()() as db:
-        lock_scheduler(db)
+        node = locked_node(db, node_id)
         node_auth(authorization, node_id, db)
-        node = db.get(ComputeNode, node_id)
         if node.runtime_report.get('protocol_version') != 3:
             problem('PROTOCOL_MISMATCH', '请先注册整页协议', 409)
         connection = uid()
@@ -55,8 +54,8 @@ def authenticated(node_id, authorization):
         return connection
 
 
-def current_node(db, identity, connection):
-    node = db.get(ComputeNode, identity, populate_existing=True)
+def current_node(db, identity, connection, *, lock=False):
+    node = locked_node(db, identity) if lock else db.get(ComputeNode, identity)
     if not node or node.runtime_report.get('channel_id') != connection:
         problem('NODE_AUTH_REQUIRED', '计算节点连接已失效', 401)
     return node
@@ -64,8 +63,7 @@ def current_node(db, identity, connection):
 
 def withdraw(identity, connection):
     with session_factory()() as db:
-        lock_scheduler(db)
-        node = current_node(db, identity, connection)
+        node = current_node(db, identity, connection, lock=True)
         node.runtime_report = {**node.runtime_report, 'dispatch_slots': 0, 'dispatch_documents': 0}
         db.commit()
 
@@ -77,8 +75,7 @@ def assign(identity, connection, body):
         key = (identity, body.request_id)
         prepared = (prepare_claim_candidates(db, identity, ['page'], limit=body.count)
                     if body.count and not db.get(ComputeClaim, key) else None)
-        lock_scheduler(db)
-        node = current_node(db, identity, connection)
+        node = current_node(db, identity, connection, lock=True)
         config = config_payload(node)
         saved = db.get(ComputeClaim, key, populate_existing=True)
         request_hash = digest(body.model_dump())
@@ -90,8 +87,7 @@ def assign(identity, connection, body):
             if body.config_version != node.config_version:
                 problem('NODE_CONFIG_CONFLICT', '领取前需要同步配置', 409)
             cutoff = now() - timedelta(seconds=PREFERENCE_SECONDS)
-            leases = (claim_batch(db, identity, ['page'], limit=body.count, prepared=prepared, steal_before=cutoff,
-                                  higher_work=has_document_work)
+            leases = (claim_prepared(db, node, prepared, prepared.limit, steal_before=cutoff, higher_work=has_document_work)
                       if prepared else [])
             if not leases and body.document_count and (document := claim_document(db, node, steal_before=cutoff)):
                 leases = [document]
@@ -118,26 +114,32 @@ def snapshot(identity, connection, tracked, interest):
     from .documents.compute import NODE_STAGES, has_document_work, live
     with session_factory()() as db:
         node = current_node(db, identity, connection)
-        rows = db.execute(select(ExecutionLease, JobStage.name, JobStage.service_priority).join(JobStage).where(
-            ExecutionLease.node_id == identity,
+        rows = db.execute(node_lease_states(identity).where(
             or_(ExecutionLease.completed_at.is_(None), ExecutionLease.id.in_(tracked)))).all()
-        active = {lease.id for lease, _, _ in rows if not lease.completed_at}
-        ordinary = sum(1 for lease, _, rank in rows if not lease.completed_at and not rank)
+        active = {r.ExecutionLease.id for r in rows if not r.ExecutionLease.completed_at}
+        ordinary = sum(1 for r in rows if not r.ExecutionLease.completed_at and not r.JobStage.service_priority)
         replies = []
-        for lease, stage, _ in rows:
-            if stage == 'page':
-                if reply := page_update(db, lease):
-                    replies.append(reply)
-                continue
-            if stage not in NODE_STAGES:
+        pending = []
+        for row in rows:
+            lease, stage = row.ExecutionLease, row.JobStage.name
+            if stage != 'page' and stage not in NODE_STAGES:
                 continue
             if lease.completed_at:
                 replies.append(receipt(lease))
+            elif stage == 'page':
+                try:
+                    checked_page_deadline(row)
+                except ProcessingError as error:
+                    replies.append({'lease_id': lease.id, 'status': 'stop', 'code': error.code})
+                    continue
+                pending.append((lease.id, row, tracked.get(lease.id)))
             else:
                 try:
                     live(db, lease)
                 except ProcessingError:
                     replies.append({'lease_id': lease.id, 'status': 'stop', 'code': 'LEASE_STOPPED'})
+        for key, translated in changed_translations(db, pending):
+            replies.append({'lease_id': key, 'status': 'active', 'translations': translated})
         # A hint doesn't reserve a stage or bind a document workspace.
         available = False
         if interest and node.enabled and interest.config_version == node.config_version and len(active) < node.capacity:
@@ -165,7 +167,7 @@ async def channel(socket: WebSocket, node_id: str):
         return
     notices = hub()
     receive = None
-    interest, previous, sent, tracked = None, None, {}, set()
+    interest, previous, tracked, stops = None, None, {}, {}
     clock = asyncio.get_running_loop().time
     hint_after = 0
 
@@ -219,11 +221,17 @@ async def channel(socket: WebSocket, node_id: str):
                     hint_after = clock() + PREFERENCE_SECONDS
                 if update:
                     await send({'type': 'updates', **update})
+                tracked = {key: tracked.get(key) for key in active}
                 for reply in replies:
-                    if sent.get(reply['lease_id']) != reply:
-                        await send({'type': 'updates', 'leases': [reply]})
-                sent = {reply['lease_id']: reply for reply in replies if reply['lease_id'] in active}
-                tracked = active
+                    key = reply['lease_id']
+                    if reply['status'] == 'stop':
+                        tracked[key] = None
+                        if stops.get(key) == reply['code']:
+                            continue
+                    elif reply['status'] == 'active':
+                        tracked[key] = reply['translations']['revision']
+                    await send({'type': 'updates', 'leases': [reply]})
+                stops = {reply['lease_id']: reply['code'] for reply in replies if reply['status'] == 'stop'}
                 delay = hint_after - clock()
                 with anyio.move_on_after(min(RECONCILE_SECONDS, delay) if interest and delay > 0 else RECONCILE_SECONDS):
                     await wake.wait()

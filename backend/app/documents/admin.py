@@ -11,7 +11,7 @@ from ..errors import ProcessingError, problem
 from ..models import Job, TextCall, User, now
 from ..queue_models import ExecutionLease
 from ..request_models import RequestBody
-from ..scheduler import lock_scheduler, touch_job
+from ..scheduler import lock_jobs, touch_job
 from .models import Document
 from .workflow import finish_failed
 
@@ -27,7 +27,7 @@ class ResolveUnknown(RequestBody):
 
 @router.post('/{job_id}/resolve-unknown')
 def resolve_unknown(job_id: UUID, body: ResolveUnknown, actor: User = Depends(admin), db: Session = Depends(get_db)):
-    lock_scheduler(db)
+    lock_jobs(db, [str(job_id)])
     job, document = db.get(Job, str(job_id)), db.get(Document, str(job_id))
     if not document or not job or job.workflow_kind != 'document':
         problem('NOT_FOUND', '找不到文件任务', 404)

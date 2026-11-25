@@ -8,7 +8,7 @@ from ..entitlement_models import QuotaPeriod
 from ..entitlements import DAILY, MONTHLY, _automatic_period, finish_period, is_operator_plus, locked_user, requires_paid, reserve_period
 from ..errors import problem
 from ..models import Job, Ledger, now, uid
-from ..scheduler import lock_scheduler, touch_job
+from ..scheduler import touch_job, write_rows
 from .config import MAX_PAGES
 from .models import Document, DocumentPage, DocumentQuotaAllocation
 
@@ -76,10 +76,8 @@ def _options(db, user, scope, at, multiplier):
 
 def reserve_document(db, job):
     """Reserve all verified pages or none; caller commits and starts OCR explicitly."""
-    lock_scheduler(db)
     user = locked_user(db, job.owner_id)
-    job = db.scalar(select(Job).where(Job.id == job.id, Job.workflow_kind == 'document')
-                    .with_for_update().execution_options(populate_existing=True))
+    job = write_rows(db, select(Job).where(Job.id == job.id, Job.workflow_kind == 'document')).one_or_none()
     document = db.scalar(select(Document).where(Document.job_id == job.id).with_for_update()
                          .execution_options(populate_existing=True)) if job else None
     if document is None:
@@ -118,6 +116,10 @@ def reserve_document(db, job):
         touch_job(db, job)
         return False
 
+    # Different books can consume the same buckets in different pricing orders.
+    period_ids = [period.id for period, *_ in plan if period is not None]
+    if len(period_ids) > 1:
+        write_rows(db, select(QuotaPeriod.id).where(QuotaPeriod.id.in_(period_ids)).order_by(QuotaPeriod.id)).all()
     offset = 0
     for period, term, service, revision, amount in plan:
         units = amount * multiplier
@@ -176,13 +178,11 @@ def _settle_pages(db, job, pages, allocation_id, period_id, kind, reserved, succ
 
 def settle_document(db, job, *, success=True):
     """Exactly once, using the original per-page allocation even after expiry."""
-    lock_scheduler(db)
-    job = db.scalar(select(Job).where(Job.id == job.id, Job.workflow_kind == 'document')
-                    .with_for_update().execution_options(populate_existing=True))
+    job = write_rows(db, select(Job).where(Job.id == job.id, Job.workflow_kind == 'document')).one_or_none()
     if not job or job.settlement != 'reserved':
         return
     allocations = list(db.scalars(select(DocumentQuotaAllocation).where(
-        DocumentQuotaAllocation.job_id == job.id).order_by(DocumentQuotaAllocation.id).with_for_update()))
+        DocumentQuotaAllocation.job_id == job.id).order_by(DocumentQuotaAllocation.period_id, DocumentQuotaAllocation.id)))
     pages = list(db.scalars(select(DocumentPage).where(DocumentPage.job_id == job.id)))
     gift = (job.entitlement or {}).get('document_unlimited_gift', {})
     gift_reserved = Decimal(str(gift.get('reserved', 0)))

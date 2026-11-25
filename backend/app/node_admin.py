@@ -17,7 +17,7 @@ from .node_config import NodeConfig
 from .control_pools import DOCUMENT_POOL_LIMITS, POOL_LIMITS
 from .queue_models import ComputeNode
 from .request_models import RequestBody
-from .scheduler import lock_scheduler
+from .scheduler import locked_node, lock_scheduler
 
 router = APIRouter(prefix='/v1/admin/compute-nodes', tags=['node administration'])
 
@@ -54,8 +54,8 @@ def validate_config(config):
         problem('NODE_CONFIG_INVALID', '心跳间隔不能超过租约时长的三分之一', 422)
 
 
-def compute_node(db, node_id, *, image_only=False):
-    node = db.get(ComputeNode, node_id)
+def compute_node(db, node_id, *, image_only=False, lock=False):
+    node = locked_node(db, node_id) if lock else db.get(ComputeNode, node_id)
     if not node or (image_only and node.engine_version == 'control'):
         problem('NODE_NOT_FOUND', '计算节点不存在', 404)
     return node
@@ -95,8 +95,7 @@ def get_config(node_id: str, user: User = Depends(admin), db: Session = Depends(
 
 @router.put('/{node_id}/config')
 def update(node_id: str, body: NodeUpdate, user: User = Depends(admin), db: Session = Depends(get_db)):
-    lock_scheduler(db)
-    node = compute_node(db, node_id)
+    node = compute_node(db, node_id, lock=True)
     if node.config_version != body.expected_version:
         problem('NODE_CONFIG_CONFLICT', '配置已更新，请刷新后重新保存', 409)
     before = configuration(node)
@@ -125,8 +124,7 @@ def update(node_id: str, body: NodeUpdate, user: User = Depends(admin), db: Sess
 
 @router.post('/{node_id}/rotate-credential')
 def rotate(node_id: str, user: User = Depends(admin), db: Session = Depends(get_db)):
-    lock_scheduler(db)
-    node = compute_node(db, node_id, image_only=True)
+    node = compute_node(db, node_id, image_only=True, lock=True)
     token = secrets.token_urlsafe(48)
     node.credential_hash = token_hash(token)
     node.runtime_report = {**node.runtime_report, 'channel_id': None, 'dispatch_slots': 0, 'dispatch_documents': 0}

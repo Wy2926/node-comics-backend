@@ -233,7 +233,7 @@ def test_claim_uses_one_connection_and_preserves_caller_uncommitted_writes(sched
         single.dispose()
 
 
-def test_claim_locks_scheduler_before_autoflushing_caller_job_changes(scheduler_case):
+def test_claim_locks_node_before_autoflushing_caller_job_changes(scheduler_case):
     job_id = add_job(scheduler_case)
     statements = []
 
@@ -254,7 +254,7 @@ def test_claim_locks_scheduler_before_autoflushing_caller_job_changes(scheduler_
             event.remove(engine(), 'before_cursor_execute', record)
             db.rollback()
     lock = next(index for index, statement in enumerate(statements)
-        if 'pg_advisory_xact_lock' in statement or statement.startswith('update scheduler_mutex'))
+        if 'from compute_nodes' in statement and 'for no key update' in statement)
     write = next(index for index, statement in enumerate(statements) if statement.startswith('update jobs'))
     assert lock < write, statements
 

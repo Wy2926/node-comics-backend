@@ -104,6 +104,23 @@ def test_nested_page_savepoints_notify_only_after_outer_commit(client):
     asyncio.run(run())
 
 
+def test_repeated_notifications_deduplicate_without_losing_rolled_back_topics(client):
+    from test_document_borrowing import statements
+    assert hub().ready.wait(3)
+    async def run():
+        with hub().subscribe('retry-topic') as wake, session_factory()() as db:
+            savepoint = db.begin_nested()
+            publish(db, 'retry-topic')
+            savepoint.rollback()
+            with statements() as sql:
+                publish(db, 'retry-topic')
+                publish(db, 'retry-topic')
+                db.commit()
+            assert sum('pg_notify' in s for s in sql) == 1
+            await asyncio.wait_for(wake.wait(), 2)
+    asyncio.run(run())
+
+
 def test_snapshot_contract_has_no_long_poll_parameters(client):
     schema = client.get('/openapi.json').json()
     for path in ['/v1/translations', '/v1/translations/{translation_id}']:

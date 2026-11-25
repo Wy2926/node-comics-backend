@@ -11,52 +11,30 @@ from .db import session_factory
 from .runtime import check_runtime
 from .errors import ProcessingError
 from .health import log_failure, probe_oidc, report_failure, report_progress
-from .jobs import settle
 from .models import Asset, Job, now
 from .queue_models import ExecutionLease, JobStage
 from .redis_state import AdmissionUnavailable
-from .scheduler import lock_scheduler, release_lease, touch_job
+from .scheduler import lock_jobs, lock_scheduler
 from .storage import get_store, StorageError
 from .uploads import expire_uploads, recover_received_uploads
-from .workers import fail_stage, finish_job
+from .workers import fail_stage
 
 def recover_lease(lease_id):
-    from .compute_v3 import recover_compute_results
-    with session_factory()() as recovery_db:
-        recover_compute_results(recovery_db)
-        recovery_db.commit()
     with session_factory()() as db:
         lease = db.get(ExecutionLease, lease_id)
         if not lease or lease.completed_at or lease.expires_at > now():
             return
-        job, stage = db.get(Job, lease.job_id), db.get(JobStage, lease.stage_id)
-        document_lease = job.workflow_kind == 'document'
-        expired_page = False
-        invalid_source = False
-        if stage.name == 'page':
-            from .compute_v3 import lease_deadline
-            expired_page = lease_deadline(db, lease) <= now()
-            invalid_source = not available(db.get(Asset, job.input_asset_id))
+        document_lease = db.get(Job, lease.job_id).workflow_kind == 'document'
+        if not document_lease and lease.result_hash and db.get(JobStage, lease.stage_id).name == 'page':
+            from .compute_v3 import recover_compute_result
+            if recover_compute_result(db, lease):
+                db.commit()
+                return
     if document_lease:
         from .documents.workflow import fail_lease
         fail_lease(lease_id, ProcessingError('WORKER_LEASE_EXPIRED', '文件节点失联，恢复可重复阶段'), recovering=True)
         return
-    if invalid_source and stage.name == 'page':
-        with session_factory()() as db:
-            lock_scheduler(db)
-            lease = db.get(ExecutionLease, lease_id)
-            stage, job = db.get(JobStage, lease.stage_id), db.get(Job, lease.job_id)
-            if lease.completed_at:
-                return
-            if stage.generation == lease.generation and not job.cancel_requested and not job.discard_output and job.status in {'queued', 'running'}:
-                from .uploads import pause_missing_input
-                release_lease(db, lease, 'failed')
-                stage.status = 'ready'
-                pause_missing_input(db, job)
-                db.commit()
-                return
-    code = ('ASSET_EXPIRED' if invalid_source else 'PAGE_DEADLINE_EXCEEDED' if expired_page else 'WORKER_LEASE_EXPIRED')
-    fail_stage(lease_id, ProcessingError(code, '计算节点失联，保留检查点并恢复可重复阶段'), recovering=True)
+    fail_stage(lease_id, ProcessingError('WORKER_LEASE_EXPIRED', '计算节点失联，保留检查点并恢复可重复阶段'), recovering=True)
 
 
 
@@ -78,9 +56,10 @@ def recover_missing_inputs(limit=100):
             source = db.get(Asset, job.input_asset_id)
             if get_store().exists(source.storage_key):
                 continue
-            lock_scheduler(db)
+            lock_jobs(db, [job_id])
             db.refresh(job)
-            if job.status != 'queued' or job.cancel_requested or job.discard_output:
+            if (job.status != 'queued' or job.cancel_requested or job.discard_output
+                    or available(db.get(Asset, job.input_asset_id, populate_existing=True))):
                 continue
             if db.scalar(select(ExecutionLease.id).where(ExecutionLease.job_id == job_id,
                     ExecutionLease.completed_at.is_(None)).limit(1)):
@@ -92,10 +71,6 @@ def recover_missing_inputs(limit=100):
 
 def recover_once():
     recover_missing_inputs()
-    from .compute_v3 import recover_compute_results
-    with session_factory()() as recovery_db:
-        recover_compute_results(recovery_db)
-        recovery_db.commit()
     try:
         recover_received_uploads()
     except AdmissionUnavailable as error:
@@ -110,7 +85,6 @@ def recover_once():
             log_failure("lease-recovery", error, lease_id=lease_id)
             continue
     with session_factory()() as db:
-        lock_scheduler(db)
         expire_uploads(db)
         db.commit()
 
@@ -122,7 +96,7 @@ _upload_cleanup_cursor = None
 
 def cleanup(db):
     """Only durable tombstones/terminal intents authorize physical deletion."""
-    from .assets import cleanup_inputs
+    from .assets import cleanup_inputs, cleanup_outputs
     from .scheduler import ACTIVE
     from .upload_models import UploadReservation
     global _lease_cleanup_cursor, _upload_cleanup_cursor
@@ -146,18 +120,10 @@ def cleanup(db):
             and_(Job.id.is_(None), Asset.created_at <= orphan_cutoff))).distinct().limit(200)))
     deleted = list(db.scalars(select(Asset).where(Asset.kind != 'original', Asset.deleted_at.is_not(None),
         Asset.purged_at.is_(None)).limit(200)))
-    files = [(asset.id, asset.storage_key) for asset in deleted]
     # Revoked assets cannot regain an authorization; no new grant path exists.
     db.commit()
     cleanup_inputs(originals)
-    for asset_id, key in files:
-        try:
-            get_store().delete(key)
-        except OSError:
-            continue
-        asset = db.get(Asset, asset_id)
-        asset.purged_at = now()
-    db.commit()
+    cleanup_outputs(db, deleted)
     # Keep lease pointers as tombstones, including after unlink: a cancelled
     # request may still finish writing and the next pass must remove that file.
     cutoff = now() - timedelta(seconds=settings().upload_body_timeout_seconds + 60)
@@ -210,6 +176,8 @@ def main():
     next_oidc_probe = 0
     next_campaign_scan = 0
     next_retention_scan = 0
+    next_checkpoint_scan = 0
+    checkpoint_cutoff = None
     next_cleanup = 0
     while not stopping.is_set():
         try:
@@ -220,6 +188,17 @@ def main():
                 with session_factory()() as db:
                     cleanup(db)
                 next_cleanup = time.monotonic() + 60
+            if checkpoint_cutoff is not None or time.monotonic() >= next_checkpoint_scan:
+                from .execution_retention import compact_checkpoints
+                if checkpoint_cutoff is None:
+                    checkpoint_cutoff = now()
+                    next_checkpoint_scan = time.monotonic() + 6 * 3600
+                # Drain one bounded transaction per recovery tick without chasing newly completed pages.
+                with session_factory()() as db:
+                    compacted = compact_checkpoints(db, at=checkpoint_cutoff)
+                    db.commit()
+                if not any(compacted.values()):
+                    checkpoint_cutoff = None
             if time.monotonic() >= next_retention_scan:
                 from .execution_retention import cleanup_execution_data
                 with session_factory()() as db:

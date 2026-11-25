@@ -11,14 +11,14 @@ def test_cleanup_cadence_preserves_recovery_and_retries(monkeypatch, fail_first_
     import threading
 
     clock = [0]
-    calls = {name: [] for name in ('recovery', 'cleanup', 'retention', 'progress', 'failure')}
+    calls = {name: [] for name in ('recovery', 'cleanup', 'retention', 'checkpoints', 'progress', 'failure')}
 
     class Stop:
         def is_set(self):
-            return clock[0] > 122
+            return clock[0] > 21604
 
         def wait(self, seconds):
-            clock[0] += seconds
+            clock[0] = 21600 if clock[0] == 122 else clock[0] + seconds
 
     class Session:
         def __enter__(self):
@@ -49,11 +49,18 @@ def test_cleanup_cadence_preserves_recovery_and_retries(monkeypatch, fail_first_
     monkeypatch.setattr(dispatcher, 'report_progress', lambda *_: calls['progress'].append(clock[0]))
     monkeypatch.setattr(dispatcher, 'report_failure', lambda *_: calls['failure'].append(clock[0]))
     monkeypatch.setattr(execution_retention, 'cleanup_execution_data', lambda _: calls['retention'].append(clock[0]))
+    def compact(db, *, at):
+        calls['checkpoints'].append((clock[0], at))
+        return {'checkpoints': 20 if len(calls['checkpoints']) == 1 else 0}
+    monkeypatch.setattr(execution_retention, 'compact_checkpoints', compact)
     monkeypatch.setattr(quota_campaigns, 'backfill_campaigns', lambda: None)
     dispatcher.main()
 
-    assert calls['recovery'] == list(range(0, 123, 2))
-    assert calls['cleanup'] == ([0, 2, 62, 122] if fail_first_cleanup else [0, 60, 120])
+    first = 2 if fail_first_cleanup else 0
+    assert calls['recovery'] == [*range(0, 123, 2), 21600, 21602, 21604]
+    assert calls['cleanup'] == ([0, 2, 62, 122] if fail_first_cleanup else [0, 60, 120]) + [21600]
     assert calls['failure'] == ([0] if fail_first_cleanup else [])
-    assert calls['progress'] == list(range(2 if fail_first_cleanup else 0, 123, 2))
-    assert calls['retention'] == list(range(2 if fail_first_cleanup else 0, 123, 10))
+    assert calls['progress'] == [*range(first, 123, 2), 21600, 21602, 21604]
+    assert calls['retention'] == [*range(first, 123, 10), 21600]
+    assert [t for t, _ in calls['checkpoints']] == [first, first + 2, first + 21600]
+    assert calls['checkpoints'][0][1] == calls['checkpoints'][1][1]

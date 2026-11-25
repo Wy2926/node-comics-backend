@@ -160,6 +160,38 @@ def test_claimability_uses_registered_languages(scheduler_case):
         assert not scheduler.has_claimable_work(db, node.id, ['page'])
 
 
+def test_idle_control_claim_does_not_take_the_global_lock(text_database):
+    from sqlalchemy import text
+    from app.control_pools import initialize_pools
+    with session_factory()() as other, session_factory()() as db:
+        initialize_pools(db)
+        previous = db.get(ComputeNode, 'control-text').heartbeat_at
+        scheduler.lock_scheduler(other)
+        db.execute(text("SET LOCAL lock_timeout = '250ms'"))
+        assert scheduler.claim_batch(db, 'control-text', ['text']) == []
+        db.commit()
+        assert db.get(ComputeNode, 'control-text').heartbeat_at == previous
+
+
+def test_repeated_scheduler_lock_does_not_escape_a_savepoint_or_transaction(text_database):
+    from sqlalchemy import text
+    with session_factory()() as db, session_factory()() as peer:
+        sp = db.begin_nested()
+        scheduler.lock_scheduler(db)
+        sp.rollback()
+        assert peer.scalar(text('SELECT pg_try_advisory_xact_lock(761349211)'))
+        peer.rollback()
+        scheduler.lock_scheduler(db)
+        with db.begin_nested():
+            scheduler.lock_scheduler(db)
+        assert not peer.scalar(text('SELECT pg_try_advisory_xact_lock(761349211)'))
+        db.commit()
+        assert peer.scalar(text('SELECT pg_try_advisory_xact_lock(761349211)'))
+        peer.rollback()
+        scheduler.lock_scheduler(db)
+        assert not peer.scalar(text('SELECT pg_try_advisory_xact_lock(761349211)'))
+
+
 def test_dispatch_refills_without_prefetch_and_rotates_pools(monkeypatch):
     pending, order = [], []
     class Executor:

@@ -111,11 +111,16 @@ def heartbeat(v3, leases, revision=None):
                     'translations_revision': revision, 'phase': 'text'} for lease in leases]})
 
 
-def text(lease):
+def claim_text():
     with session_factory()() as db:
         claimed = claim_stage(db, 'control-text', ['text'])
-        assert claimed and claimed.job_id == lease['job_id']
         db.commit()
+        return claimed
+
+
+def text(lease):
+    claimed = claim_text()
+    assert claimed and claimed.job_id == lease['job_id']
     run_control_stage(claimed.id)
 
 
@@ -183,10 +188,10 @@ def test_no_text_checkpoint_is_terminal_idempotent_and_never_calls_llm(v3):
     lease = claim(v3)[0]
     body, reply = analyze(v3, lease, empty=True)
     assert reply['receipt']['job_status'] == 'no_text'
-    from app.execution_retention import cleanup_execution_data
+    from app.execution_retention import compact_checkpoints
     from app.models import ClassicState
     with session_factory()() as db:
-        cleanup_execution_data(db)
+        compact_checkpoints(db)
         db.commit()
         assert db.get(ClassicState, lease['job_id']).retention_stage == 1
     assert request(v3, f'/leases/{lease["lease_id"]}/analysis', body).json() == reply
@@ -221,9 +226,9 @@ def test_analysis_text_revision_and_delivery_settle_once(v3, png):
     response = deliver(v3, lease, result, data)
     assert response.status_code == 200, response.text
     assert response.json()['job_status'] == 'succeeded'
-    from app.execution_retention import cleanup_execution_data
+    from app.execution_retention import compact_checkpoints
     with session_factory()() as db:
-        cleanup_execution_data(db)
+        compact_checkpoints(db)
         db.commit()
     assert request(v3, f'/leases/{lease["lease_id"]}/analysis', body).json()['receipt'] == response.json()
     assert deliver(v3, lease, result, data).json() == response.json()
@@ -234,20 +239,70 @@ def test_analysis_text_revision_and_delivery_settle_once(v3, png):
         assert db.scalar(select(func.count()).select_from(TextCall)) == 1
 
 
-def test_page_update_reads_committed_translations_even_with_cached_checkpoint(v3):
-    from app.compute_v3 import page_update
+@pytest.mark.parametrize('checkpoint_version', ['current', 'legacy', 'revision_only'])
+def test_channel_and_heartbeat_reconcile_committed_text_with_cached_checkpoint(v3, monkeypatch, checkpoint_version):
+    from app import compute_channel, compute_v3
     from app.models import ClassicState
     v3['create']()
     lease = claim(v3)[0]
-    body, _ = analyze(v3, lease)
+    checkpoint = analysis_for(lease)
+    if checkpoint_version == 'current':
+        checkpoint['quality_flags'] = ['unrecognized_regions']
+    body = {'lease_token': lease['lease_token'], 'analysis': checkpoint, 'analysis_hash': digest(checkpoint)}
+    assert request(v3, f'/leases/{lease["lease_id"]}/analysis', body).status_code == 200
+    identity = v3['node']['node_id']
+    connection = compute_channel.authenticated(identity, v3['auth']['Authorization'])
     with session_factory()() as reader:
-        page = reader.get(ExecutionLease, lease['lease_id'])
         cached = reader.get(ClassicState, lease['job_id'])
-        assert not cached.translations and page_update(reader, page) is None
+        assert not cached.translations and compute_v3.translations_payload(reader, lease['job_id']) is None
         text(lease)  # The worker commits in another session while the channel is reading.
-        payload = page_update(reader, page)['translations']
-        assert payload['analysis_hash'] == body['analysis_hash']
-        assert payload['translations'] == {'0': 'Hello'}
+        expected = {'analysis_hash': body['analysis_hash'], 'language': 'en', 'translations': {'0': 'Hello'}}
+        expected['revision'] = digest(expected)
+        with session_factory()() as db:
+            stage = db.scalar(select(JobStage).where(JobStage.job_id == lease['job_id'], JobStage.name == 'text'))
+            assert stage.result['revision'] == expected['revision']
+            if checkpoint_version != 'current':
+                stage.result = {'revision': expected['revision']} if checkpoint_version == 'revision_only' else {}
+                db.commit()
+        with monkeypatch.context() as patch:
+            if checkpoint_version == 'current':
+                patch.setattr(compute_v3, 'digest', lambda _: pytest.fail('Rehashed a frozen checkpoint'))
+            assert compute_v3.translations_payload(reader, lease['job_id']) == expected
+            assert compute_channel.snapshot(identity, connection, {}, None)[1][0]['translations'] == expected
+            assert compute_channel.snapshot(identity, connection, {lease['lease_id']: expected['revision']}, None)[1] == []
+            assert heartbeat(v3, [lease], 'outdated').json()['leases'][0]['translations'] == expected
+            matched = heartbeat(v3, [lease], expected['revision']).json()['leases'][0]
+            assert matched['status'] == 'active' and 'expires_at' in matched and 'translations' not in matched
+
+    from test_document_borrowing import statements
+    if checkpoint_version == 'legacy':
+        with session_factory()() as db:
+            page_stage = db.get(JobStage, db.get(ExecutionLease, lease['lease_id']).stage_id)
+            page_stage.result = None  # Historical page without either stored hash.
+            db.commit()
+        assert request(v3, '/nodes/register', v3['registration']).json()['leases'][0]['analysis_hash'] == body['analysis_hash']
+        assert request(v3, f'/leases/{lease["lease_id"]}/analysis', body).status_code == 200
+    result, data = result_for(v3, lease, None)
+    with statements() as sql:
+        delivered = deliver(v3, lease, result, data)
+    assert delivered.status_code == 200 and delivered.json()['job_status'] == 'succeeded'
+    assert any('classic_states.translations' in s for s in sql) == (checkpoint_version != 'current')
+    with session_factory()() as db:
+        job = db.get(Job, lease['job_id'])
+        assert job.settlement == ('released' if checkpoint_version == 'current' else 'settled')
+
+
+def test_heartbeat_enforces_text_deadline_without_loading_checkpoint(v3):
+    from app.models import ClassicState
+    v3['create']()
+    lease = claim(v3)[0]
+    analyze(v3, lease)
+    with session_factory()() as db:
+        state = db.get(ClassicState, lease['job_id'])
+        state.artifacts = {'analysis_accepted_at': (now() - timedelta(hours=2)).isoformat() + 'Z'}
+        db.commit()
+    reply = heartbeat(v3, [lease]).json()['leases'][0]
+    assert (reply['status'], reply['code']) == ('stop', 'PAGE_DEADLINE_EXCEEDED')
 
 
 @pytest.mark.parametrize('representation', ['overlay-v1', 'original'])
@@ -307,7 +362,7 @@ def test_mixed_heartbeat_cancellation_and_stopped_ack(v3):
     with session_factory()() as db:
         db.get(Job, leases[0]['job_id']).cancel_requested = True
         db.commit()
-    reply = heartbeat(v3, [leases[0], {**leases[1], 'lease_token': 'invalid'}, leases[1]]).json()['leases']
+    reply = heartbeat(v3, [leases[0], {**leases[1], 'lease_token': '无效'}, leases[1]]).json()['leases']
     assert [item['status'] for item in reply] == ['stop', 'stop', 'active']
     assert read_input(v3, leases[0]).status_code == 200
     response = request(v3, f'/leases/{leases[0]["lease_id"]}/complete',
@@ -522,7 +577,7 @@ def test_result_written_before_lost_commit_is_recovered(v3, png, monkeypatch):
         db.get(ExecutionLease, lease['lease_id']).expires_at = now() - timedelta(seconds=1)
         db.commit()
     with session_factory()() as db:
-        assert compute_v3.recover_compute_results(db) == 1
+        assert compute_v3.recover_compute_result(db, db.get(ExecutionLease, lease['lease_id']))
         db.commit()
     reply = deliver(v3, lease, result, data)
     assert reply.status_code == 200 and reply.json()['job_status'] == 'succeeded'
@@ -644,7 +699,7 @@ def test_verification_finishing_after_deadline_is_never_recovered(v3, png, monke
         record.expires_at = now() - timedelta(seconds=1)
         db.commit()
     with session_factory()() as db:
-        assert compute_v3.recover_compute_results(db) == 0
+        assert not compute_v3.recover_compute_result(db, db.get(ExecutionLease, lease['lease_id']))
         assert db.get(Job, lease['job_id']).output_asset_id is None
         assert db.get(Job, lease['job_id']).settlement == 'reserved'
 
@@ -680,7 +735,7 @@ def test_timely_received_result_can_publish_or_recover_after_deadline(v3, png, m
             record = db.get(ExecutionLease, lease['lease_id'])
             assert compute_v3.accepted_delivery(record)
             assert record.completed_at is None
-            assert compute_v3.recover_compute_results(db) == 1
+            assert compute_v3.recover_compute_result(db, record)
             db.commit()
     else:
         response = deliver(v3, lease, result, data)
@@ -688,7 +743,7 @@ def test_timely_received_result_can_publish_or_recover_after_deadline(v3, png, m
     reply = deliver(v3, lease, result, data)
     assert reply.status_code == 200 and reply.json()['job_status'] == 'succeeded'
     with session_factory()() as db:
-        assert compute_v3.recover_compute_results(db) == 0
+        assert not compute_v3.recover_compute_result(db, db.get(ExecutionLease, lease['lease_id']))
 
 
 def test_invalid_identity_file_has_no_accepted_receipt_to_recover(v3, png):
@@ -706,7 +761,7 @@ def test_invalid_identity_file_has_no_accepted_receipt_to_recover(v3, png):
         record.expires_at = now() - timedelta(seconds=1)
         db.commit()
     with session_factory()() as db:
-        assert compute_v3.recover_compute_results(db) == 0
+        assert not compute_v3.recover_compute_result(db, db.get(ExecutionLease, lease['lease_id']))
         assert db.get(Job, lease['job_id']).status == 'running'
 
 
@@ -727,7 +782,7 @@ def test_identity_receipt_survives_crash_before_final_commit(v3, png, monkeypatc
         db.get(ExecutionLease, lease['lease_id']).expires_at = now() - timedelta(seconds=1)
         db.commit()
     with session_factory()() as db:
-        assert compute_v3.recover_compute_results(db) == 1
+        assert compute_v3.recover_compute_result(db, db.get(ExecutionLease, lease['lease_id']))
         db.commit()
     assert deliver(v3, lease, result).json()['job_status'] == 'succeeded'
 

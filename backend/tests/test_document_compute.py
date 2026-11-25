@@ -509,13 +509,13 @@ def test_offline_expiry_skips_active_lease_and_rechecks_reconnected_owner(docume
         db.commit()
     assert workflow.expire_offline_workspaces() == 0
     assert complete(documents, lease).status_code == 200
-    original_lock = workflow.lock_scheduler
-    def reconnect(db):
+    original_lock = workflow.locked_node
+    def reconnect(db, node_id):
         with session_factory()() as other:
             other.get(ComputeNode, documents.v3['node']['node_id']).heartbeat_at = now()
             other.commit()
-        original_lock(db)
-    monkeypatch.setattr(workflow, 'lock_scheduler', reconnect)
+        return original_lock(db, node_id)
+    monkeypatch.setattr(workflow, 'locked_node', reconnect)
     assert workflow.expire_offline_workspaces() == 0
     with session_factory()() as db:
         assert db.get(Job, job_id).status == 'running'

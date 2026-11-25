@@ -14,7 +14,7 @@ from app.errors import ProcessingError
 from app.languages import LANGUAGES
 from app.models import Asset, now, uid
 from app.queue_models import ComputeNode
-from app.scheduler import claim_stage, current_lease, lock_scheduler, release_lease, touch_job
+from app.scheduler import claim_stage, current_lease, lock_lease_jobs, release_lease
 from app.translation_fonts import FONT_LANGUAGES
 from app.workers import fail_stage, finish_job, finish_stopped_lease, _heartbeat
 
@@ -51,7 +51,7 @@ class SyntheticPageWorker:
                 image.save(buffer, 'WEBP', lossless=True)
                 data, bbox = buffer.getvalue(), {'x': 0, 'y': 0, 'width': image.width, 'height': image.height}
             with session_factory()() as db:
-                lock_scheduler(db)
+                lock_lease_jobs(db, [lease_id])
                 lease, stage, job = current_lease(db, lease_id, token)
                 if data is not None:
                     output = create_asset(db, job.owner_id, data, kind='classic', parent_id=job.input_asset_id,
@@ -60,7 +60,6 @@ class SyntheticPageWorker:
                 stage.status, stage.completed_at = 'succeeded', now()
                 finish_job(db, job, 'succeeded' if data is not None else 'no_text')
                 release_lease(db, lease, 'succeeded')
-                touch_job(db, job)
                 db.commit()
         except ProcessingError as error:
             if error.code == 'LEASE_EXPIRED':

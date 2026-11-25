@@ -10,7 +10,7 @@ from ..db import session_factory
 from ..errors import ProcessingError
 from ..models import Job, TextCall, now, uid
 from ..providers import digest
-from ..scheduler import lock_scheduler, touch_job
+from ..scheduler import lock_jobs, touch_job
 from ..translation_provider_limits import UNSTARTED_ERRORS, release_unstarted_request, reserve_request
 from ..translation_providers import require_enabled
 from ..translation_output import printed_text, translation_json
@@ -155,7 +155,7 @@ def load_sources(pages, limit, check):
 def _record_call(call_id, *, response=None, error=None):
     """Cost belongs to the call even if its execution lease was lost meanwhile."""
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_jobs(db, select(TextCall.job_id).where(TextCall.id == call_id))
         call = db.get(TextCall, call_id)
         job, document = db.get(Job, call.job_id), db.get(Document, call.job_id)
         usage = response.usage if response else getattr(error, 'usage', None)
@@ -222,14 +222,14 @@ def _current_text(db, job_id, lease_id):
 
 def _intent(job_id, lease_id, request_hash, input_payload, bound):
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_jobs(db, [job_id])
         _, _, job = _current_text(db, job_id, lease_id)
         document = db.get(Document, job_id)
         if document.text_state != 'pending' or document.text_call_id:
             raise TextError('DOCUMENT_CALL_ALREADY_SENT', '整本请求已有持久化发送记录，不能重复发送')
         profile = job.config['text']
         limits = policy(profile)
-        provider = require_enabled(db, profile)
+        provider = require_enabled(db, profile, lock=True)
         sequence = (db.scalar(select(func.max(TextCall.sequence)).where(TextCall.job_id == job_id)) or 0) + 1
         call_id = uid()
         reserve_request(provider, call_id, priority=job.service_priority)
@@ -299,7 +299,7 @@ def run_text_stage(job_id, lease_id, check=lambda: None):
         content['revision'] = digest(content)
         page_refs[page_index] = content
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_jobs(db, [job_id])
         _, _, job = _current_text(db, job_id, lease_id)
         document = db.get(Document, job_id)
         for page_index, ref in page_refs.items():
@@ -325,7 +325,7 @@ def reconcile_saved_response(job_id):
         raise ProcessingError('DOCUMENT_TEXT_CONFLICT', '待核实响应不匹配全文请求')
     _record_call(call_id, response=TextResponse(data['content'], data.get('usage'), data.get('request_id')))
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_jobs(db, [job_id])
         document, job = db.get(Document, job_id), db.get(Job, job_id)
         if job.status == 'outcome_unknown' and document.text_call_id == call_id and document.text_state == 'received':
             stage = stage_for(db, job_id, 'doc_text')

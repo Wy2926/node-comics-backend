@@ -32,12 +32,11 @@ def decode_bounded(value, limit=MAX_IMAGE_BYTES):
 
 
 def current(db, job_id, lease_id):
-    from .scheduler import current_lease, lock_scheduler
-    lock_scheduler(db)
+    from .scheduler import current_lease
     lease, stage, job = current_lease(db, lease_id)
     if job.id != job_id or stage.name != 'text':
         raise ProcessingError('LEASE_EXPIRED', '文本执行租约已失效')
-    if job.cancel_requested or job.discard_output or not available(db.get(Asset, job.input_asset_id)):
+    if not available(db.get(Asset, job.input_asset_id)):
         raise ProcessingError('ASSET_EXPIRED', '原图已删除、过期或任务已取消')
     return job
 
@@ -106,11 +105,13 @@ def unresolved_call(db, job_id):
 
 
 def reserve_call(job_id, lease_id, segments, language):
+    from .scheduler import lock_jobs
     with session_factory()() as db:
+        lock_jobs(db, [job_id])
         job = current(db, job_id, lease_id)
         profile = job.config['text']
         from .translation_providers import require_enabled
-        provider = require_enabled(db, profile)
+        provider = require_enabled(db, profile, lock=True)
         if text_remaining(db, job) < profile['timeout_seconds']:
             raise TextError('TEXT_DEADLINE_EXCEEDED', '此页已达到文本处理总时限')
         pending = unresolved_call(db, job_id)
@@ -141,9 +142,9 @@ def reserve_call(job_id, lease_id, segments, language):
 
 def complete_call(call_id, lease_id, response=None, error=None, translations=None):
     with session_factory()() as db:
-        from .scheduler import lock_scheduler
-        lock_scheduler(db)
-        call = db.scalar(select(TextCall).where(TextCall.id == call_id).with_for_update())
+        from .scheduler import lock_jobs
+        lock_jobs(db, select(TextCall.job_id).where(TextCall.id == call_id))
+        call = db.get(TextCall, call_id)
         if call.completed_at:
             return
         usage = response.usage if response else getattr(error, 'usage', None)
@@ -153,7 +154,7 @@ def complete_call(call_id, lease_id, response=None, error=None, translations=Non
             call.failed_output = response.content if response is not None else error.failed_output
         release_unstarted_request(call.provider_id, call_id, error)
         call.completed_at = now()
-        job = db.scalar(select(Job).where(Job.id == call.job_id).with_for_update(key_share=True))
+        job = db.get(Job, call.job_id)
         if usage is not None:
             call.usage, call.cost_state = usage, 'estimated'
             profile = job.config['text']

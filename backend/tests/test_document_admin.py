@@ -282,11 +282,13 @@ def test_document_pool_save_restart_and_claim_preserve_administrator_capacity(fl
     assert saved.status_code == 200, saved.text
     assert flow.case.client.put(path, headers=auth, json=body).status_code == 409
     with session_factory()() as db:
+        entitlement = db.get(Job, flow.job_id).entitlement
         for _ in range(slots + 1):
             job = seed_job(db, flow.case.owner, 'document', 'running')
+            job.entitlement = entitlement  # The real book's paid stage may fill the reserved slot.
             db.flush()
             db.get(Document, job.id).owner_node_id = 'document-gpu-fixture'
-            db.add(JobStage(job_id=job.id, name='doc_text', status='ready'))
+            db.add(JobStage.for_job(job, name='doc_text', status='ready'))
         db.commit()
         initialize_pools(db)  # The restart/bootstrap path must not reset admin state.
     monkeypatch.setattr(config, 'get_document_settings', lambda: SimpleNamespace(worker_slots=2))

@@ -17,10 +17,10 @@ from .runtime import check_runtime
 from .errors import ProcessingError, problem
 from .health import log_failure, report_failure, report_progress
 from .jobs import settle
-from .models import Attempt, Job, now
+from .models import Asset, Attempt, Job, now
 from .providers import digest
 from .queue_models import ExecutionLease, JobStage
-from .scheduler import (claim_batch, current_lease, has_claimable_work, heartbeat_lease, lock_scheduler,
+from .scheduler import (claim_batch, current_lease, has_claimable_work, heartbeat_lease, lock_lease_jobs,
                         next_control_delay, release_lease, touch_job)
 from .storage import StorageError
 
@@ -57,21 +57,23 @@ def finish_job(db, job, status, *, error=None):
 def complete_stage(lease_id, result, *, token=None, node_id=None):
     result_hash = digest(result)
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_lease_jobs(db, [lease_id])
         if _finished(db, lease_id, token, node_id, result_hash):
             return
         lease, stage, job = current_lease(db, lease_id, token)
-        # Freeze the accepted payload before any output PUT. Concurrent retries
-        # with the same bytes are safe; a conflicting reply must never overwrite
-        # the object that a previous completion has already delivered.
+        # Only an identical reply may replay this stage's frozen completion.
         if lease.result_hash is not None and lease.result_hash != result_hash:
             raise ProcessingError("COMPLETION_CONFLICT", "此执行代次已经接收了另一份阶段结果")
-        lease.result_hash = result_hash
         name = stage.name
         stage.status, stage.completed_at = "succeeded", now()
         lease.result_hash = result_hash
         release_lease(db, lease, "succeeded")
         if name == "text" and job.status == "running":
+            analysis_hash = db.scalar(select(JobStage.result['analysis_hash'].as_string()).where(
+                JobStage.job_id == job.id, JobStage.name == 'page', JobStage.page_index == 0))
+            if analysis_hash:
+                payload = {'analysis_hash': analysis_hash, 'language': job.target_language, 'translations': result['translations']}
+                stage.result = {**stage.result, 'analysis_hash': analysis_hash, 'revision': digest(payload)}
             job.phase = "render"
         touch_job(db, job)
         db.commit()
@@ -79,7 +81,7 @@ def complete_stage(lease_id, result, *, token=None, node_id=None):
 
 def fail_stage(lease_id, error, *, token=None, node_id=None, recovering=False):
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_lease_jobs(db, [lease_id])
         if _finished(db, lease_id, token, node_id):
             return
         lease = db.get(ExecutionLease, lease_id)
@@ -88,6 +90,19 @@ def fail_stage(lease_id, error, *, token=None, node_id=None, recovering=False):
             return  # A heartbeat committed after maintenance's initial snapshot.
         if stage.generation != lease.generation:
             raise ProcessingError("LEASE_EXPIRED", "执行代次已更新")
+        if (recovering and stage.name == 'page' and job.status in ('queued', 'running')
+                and not job.cancel_requested and not job.discard_output):
+            from .assets import available
+            from .compute_v3 import lease_deadline
+            if not available(db.get(Asset, job.input_asset_id)):
+                from .uploads import pause_missing_input
+                release_lease(db, lease, 'failed')
+                stage.status = 'ready'
+                pause_missing_input(db, job)
+                db.commit()
+                return
+            if lease_deadline(db, lease) <= now():
+                error = ProcessingError('PAGE_DEADLINE_EXCEEDED', '整页任务已达到处理时限')
         if job.status != "running":
             stage.status = "cancelled"
             release_lease(db, lease, "cancelled")
@@ -143,7 +158,7 @@ def finish_stopped_lease(lease_id, token=None, node_id=None):
     cancelled jobs, but only the still-matching generation may clear its slot.
     """
     with session_factory()() as db:
-        lock_scheduler(db)
+        lock_lease_jobs(db, [lease_id])
         lease = db.get(ExecutionLease, lease_id)
         _scoped(lease, token, node_id)
         if lease.completed_at:
@@ -193,7 +208,7 @@ def run_control_stage(lease_id):
     except StorageError:
         # Keep a possibly uploaded output for maintenance reconciliation.
         with session_factory()() as db:
-            lock_scheduler(db)
+            lock_lease_jobs(db, [lease_id])
             lease = db.get(ExecutionLease, lease_id)
             if lease and not lease.completed_at:
                 lease.expires_at = now()

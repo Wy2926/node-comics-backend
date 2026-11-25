@@ -19,6 +19,27 @@ from test_document_quota_api import document_case  # fixture dependency
 from test_document_workflow import claim, flow, ocr_all
 
 
+def test_document_pool_heartbeat_is_independent_of_empty_and_full_claims(flow):
+    from app.control_pools import report_pools
+    from app.documents.workflow import NODE_ID
+    from app.queue_models import ComputeNode
+    from app.scheduler import heartbeat_lease, locked_node
+    with session_factory()() as other, session_factory()() as db:
+        node = locked_node(other, NODE_ID)
+        assert claim() is None
+        earlier = now() - timedelta(hours=1)
+        node.heartbeat_at = earlier
+        other.commit()
+        ocr_all(flow)
+        lease = claim()
+        assert lease
+        heartbeat_lease(db, lease.id, lease.token)
+        db.commit()
+        assert db.get(ComputeNode, NODE_ID).heartbeat_at == earlier
+        report_pools(db, (NODE_ID,))
+        assert db.get(ComputeNode, NODE_ID).heartbeat_at > earlier
+
+
 def test_fresh_worker_registers_foreign_keys_without_api_parser_or_database(tmp_path):
     code = dedent('''
         import sys

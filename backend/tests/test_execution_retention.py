@@ -3,7 +3,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 
 from app.db import session_factory
-from app.execution_retention import cleanup_execution_data
+from app.execution_retention import cleanup_execution_data, compact_checkpoints
 from app.models import Attempt, ClassicState, Job, Ledger, TextCall, User, now, uid
 from app.queue_models import ComputeClaim, ComputeNode, ExecutionLease, JobStage
 from app.system_settings import SystemSettings
@@ -64,7 +64,8 @@ def test_terminal_masks_removed_but_valid_details_and_timing_remain(client):
     with session_factory()() as db:
         job, _, _ = seed(db, days=2)
         changed = db.get(Job, job).changed_at
-        counts = cleanup_execution_data(db)
+        assert not any(cleanup_execution_data(db).values())
+        counts = compact_checkpoints(db)
         db.commit()
         state = db.get(ClassicState, job)
         assert counts['checkpoints'] == 1 and counts['image_details'] == 0
@@ -72,7 +73,7 @@ def test_terminal_masks_removed_but_valid_details_and_timing_remain(client):
         assert set(state.analysis) == {'segments', 'unrecognized_regions'}
         assert state.translations == {'0': 'translated'} and state.timings == {'total': 2.5}
         assert state.artifacts == {} and db.get(Job, job).changed_at == changed
-        assert not any(cleanup_execution_data(db).values())
+        assert not any(compact_checkpoints(db).values())
 
 
 def test_expired_image_details_follow_registered_and_guest_policy(client):
@@ -80,7 +81,7 @@ def test_expired_image_details_follow_registered_and_guest_policy(client):
         registered, _, _ = seed(db, days=8)
         guest, _, _ = seed(db, days=2, guest=True)
         young, _, _ = seed(db, days=.5, guest=True)
-        counts = cleanup_execution_data(db)
+        counts = compact_checkpoints(db)
         db.commit()
         assert counts['image_details'] == 2
         for job in (registered, guest):
@@ -123,11 +124,27 @@ def test_running_unsettled_and_unknown_calls_keep_their_checkpoints(client):
         unsettled = seed(db, days=150)[0]
         db.get(Job, unsettled).settlement = 'reserved'
         jobs.append(unsettled)
+        compact_checkpoints(db)
         cleanup_execution_data(db)
         db.commit()
         for job in jobs:
             assert db.get(ClassicState, job).analysis['raw_mask'] == 'heavy'
             assert db.get(Job, job).details_compacted_at is None
+
+
+def test_retention_skips_a_busy_job_and_reclaims_it_after_commit(client):
+    from app.scheduler import lock_jobs
+    with session_factory()() as holder, session_factory()() as maintenance:
+        job, _, _ = seed(holder, days=91)
+        holder.commit()
+        lock_jobs(holder, [job])
+        assert not any(compact_checkpoints(maintenance).values())
+        assert not cleanup_execution_data(maintenance)['history']
+        maintenance.commit()
+        holder.commit()
+        assert compact_checkpoints(maintenance)['checkpoints'] == 1
+        assert cleanup_execution_data(maintenance)['history'] == 1
+        maintenance.commit()
 
 
 def test_claim_ttl_uses_all_lease_and_job_end_times_and_bounded_batches(client):
@@ -187,6 +204,7 @@ def test_database_retention_changes_apply_without_restart(client):
         row = db.get(SystemSettings, 1)
         row.values = {**row.values, 'image_result_retention_days': 14,
             'completed_claim_retention_days': 12, 'execution_detail_retention_days': 120}
+        compact_checkpoints(db)
         cleanup_execution_data(db)
         db.commit()
         assert db.get(ClassicState, job).translations
@@ -235,8 +253,13 @@ def test_checkpoint_batches_are_bounded_and_resume(client):
     with session_factory()() as db:
         for _ in range(5):
             seed(db, days=2)
-        assert cleanup_execution_data(db, batch=2)['checkpoints'] == 2
+        cutoff = now()
+        later, _, _ = seed(db, days=0)
+        db.get(Job, later).completed_at = cutoff + timedelta(seconds=1)
+        assert compact_checkpoints(db, at=cutoff, batch=2)['checkpoints'] == 2
         db.commit()
-        assert cleanup_execution_data(db, batch=2)['checkpoints'] == 2
+        assert compact_checkpoints(db, at=cutoff, batch=2)['checkpoints'] == 2
         db.commit()
-        assert cleanup_execution_data(db, batch=2)['checkpoints'] == 1
+        assert compact_checkpoints(db, at=cutoff, batch=2)['checkpoints'] == 1
+        assert not any(compact_checkpoints(db, at=cutoff, batch=2).values())
+        assert db.get(ClassicState, later).retention_stage == 0

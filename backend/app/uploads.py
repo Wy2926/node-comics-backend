@@ -126,15 +126,13 @@ def _owned(reservation, owner):
 
 
 def _lock_current(db, reservation):
-    """Take locks in global scheduler -> upload -> job order after external I/O."""
-    from .scheduler import lock_scheduler
-    lock_scheduler(db)
+    """A stale pre-I/O upload must reread its parent before publishing or settling."""
+    from .scheduler import write_rows
+    write_rows(db, select(Job).where(Job.id == reservation.job_id)).one()
     current = db.scalar(select(UploadReservation).where(UploadReservation.id == reservation.id)
                         .with_for_update().execution_options(populate_existing=True))
     if current is None:
         problem("NOT_FOUND", "找不到此上传任务", 404)
-    db.scalar(select(Job).where(Job.id == current.job_id).with_for_update(key_share=True)
-              .execution_options(populate_existing=True))
     return current
 
 
@@ -148,8 +146,6 @@ def _fail_locked(db, reservation, code, message, *, status="failed"):
     if job and (job.status == "awaiting_upload" or _validating(job)):
         job.status, job.phase = ("cancelled", "cancelled") if status == "cancelled" else ("failed", "upload_failed")
         job.error_code, job.error_message, job.completed_at = code, message, now()
-        from .scheduler import touch_job
-        touch_job(db, job)
         settle(db, job, success=False)
     return None
 
@@ -259,13 +255,16 @@ def accept_verified_upload(db, reservation, data, info, *, lease_id=None, lease_
 
 
 def expire_uploads(db, *, limit=100):
-    from .scheduler import lock_scheduler
-    lock_scheduler(db)
-    reservations = db.scalars(select(UploadReservation).join(Job, Job.id == UploadReservation.job_id).where(
+    from .scheduler import lock_jobs
+    due = select(UploadReservation).join(Job, Job.id == UploadReservation.job_id).where(
         UploadReservation.status == "awaiting_upload", UploadReservation.expires_at <= now(),
         Job.status == "awaiting_upload", UploadReservation.verified_info["sha256"].as_string().is_(None))
-        .order_by(UploadReservation.expires_at, UploadReservation.id).limit(limit)
-        .with_for_update(skip_locked=True)).all()
+    jobs = list(db.scalars(due.with_only_columns(Job.id).order_by(UploadReservation.expires_at, UploadReservation.id).limit(limit)))
+    if not jobs:
+        return 0
+    lock_jobs(db, jobs)
+    reservations = db.scalars(due.where(Job.id.in_(jobs)).order_by(Job.quota_period_id, Job.id)
+        .execution_options(populate_existing=True)).all()
     for reservation in reservations:
         _fail_locked(db, reservation, "INPUT_EXPIRED", "原图输入已过期，请手动重试", status="expired")
     return len(reservations)
@@ -281,9 +280,9 @@ def recover_received_uploads(limit=100):
     from .db import session_factory
     from .upload_ingress import ingress_snapshot
     from .queue_models import JobStage
-    from .scheduler import lock_scheduler, touch_job
+    from .scheduler import lock_jobs, touch_job
     with session_factory()() as db:
-        rows = db.execute(select(UploadReservation.id,
+        rows = db.execute(select(UploadReservation.id, UploadReservation.job_id,
             UploadReservation.expected_sha256, UploadReservation.expires_at)
             .where(UploadReservation.status == 'awaiting_upload', UploadReservation.verified_info["sha256"].as_string().is_not(None))
             .order_by(UploadReservation.created_at).limit(limit)).all()
@@ -299,7 +298,7 @@ def recover_received_uploads(limit=100):
         if not present and row.expires_at > now():
             continue
         with session_factory()() as db:
-            lock_scheduler(db)
+            lock_jobs(db, [row.job_id])
             receipt = db.get(UploadReservation, row.id)
             if not receipt or receipt.status != 'awaiting_upload':
                 continue
