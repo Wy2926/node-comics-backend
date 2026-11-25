@@ -29,11 +29,6 @@ export function languageSuggestion(path: string, current: Locale, languages: rea
   return target && target !== current && dismissed !== target ? target : undefined;
 }
 
-export function languageSuffix(url: Pick<URL,'search'|'hash'>) {
-  // A one-time checkout handoff belongs to its initial page, never to a language link.
-  return url.search + (url.hash.startsWith('#app-billing=')?'':url.hash);
-}
-
 export function languageTarget(url: URL, locale: Locale) {
-  return localPath(url.pathname, locale) + languageSuffix(url);
+  return localPath(url.pathname, locale) + url.search + url.hash;
 }

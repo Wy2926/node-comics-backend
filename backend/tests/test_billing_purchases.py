@@ -126,27 +126,6 @@ def buy(state, key='purchase-intent-1'):
         json={'provider': state['provider'], 'price_id': 'purchase-price'})
 
 
-def test_app_upgrade_uses_the_app_owner_and_resumes_the_same_unpaid_checkout(purchase):
-    client = purchase['client']
-    link = client.post('/v1/billing/app-handoff', headers=purchase['auth']).json()
-    assert link['account_id'] == purchase['owner']
-    session = client.post('/v1/billing/app-handoff/redeem', json={'code': link['code']}).json()
-    headers = {'Authorization': 'Billing ' + session['session'], 'Idempotency-Key': 'app-purchase-1'}
-    quote = client.get('/v1/billing/status', headers=headers).json()['quota_offers'][0]
-    assert not purchase['posts']
-    body = {'price_id': quote['id'], 'provider': quote['channels'][0]['provider']}
-    first = client.post('/v1/billing/checkouts', headers=headers, json=body).json()
-    assert first['checkout_url'].startswith('https://')
-    assert purchase['posts'][0]['success_url'] == 'https://comics.example/payment/success/'
-    if purchase['provider'] == 'stripe':
-        assert purchase['posts'][0]['cancel_url'] == 'https://comics.example/pricing/?app=1'
-    status = '/v1/billing/status?price_id=' + quote['id']
-    assert client.get(status, headers=login(client, 'other-buyer')).json()['pending_checkout'] is None
-    assert client.get(status, headers=purchase['auth']).json()['pending_checkout']['id'] == first['checkout_id']
-    assert client.post('/v1/billing/checkouts', headers=headers, json=body).json()['checkout_id'] == first['checkout_id']
-    assert len(purchase['posts']) == 1
-
-
 def historical_checkout(state, key, price_id='purchase-price'):
     """Seed a previously issued intent; only the isolated provider fixture is used.
 

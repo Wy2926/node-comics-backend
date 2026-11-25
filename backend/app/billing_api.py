@@ -3,25 +3,21 @@ import hashlib
 import hmac
 import json
 import re
-import secrets
 from typing import Literal
 import stripe as sdk
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.security.http import HTTPBase
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from . import stripe_client as stripe, creem_client as creem
-from .auth import bearer, identity
-from . import redis_state
+from .auth import identity
 from .billing_checkout import billing_status, start_checkout, sync_owner, customer_for, current_subscription
 from .billing_models import BillingEvent
 from .billing_providers import BillingError, require, provider_enabled, provider_environment, resource_key
 from .billing_sync import process_event
 from .billing_grants import timestamp
 from .request_models import RequestBody
-from pydantic import BaseModel, Field
+from pydantic import Field
 from .billing_catalog import offers, products_json
 from .config import settings
 from .db import get_db
@@ -72,66 +68,9 @@ def billing_error(exc):
     problem(exc.code, messages.get(exc.code, '支付服务暂时不可用，请稍后重试'), 503 if exc.uncertain else 409)
 
 
-class AppHandoff(RequestBody):
-    code: str = Field(pattern=r'^[A-Za-z0-9_-]{43}$', max_length=43)
-
-
-class AppHandoffResponse(BaseModel):
-    account_id: str
-    code: str
-
-
-class AppBillingSession(BaseModel):
-    account_id: str
-    session: str
-
-
-app_checkout = HTTPBase(scheme='Billing', scheme_name='AppCheckout', auto_error=False,
-    description='Tab-scoped authorization for billing status and checkout only.')
-
-
-def app_key(kind, secret):
-    return redis_state.key('billing-' + kind, hashlib.sha256(secret.encode()).hexdigest())
-
-
-@router.post('/v1/billing/app-handoff', response_model=AppHandoffResponse)
-def issue_app_handoff(user: User = Depends(identity)):
-    """Issue a single-use pricing link code for the authenticated account (60 seconds)."""
-    code = secrets.token_urlsafe(32)
-    window = redis_state.window('billing-link-issue', user.id, 12, member=hashlib.sha256(code.encode()).hexdigest())
-    if window['retry_after_seconds']:
-        problem('RATE_LIMITED', '请稍后再打开升级页面', 429, retry_after_seconds=window['retry_after_seconds'])
-    redis_state.command('set', app_key('handoff', code), user.id, ex=60)
-    return {'code': code, 'account_id': user.id}
-
-
-@router.post('/v1/billing/app-handoff/redeem', response_model=AppBillingSession)
-def redeem_app_handoff(body: AppHandoff):
-    """Exchange the app code once for a 15-minute billing-only session."""
-    owner = redis_state.command('getdel', app_key('handoff', body.code))
-    if not owner:
-        problem('BILLING_LINK_EXPIRED', '请返回 App 重新打开升级页面', 401)
-    token = secrets.token_urlsafe(32)
-    redis_state.command('set', app_key('session', token), owner, ex=15 * 60)
-    return {'account_id': owner, 'session': token}
-
-
-def billing_identity(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-        checkout: HTTPAuthorizationCredentials | None = Depends(app_checkout), db: Session = Depends(get_db)):
-    if not checkout or checkout.scheme.lower() != 'billing':
-        return identity(credentials, db)
-    token = checkout.credentials
-    owner = redis_state.command('get', app_key('session', token)) if re.fullmatch(r'[A-Za-z0-9_-]{43}', token) else None
-    user = db.get(User, owner) if owner else None
-    if not user or user.kind != 'registered':
-        problem('BILLING_LINK_EXPIRED', '请返回 App 重新打开升级页面', 401)
-    request.state.app_pricing = True
-    return user
-
-
 @router.get('/v1/billing/status')
 def status(price_id: str | None = Query(None, min_length=1, max_length=36),
-        user: User = Depends(billing_identity), db: Session = Depends(get_db)):
+        user: User = Depends(identity), db: Session = Depends(get_db)):
     return billing_status(db, user, price_id)
 
 
@@ -145,10 +84,9 @@ def public_catalog(db: Session = Depends(get_db)):
 
 
 @router.post('/v1/billing/checkouts')
-def checkout(body: CheckoutRequest, request: Request, user: User = Depends(billing_identity)):
+def checkout(body: CheckoutRequest, request: Request, user: User = Depends(identity)):
     try:
-        return start_checkout(user.id, body.price_id, body.provider, request.headers.get('Idempotency-Key'),
-            app_pricing=getattr(request.state, 'app_pricing', False))
+        return start_checkout(user.id, body.price_id, body.provider, request.headers.get('Idempotency-Key'))
     except BillingError as exc:
         billing_error(exc)
 

@@ -19,7 +19,7 @@ export default function QuotaOffers({locale,offers,billing,blocked=false,account
   const visible=offers.filter(offer=>offer.interval==='once');
   if(!visible.length)return null;
   const [beforePages,afterPages]=copy.pages.split('{0}');
-  return <section id="quota-offers" className="quota-offers" aria-label={copy.title}>
+  return <section className="quota-offers" aria-label={copy.title}>
     <header className="quota-offers-heading"><h2>{copy.title}</h2></header>
     <div className="quota-offer-grid">{visible.map(offer=><article className="quota-offer" key={offer.id}>
       <header className="quota-offer-heading"><h3>{offer.name}</h3><span className="quota-page-mark"><QuotaIcon kind="pages"/></span></header>

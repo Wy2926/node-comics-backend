@@ -170,7 +170,7 @@ const pricingRequire=createRequire(pricingFile);
 const pricingCompiled=ts.transpileModule(readFileSync(pricingFile,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 function pricingSnapshot(billing:Billing|null,locale='en',selectedPrice='',interval:string|null='month',catalog:BillingCatalog|null={offers:billing?.offers??[subscription],quota_offers:billing?.quota_offers??[pack]},error=false){
   // Seed only BillingOffers' loaded snapshot. Child controls use real React SSR.
-  const states:unknown[]=[catalog??undefined,error,billing,false,interval??undefined,selectedPrice];
+  const states:unknown[]=[catalog??undefined,error,billing,interval??undefined,selectedPrice];
   const exports={} as typeof import('../src/components/BillingOffers');
   new Function('require','exports',pricingCompiled)((name:string)=>name==='react'?{...react,useEffect:()=>{},useState:()=>[states.shift(),()=>{}]}:name.endsWith('.css')?{}:pricingRequire(name),exports);
   return load(renderToStaticMarkup(createElement(exports.default,{locale,accountHref:localPath('/account/',locale as typeof locales[number]),downloadHref:'/download/',checkoutCopy,

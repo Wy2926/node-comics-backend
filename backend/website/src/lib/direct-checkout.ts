@@ -1,6 +1,5 @@
 import { api, ApiError, sessionIdentity } from "./auth";
 import { checkoutUrl } from "./auth-config";
-import {appBillingRequest, appBillingSession, isAppPricing} from './app-billing';
 import {
   findCheckoutOffer,
   findPendingCheckout,
@@ -18,12 +17,7 @@ import {
 } from "./checkout-intent";
 export { session, signIn, subscribeAuth } from "./auth";
 export type CreemPurchase = { url: string; offer: BillingOffer };
-export async function checkoutStatus():Promise<(Billing & {appAccountId?:string})|null> {
-  if (isAppPricing()) {
-    const bound=await appBillingSession();
-    const billing=await appBillingRequest(bound)<Billing>('/v1/billing/status');
-    return {...billing,appAccountId:bound.account_id};
-  }
+export async function checkoutStatus() {
   const identity = await sessionIdentity();
   return identity
     ? api<Billing>("/v1/billing/status", "GET", undefined, undefined, identity)
@@ -47,8 +41,6 @@ export async function directCheckout(
   request: typeof api = api,
   storage?: Storage,
 ): Promise<CreemPurchase | string | {fulfilled:true} | null> {
-  const app = request === api && isAppPricing() ? await appBillingSession() : null;
-  if (app) request=appBillingRequest(app);
   const identity = request === api ? await sessionIdentity() : undefined;
   if (request === api && !identity) throw new ApiError("LOGIN_REQUIRED", 401);
   const billing = await request<Billing>(
@@ -63,7 +55,7 @@ export async function directCheckout(
   let selection: { price_id: string; provider: BillingProvider } | null;
   if (!offer || isOneTimePrice(offer)) {
     const local = storage ?? localStorage;
-    const scope = app?.account_id ?? (
+    const scope = (
       await request<{ user: { id: string } }>(
         "/v1/me",
         "GET",

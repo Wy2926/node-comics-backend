@@ -19,6 +19,5 @@ npm run preview
 - 支持站点：`../../contracts/extension/` 的版本化快照；更新时替换完整导出目录并运行测试。
 - 图像协议：`../shared/translation-images/`；文件任务沿用服务端持久状态。
 - 公开页面静态可读；私有页面 no-store/noindex，写请求不自动重放，历史按账户隔离。
-- App 的「升级」打开 `/pricing/?app=1`。一次性码仅在 URL 片段和兑换请求正文中传递；兑换后清除片段。页签只保存短期计费凭据，仅能读取报价和创建该 App 账号的结账，不覆盖官网登录。链接失效时返回 App 重新点升级。
 
 [部署](../../docs/DEPLOYMENT.md) · [SEO](SEO.md) · [图片来源](ASSETS.md) · [依赖许可](DEPENDENCIES.md)
